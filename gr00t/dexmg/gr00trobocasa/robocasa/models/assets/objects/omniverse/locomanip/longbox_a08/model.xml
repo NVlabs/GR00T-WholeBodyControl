@@ -1,0 +1,33 @@
+<mujoco model="longbox_a08">
+  <default>
+    <default class="visual">
+      <geom group="1" type="mesh" contype="0" conaffinity="0" density="100"/>
+    </default>
+    <default class="collision">
+      <geom group="0" type="mesh" density="100" solimp="0.95 0.98 0.001" solref="0.004 1" rgba="1 1 1 0.25"/>
+    </default>
+  </default>
+  <asset>
+    <texture type="2d" name="T_LongBox_A01_Tile_Albedo" file="textures/T_LongBox_A01_Tile_Albedo.png"/>
+    <material name="opaque__cardboard__longbox.009" texture="T_LongBox_A01_Tile_Albedo" specular="0.5" shininess="0.25"/>
+    <texture type="2d" name="T_LongBox_A01_Trim_Albedo" file="textures/T_LongBox_A01_Trim_Albedo.png"/>
+    <material name="opaque__cardboard__longbox_decal.009" texture="T_LongBox_A01_Trim_Albedo" specular="0.5" shininess="0.25"/>
+    <mesh file="meshes/longbox_a08_0.obj" name="longbox_a08_0"/>
+    <mesh file="meshes/longbox_a08_1.obj" name="longbox_a08_1"/>
+  </asset>
+  <worldbody>
+    <body>
+      <body name="object">
+        <geom mesh="longbox_a08_0" material="opaque__cardboard__longbox.009" class="visual"/>
+        <geom mesh="longbox_a08_1" material="opaque__cardboard__longbox_decal.009" class="visual"/>
+        <geom name="collider_box_e8223e63" type="box" pos="-0.005650025400012792 0.040098211923876276 0.23203545751490284" size="0.07678800100909002 0.03929919652833351 0.07703229771734593" quat="0.0005524909278018757 0.9999998473489994 6.600358303463617e-06 -3.491115625401839e-06" class="collision"/>
+        <geom name="collider_box_6b63c3e7" type="box" pos="-0.005651099990845828 0.039927973360217 0.07797095613923889" size="0.07678800100909002 0.03929919652833351 0.07703229771734593" quat="0.0005524909278018757 0.9999998473489994 6.600358303463617e-06 -3.491115625401839e-06" class="collision"/>
+        <geom name="collider_box_6a608800" type="box" pos="-0.0056489875418559874 -0.03850013314221694 0.23212230729623018" size="0.07678800100909002 0.03929919652833351 0.07703229771734593" quat="0.0005524909278018757 0.9999998473489994 6.600358303463617e-06 -3.491115625401839e-06" class="collision"/>
+        <geom name="collider_box_1f84abba" type="box" pos="-0.005650062132689023 -0.038670371705876214 0.0780578059205662" size="0.07678800100909002 0.03929919652833351 0.07703229771734593" quat="0.0005524909278018757 0.9999998473489994 6.600358303463617e-06 -3.491115625401839e-06" class="collision"/>
+      </body>
+      <site name="bottom_site" pos="0 0 0.000907" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="top_site" pos="0 0 0.309036" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="horizontal_radius_site" pos="0.071139 0.079465 0" rgba="1 1 1 0.5" size="0.005"/>
+    </body>
+  </worldbody>
+</mujoco>

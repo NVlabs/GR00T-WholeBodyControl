@@ -1,0 +1,97 @@
+<mujoco model="mobile_shelving_cart">
+  <default>
+    <default class="visual">
+      <geom group="1" type="mesh" contype="0" conaffinity="0" density="100"/>
+    </default>
+    <default class="collision">
+      <geom group="0" type="mesh" density="100" solimp="0.95 0.98 0.001" solref="0.004 1" rgba="1 1 1 0.25"/>
+    </default>
+    <default class="wheel_joint">
+      <joint frictionloss="0.001" damping="0.001" limited="false" type="hinge"/>
+    </default>
+  </default>
+  <asset>
+    <material name="opaque__metal__glossy_a_mobileshelvingcart_c.001" specular="1.0" shininess="0.2" rgba="1.000000 1.000000 1.000000 1.000000"/>
+    <texture type="2d" name="T_Plastic_Blue_A_Albedo" file="textures/T_Plastic_Blue_A_Albedo.png"/>
+    <material name="opaque__metal__painted_blue_rough_a_mobileshelvingcart_c.001" texture="T_Plastic_Blue_A_Albedo" specular="1.0" shininess="0.2"/>
+    <material name="opaque__metal__rough_a_mobileshelvingcart_c.001" specular="1.0" shininess="0.2" rgba="1.000000 1.000000 1.000000 1.000000"/>
+    <material name="opaque__rubber__black_glossy_a_mobileshelvingcart_c.001" specular="1.0" shininess="0.2" rgba="0.060199 0.060199 0.060199 1.000000"/>
+    <texture type="2d" name="T_Aluminium_Brushed_A1_Albedo" file="textures/T_Aluminium_Brushed_A1_Albedo.png"/>
+    <material name="opaque__woodpainted_beige_glossy_a_mobileshelvingcart_c.001" texture="T_Aluminium_Brushed_A1_Albedo" specular="1.0" shininess="0.2"/>
+    <mesh file="meshes/mobile_shelving_cart_0.obj" name="mobile_shelving_cart_0"/>
+    <mesh file="meshes/mobile_shelving_cart_1.obj" name="mobile_shelving_cart_1"/>
+    <mesh file="meshes/mobile_shelving_cart_wheel_disk.obj" name="mobile_shelving_cart_wheel_disk"/>
+    <mesh file="meshes/mobile_shelving_cart_wheel_hinge.obj" name="mobile_shelving_cart_wheel_hinge"/>
+    <mesh file="meshes/mobile_shelving_cart_wheel_rubber.obj" name="mobile_shelving_cart_wheel_rubber"/>
+  </asset>
+  <worldbody>
+    <body>
+      <body name="object">
+        <geom mesh="mobile_shelving_cart_0" material="opaque__woodpainted_beige_glossy_a_mobileshelvingcart_c.001" class="visual"/>
+        <geom mesh="mobile_shelving_cart_1" material="opaque__metal__painted_blue_rough_a_mobileshelvingcart_c.001" class="visual"/>
+        <geom name="collider_box_8852657b" type="box" pos="-0.004100570000000026 -8.539923154706126e-21 0.90642643" size="0.01 0.24683195 0.51" quat="2.164890140588733e-17 0.7071067811865475 0.0 -0.7071067811865475" class="collision"/>
+        <geom name="collider_box_b9b569ab" type="box" pos="0 0 0.14375666805853637" size="0.03 0.2521887505521665 0.51" quat="2.091569821910527e-05 -0.7071067808772121 -2.091569821923709e-05 0.7071067808772123" class="collision"/>
+        <geom name="collider_box_729c0aef" type="box" pos="0 0 0.4105861700000001" size="0.01 0.248126335 0.51" quat="2.164890140588733e-17 0.7071067811865475 0.0 -0.7071067811865475" class="collision"/>
+        <geom name="collider_box_7010ef2a" type="box" pos="0.49436788712018526 -0.0011372550000000102 1.4270434762774418" size="0.02 0.02 0.22" quat="0.11201332389959849 0.11201332389959853 0.6981783549129574 -0.6981783549129574" class="collision"/>
+        <geom name="collider_box_7010ef2a_1" type="box" pos="-0.49436788712018526 -0.0011372550000000102 1.4270434762774418" size="0.02 0.02 0.22" quat="0.11201332389959849 0.11201332389959853 0.6981783549129574 -0.6981783549129574" class="collision"/>
+        <geom name="collider_box_f84d423e" type="box" pos="0.4904662319855294 0.22861775878582985 0.8193403933891392" size="0.02 0.02 0.64" quat="1 0 0 0" class="collision"/>
+        <geom name="collider_box_f84d423e_1" type="box" pos="-0.4904662319855294 0.22861775878582985 0.8193403933891392" size="0.02 0.02 0.64" quat="1 0 0 0" class="collision"/>
+        <geom name="collider_box_f84d423e_2" type="box" pos="-0.4904662319855294 -0.22861775878582985 0.8193403933891392" size="0.02 0.02 0.64" quat="1 0 0 0" class="collision"/>
+        <geom name="collider_box_f84d423e_4" type="box" pos="0.4904662319855294 -0.22861775878582985 0.8193403933891392" size="0.02 0.02 0.64" quat="1 0 0 0" class="collision"/>
+        <geom name="collider_box_03b43fa2" type="box" pos="-0.004065410000000007 -1.256936854908579e-17 1.15457548" size="0.01 0.24673604 0.51" quat="2.164890140588733e-17 0.7071067811865475 0.0 -0.7071067811865475" class="collision"/>
+        <geom name="collider_box_c2936a64" type="box" pos="0 0 0.654224332370507" size="0.01 0.2558301123579767 0.51" quat="0.00018623985631862825 -0.7068632983787615 0.0001390643323498997 0.7073501419954088" class="collision"/>
+        <!-- Front-left wheel -->
+        <body name="wheel_fl_rot" pos="0.46 0.21 0.107">
+          <joint name="wheel_fl_zrot" axis="0 0 1" class="wheel_joint"/>
+          <geom type="mesh" mesh="mobile_shelving_cart_wheel_hinge" material="opaque__metal__glossy_a_mobileshelvingcart_c.001" quat="0 0 0 1" class="visual"/>
+          <geom type="cylinder" size="0.015 0.005" pos="0 0 -0.01" class="collision"/>
+          <body name="wheel_fl_spin" pos="0.033 0 -0.062">
+            <joint name="wheel_fl_spin" type="hinge" axis="0 1 0" class="wheel_joint"/>
+            <geom type="mesh" mesh="mobile_shelving_cart_wheel_disk" material="opaque__metal__glossy_a_mobileshelvingcart_c.001" class="visual"/>
+            <geom type="mesh" mesh="mobile_shelving_cart_wheel_rubber" material="opaque__rubber__black_glossy_a_mobileshelvingcart_c.001" class="visual"/>
+            <geom type="cylinder" size="0.045 0.015" quat="0.7071068 0.7071068 0 0" class="collision"/>
+          </body>
+        </body>
+        <!-- Front-right wheel -->
+        <body name="wheel_fr_rot" pos="0.46 -0.21 0.107">
+          <joint name="wheel_fr_zrot" type="hinge" axis="0 0 1" class="wheel_joint"/>
+          <geom type="mesh" mesh="mobile_shelving_cart_wheel_hinge" material="opaque__metal__glossy_a_mobileshelvingcart_c.001" quat="0 0 0 1" class="visual"/>
+          <geom type="cylinder" size="0.015 0.005" pos="0 0 -0.01" class="collision"/>
+          <body name="wheel_fr_spin" pos="0.033 0 -0.062">
+            <joint name="wheel_fr_spin" type="hinge" axis="0 1 0" class="wheel_joint"/>
+            <geom type="mesh" mesh="mobile_shelving_cart_wheel_disk" material="opaque__metal__glossy_a_mobileshelvingcart_c.001" class="visual"/>
+            <geom type="mesh" mesh="mobile_shelving_cart_wheel_rubber" material="opaque__rubber__black_glossy_a_mobileshelvingcart_c.001" class="visual"/>
+            <geom type="cylinder" size="0.045 0.015" quat="0.7071068 0.7071068 0 0" class="collision"/>
+          </body>
+        </body>
+        <!-- Rear-left wheel -->
+        <body name="wheel_rl_rot" pos="-0.48 0.21 0.107">
+          <joint name="wheel_rl_zrot" type="hinge" axis="0 0 1" class="wheel_joint"/>
+          <geom type="mesh" mesh="mobile_shelving_cart_wheel_hinge" material="opaque__metal__glossy_a_mobileshelvingcart_c.001" quat="0 0 0 1" class="visual"/>
+          <geom type="cylinder" size="0.015 0.005" pos="0 0 -0.01" class="collision"/>
+          <body name="wheel_rl_spin" pos="0.033 0 -0.062">
+            <joint name="wheel_rl_spin" type="hinge" axis="0 1 0" class="wheel_joint"/>
+            <geom type="mesh" mesh="mobile_shelving_cart_wheel_disk" material="opaque__metal__glossy_a_mobileshelvingcart_c.001" class="visual"/>
+            <geom type="mesh" mesh="mobile_shelving_cart_wheel_rubber" material="opaque__rubber__black_glossy_a_mobileshelvingcart_c.001" class="visual"/>
+            <geom type="cylinder" size="0.045 0.015" quat="0.7071068 0.7071068 0 0" class="collision"/>
+          </body>
+        </body>
+        <!-- Rear-right wheel -->
+        <body name="wheel_rr_rot" pos="-0.48 -0.21 0.107">
+          <joint name="wheel_rr_zrot" type="hinge" axis="0 0 1" class="wheel_joint"/>
+          <geom type="mesh" mesh="mobile_shelving_cart_wheel_hinge" material="opaque__metal__glossy_a_mobileshelvingcart_c.001" quat="0 0 0 1" class="visual"/>
+          <geom type="cylinder" size="0.015 0.005" pos="0 0 -0.01" class="collision"/>
+          <body name="wheel_rr_spin" pos="0.033 0 -0.062">
+            <joint name="wheel_rr_spin" type="hinge" axis="0 1 0" class="wheel_joint"/>
+            <geom type="mesh" mesh="mobile_shelving_cart_wheel_disk" material="opaque__metal__glossy_a_mobileshelvingcart_c.001" class="visual"/>
+            <geom type="mesh" mesh="mobile_shelving_cart_wheel_rubber" material="opaque__rubber__black_glossy_a_mobileshelvingcart_c.001" class="visual"/>
+            <geom type="cylinder" size="0.045 0.015" quat="0.7071068 0.7071068 0 0" class="collision"/>
+          </body>
+        </body>
+      </body>
+      <site name="bottom_site" pos="0 0 0.000365" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="top_site" pos="0 0 1.442511" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="horizontal_radius_site" pos="0.571391 0.253603 0" rgba="1 1 1 0.5" size="0.005"/>
+    </body>
+  </worldbody>
+</mujoco>

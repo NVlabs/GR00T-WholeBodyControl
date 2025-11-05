@@ -1,0 +1,25 @@
+"""
+" service name
+"""
+ROBOT_STATE_SERVICE_NAME = "robot_state"
+
+
+"""
+" service api version
+"""
+ROBOT_STATE_API_VERSION = "1.0.0.1"
+
+
+"""
+" api id
+"""
+ROBOT_STATE_API_ID_SERVICE_SWITCH = 1001
+ROBOT_STATE_API_ID_REPORT_FREQ = 1002
+ROBOT_STATE_API_ID_SERVICE_LIST = 1003
+
+
+"""
+" error code
+"""
+ROBOT_STATE_ERR_SERVICE_SWITCH = 5201
+ROBOT_STATE_ERR_SERVICE_PROTECTED = 5202

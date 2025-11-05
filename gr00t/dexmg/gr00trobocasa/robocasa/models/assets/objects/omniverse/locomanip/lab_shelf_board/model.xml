@@ -1,0 +1,35 @@
+<mujoco model="lab_shelf_board">
+  <default>
+    <default class="visual">
+      <geom group="1" type="box" contype="0" conaffinity="0" density="100"/>
+    </default>
+    <default class="collision">
+      <geom group="0" type="box" density="100" solimp="0.95 0.98 0.001" solref="0.004 1" rgba="1 1 1 0.25"/>
+    </default>
+    <default class="spawn">
+      <geom group="1" rgba="1 1 1 0" contype="0" conaffinity="0" density="0" mass="0"/>
+    </default>
+  </default>
+
+  <asset>
+    <texture name="white_tex" builtin="flat" rgb1="1 1 1" rgb2="1 1 1" width="32" height="32"/>
+    <material name="white_mat" texture="white_tex" shininess="0.2" reflectance="0.05" rgba="1 1 1 1"/>
+  </asset>
+
+  <!-- H = 1.80797 m; shelf z tops = 0.3317, 0.5888, 0.9159, 1.2174, 1.5001, 1.8080 -->
+  <worldbody>
+    <body>
+      <body name="object">
+        <geom class="collision" name="board" size="0.294640 0.144780 0.007938" pos="0 0 0.007938"/>
+        <geom class="visual"   name="board_vis" size="0.294640 0.144780 0.007938" pos="0 0 0.007938"/>
+        <geom class="spawn" name="spawn_1" type="box" size="0.05 0.05 0.001" pos="0 -0.2 0.0159"/>
+        <geom class="spawn" name="spawn_2" type="box" size="0.05 0.05 0.001" pos="0 0 0.0159"/>
+        <geom class="spawn" name="spawn_3" type="box" size="0.05 0.05 0.001" pos="0 0.2 0.0159"/>
+      </body>
+
+      <site name="top_site" pos="0 0 0.015876" size="0.01 0.01 0.01" rgba="1 0 0 0.3"/>
+      <site name="bottom_site" pos="0 0 0" size="0.01 0.01 0.01" rgba="0 1 0 0.3"/>
+      <site name="horizontal_radius_site" pos="0.294640 0.144780 0.007938" size="0.01 0.01 0.01" rgba="0 0 1 0.3"/>
+    </body>
+  </worldbody>
+</mujoco>

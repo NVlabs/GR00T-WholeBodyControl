@@ -1,0 +1,85 @@
+<mujoco model="workshop_trolley_a01">
+  <default>
+    <default class="visual">
+      <geom group="1" type="mesh" contype="0" conaffinity="0" density="100"/>
+    </default>
+    <default class="collision">
+      <geom group="0" type="mesh" density="100" solimp="0.95 0.98 0.001" solref="0.004 1" rgba="1 1 1 0.25"/>
+    </default>
+    <default class="wheel_joint">
+      <joint frictionloss="0.001" damping="0.001" limited="false" type="hinge"/>
+    </default>
+  </default>
+  <asset>
+    <material name="opaque__metal__glossy_a_workshoptrolley_a.001" specular="1.0" shininess="0.2" rgba="1.000000 1.000000 1.000000 1.000000"/>
+    <texture type="2d" name="T_Plastic_Blue_A_Albedo" file="textures/T_Plastic_Blue_A_Albedo.png"/>
+    <material name="opaque__metal__painted_blue_rough_a_workshoptrolley_a.001" texture="T_Plastic_Blue_A_Albedo" specular="1.0" shininess="0.2"/>
+    <material name="opaque__metal__painted_gray_rough_a_workshoptrolley_a.001" specular="1.0" shininess="0.2" rgba="0.101209 0.100893 0.100893 1.000000"/>
+    <material name="opaque__metal__rough_a_workshoptrolley_a.001" specular="1.0" shininess="0.2" rgba="0.386100 0.386097 0.386097 1.000000"/>
+    <material name="opaque__plastic__black_a_workshoptrolley_a.001" specular="1.0" shininess="0.2" rgba="0.274131 0.274129 0.274129 1.000000"/>
+    <material name="opaque__rubber__black_glossy_a_workshoptrolley_a.001" specular="1.0" shininess="0.2" rgba="0.005000 0.005000 0.005000 1.000000"/>
+    <mesh file="meshes/workshop_trolley_a01_0.obj" name="workshop_trolley_a01_0"/>
+    <mesh file="meshes/workshop_trolley_a01_2.obj" name="workshop_trolley_a01_2"/>
+    <mesh file="meshes/workshop_trolley_a01_5.obj" name="workshop_trolley_a01_5"/>
+    <mesh file="meshes/wheel_disk.obj" name="wheel_disk"/>
+    <mesh file="meshes/wheel_hinge.obj" name="wheel_hinge"/>
+    <mesh file="meshes/wheel_rubber.obj" name="wheel_rubber"/>
+  </asset>
+  <worldbody>
+    <body>
+      <body name="object">
+        <geom mesh="workshop_trolley_a01_0" material="opaque__metal__painted_gray_rough_a_workshoptrolley_a.001" class="visual"/>
+        <geom mesh="workshop_trolley_a01_2" material="opaque__plastic__black_a_workshoptrolley_a.001" class="visual"/>
+        <geom mesh="workshop_trolley_a01_5" material="opaque__metal__painted_blue_rough_a_workshoptrolley_a.001" class="visual"/>
+        <geom name="collider_box_73dde72e" type="box" pos="-0.4067681790764488 0.17105084955545624 0.9027340544410308" size="0.01707826946416252 0.02 0.053962591734132634" quat="0.6681452044376381 -0.2254240572440235 0.6727313268551627 0.22405031147115656" class="collision"/>
+        <geom name="collider_box_73dde72e_1" type="box" pos="-0.4067681790764488 -0.17105084955545624 0.9027340544410308" size="0.01707826946416252 0.053962591734132634 0.02" quat="0.6681452044376381 -0.2254240572440235 0.6727313268551627 0.22405031147115656" class="collision"/>
+        <geom name="collider_box_e86733a3" type="box" pos="-0.38693448 0 0.9022095750000001" size="0.017218824999999993 0.05 0.06" quat="0.5 0.5 0.5000000000000001 -0.49999999999999983" class="collision"/>
+        <geom name="collider_box_73f211d4" type="box" pos="-0.42967966 0 0.9026387699999999" size="0.017648410000000003 0.02 0.15" quat="0.5 0.4999999999999998 -0.5000000000000002 0.5000000000000001" class="collision"/>
+        <geom name="collider_box_73f211d4_1" type="box" pos="-0.32967966 0 0.9026387699999999" size="0.017648410000000003 0.04 0.22" quat="0.5 0.4999999999999998 -0.5000000000000002 0.5000000000000001" class="collision"/>
+        <geom name="collider_box_body" type="box" pos="0 0 0.52" size="0.305 0.225 0.41" class="collision"/>
+        <geom name="collider_box_tray" type="box" pos="0 0 0.93" size="0.305 0.225 0.02" class="collision"/>
+        <!-- Front-left wheel -->
+        <body name="wheel_fl_spin" pos="0.2288 0.232 0.045">
+          <joint name="wheel_fl_spin" type="hinge" axis="0 1 0" class="wheel_joint"/>
+          <geom type="mesh" mesh="wheel_disk" material="opaque__metal__rough_a_workshoptrolley_a.001" class="visual"/>
+          <geom type="mesh" mesh="wheel_rubber" material="opaque__rubber__black_glossy_a_workshoptrolley_a.001" class="visual"/>
+          <geom type="cylinder" size="0.045 0.015" quat="0.7071068 0.7071068 0 0" class="collision"/>
+        </body>
+        <!-- Front-right wheel -->
+        <body name="wheel_fr_spin" pos="0.2288 -0.232 0.045">
+          <joint name="wheel_fr_spin" type="hinge" axis="0 1 0" class="wheel_joint"/>
+          <geom type="mesh" mesh="wheel_disk" material="opaque__metal__rough_a_workshoptrolley_a.001" class="visual"/>
+          <geom type="mesh" mesh="wheel_rubber" material="opaque__rubber__black_glossy_a_workshoptrolley_a.001" class="visual"/>
+          <geom type="cylinder" size="0.045 0.015" quat="0.7071068 0.7071068 0 0" class="collision"/>
+        </body>
+        <!-- Rear-left wheel -->
+        <body name="wheel_rl_rot" pos="-0.265 0.175 0.107">
+          <joint name="wheel_rl_zrot" type="hinge" axis="0 0 1" class="wheel_joint"/>
+          <geom type="mesh" mesh="wheel_hinge" material="opaque__metal__rough_a_workshoptrolley_a.001" class="visual"/>
+          <geom type="cylinder" size="0.015 0.005" pos="0 0 -0.01" class="collision"/>
+          <body name="wheel_rl_spin" pos="-0.033 0 -0.062">
+            <joint name="wheel_rl_spin" type="hinge" axis="0 1 0" class="wheel_joint"/>
+            <geom type="mesh" mesh="wheel_disk" material="opaque__metal__rough_a_workshoptrolley_a.001" class="visual"/>
+            <geom type="mesh" mesh="wheel_rubber" material="opaque__rubber__black_glossy_a_workshoptrolley_a.001" class="visual"/>
+            <geom type="cylinder" size="0.045 0.015" quat="0.7071068 0.7071068 0 0" class="collision"/>
+          </body>
+        </body>
+        <!-- Rear-right wheel -->
+        <body name="wheel_rr_rot" pos="-0.265 -0.175 0.107">
+          <joint name="wheel_rr_zrot" type="hinge" axis="0 0 1" class="wheel_joint"/>
+          <geom type="mesh" mesh="wheel_hinge" material="opaque__metal__rough_a_workshoptrolley_a.001" class="visual"/>
+          <geom type="cylinder" size="0.015 0.005" pos="0 0 -0.01" class="collision"/>
+          <body name="wheel_rr_spin" pos="-0.033 0 -0.062">
+            <joint name="wheel_rr_spin" type="hinge" axis="0 1 0" class="wheel_joint"/>
+            <geom type="mesh" mesh="wheel_disk" material="opaque__metal__rough_a_workshoptrolley_a.001" class="visual"/>
+            <geom type="mesh" mesh="wheel_rubber" material="opaque__rubber__black_glossy_a_workshoptrolley_a.001" class="visual"/>
+            <geom type="cylinder" size="0.045 0.015" quat="0.7071068 0.7071068 0 0" class="collision"/>
+          </body>
+        </body>
+      </body>
+      <site name="bottom_site" pos="0 0 -0.000228" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="top_site" pos="0 0 0.950095" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="horizontal_radius_site" pos="0.317 0.259212 0" rgba="1 1 1 0.5" size="0.005"/>
+    </body>
+  </worldbody>
+</mujoco>

@@ -1,0 +1,40 @@
+<mujoco model="factory_ergo_table">
+  <default>
+    <default class="visual">
+      <geom group="1" type="mesh" contype="0" conaffinity="0" density="100"/>
+    </default>
+    <default class="collision">
+      <geom group="0" type="mesh" density="100" solimp="0.95 0.98 0.001" solref="0.004 1" rgba="1 1 1 0.25"/>
+    </default>
+  </default>
+  <asset>
+    <material name="Frosted_Glass" specular="1.0" shininess="0.555709412" rgba="1.000000 1.000000 1.000000 0.200000"/>
+    <material name="Metal_White_Paint" specular="1.0" shininess="0.2" rgba="1.000000 1.000000 1.000000 1.000000"/>
+    <material name="Pristine_Metal_Chrome_Grain" specular="1.0" shininess="0.489783325" rgba="1.000000 1.000000 1.000000 1.000000"/>
+    <texture type="2d" name="Rubber_Smooth_BaseColor" file="textures/Rubber_Smooth_BaseColor.png"/>
+    <material name="Rubber_Smooth" texture="Rubber_Smooth_BaseColor" specular="1.0" shininess="0.2"/>
+    <mesh file="meshes/ergo_table_0.obj" name="ergo_table_0"/>
+    <mesh file="meshes/ergo_table_1.obj" name="ergo_table_1"/>
+    <mesh file="meshes/ergo_table_2.obj" name="ergo_table_2"/>
+    <mesh file="meshes/ergo_table_3.obj" name="ergo_table_3"/>
+  </asset>
+  <worldbody>
+    <body>
+      <body name="object">
+        <geom mesh="ergo_table_0" material="Pristine_Metal_Chrome_Grain" class="visual"/>
+        <geom mesh="ergo_table_1" material="Rubber_Smooth" class="visual"/>
+        <geom mesh="ergo_table_2" material="Frosted_Glass" class="visual"/>
+        <geom mesh="ergo_table_3" material="Metal_White_Paint" class="visual"/>
+        <geom type="box" pos="-0.46350255976259347 -4.682526400941819e-07 0.8896096217538708" size="0.011364070261604131 0.37569603292537185 0.7069133795042581" quat="0.7071067710735451 -0.7071067655177742 0.00011959073877681259 0.00014885896529341037" class="collision"/>
+        <geom type="box" pos="-0.004822535916103561 -0.6211251573931159 0.3846578459579856" size="0.04430337999982359 0.044504896722269933 0.31861118100626284" quat="0.689689685988698 0.004585655900224514 0.0048142762301561495 0.7240745345233154" class="collision"/>
+        <geom type="box" pos="-0.0002115116289263922 -0.6200129459885813 0.029424661532591875" size="0.037210579921073156 0.0383342790206358 0.40751512541875856" quat="0.707098811355153 0.003357228042582875 -0.7071032414048263 -0.00223740805129307" class="collision"/>
+        <geom type="box" pos="0 0 0.75" size="0.45 0.7075615 0.0495" class="collision"/>
+        <geom type="box" pos="0.004638961193049215 0.6212950268168259 0.3845092245226624" size="0.04429060637176996 0.04449042285275407 0.31888412967723156" quat="0.7259966413143332 0.005746945121697842 -0.005443416722616946 -0.687652687507625" class="collision"/>
+        <geom type="box" pos="-0.00020491564036606254 0.619985973649615 0.02919114999999999" size="0.03688394 0.03789126822471811 0.4075007709955647" quat="0.7071067567665855 -0.00018583605895029987 0.7071067567665855 0.00018583605895034289" class="collision"/>
+      </body>
+      <site name="bottom_site" pos="0 0 0.0" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="top_site" pos="0 0 0.8" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="horizontal_radius_site" pos="0.45 0.7 0" rgba="1 1 1 0.5" size="0.005"/>
+    </body>
+  </worldbody>
+</mujoco>

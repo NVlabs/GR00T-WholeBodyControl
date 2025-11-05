@@ -1,0 +1,29 @@
+<mujoco model="cardbox_c1">
+  <default>
+    <default class="visual">
+      <geom group="1" type="mesh" contype="0" conaffinity="0" density="100"/>
+    </default>
+    <default class="collision">
+      <geom group="0" type="mesh" density="100" solimp="0.95 0.98 0.001" solref="0.004 1" rgba="1 1 1 0.25"/>
+    </default>
+  </default>
+  <asset>
+    <texture type="2d" name="T_Cardbox_C2_Albedo" file="textures/T_Cardbox_C2_Albedo.png"/>
+    <material name="Cardboard_C1.001" texture="T_Cardbox_C2_Albedo" specular="0.5" shininess="0.25"/>
+    <mesh file="meshes/cardbox_c1.obj" name="cardbox_c1"/>
+  </asset>
+  <worldbody>
+    <body>
+      <body name="object">
+        <geom material="Cardboard_C1.001" mesh="cardbox_c1" class="visual"/>
+        <geom type="box" pos="0.11438979458586568 0.1132395756748832 0.11619486769882828" size="0.11532320848879028 0.11362960291817131 0.1138694271417666" quat="0.5001047556437312 0.5001791179205314 -0.5006005553534867 0.49911438304114525" class="collision"/>
+        <geom type="box" pos="0.11406816967872227 -0.11449877434064977 0.11583956501369462" size="0.11532320848879028 0.11362960291817131 0.1138694271417666" quat="0.5001047556437312 0.5001791179205314 -0.5006005553534867 0.49911438304114525" class="collision"/>
+        <geom type="box" pos="-0.11286914798264039 0.11356032142651372 0.11632441372313261" size="0.11532320848879028 0.11362960291817131 0.1138694271417666" quat="0.5001047556437312 0.5001791179205314 -0.5006005553534867 0.49911438304114525" class="collision"/>
+        <geom type="box" pos="-0.1131907728897838 -0.11417802858901925 0.11596911103799895" size="0.11532320848879028 0.11362960291817131 0.1138694271417666" quat="0.5001047556437312 0.5001791179205314 -0.5006005553534867 0.49911438304114525" class="collision"/>
+      </body>
+      <site name="bottom_site" pos="0 0 0.00098" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="top_site" pos="0 0 0.231274" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="horizontal_radius_site" pos="0.227483 0.227764 0" rgba="1 1 1 0.5" size="0.005"/>
+    </body>
+  </worldbody>
+</mujoco>

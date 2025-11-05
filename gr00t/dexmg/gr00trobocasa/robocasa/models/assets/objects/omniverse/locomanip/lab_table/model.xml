@@ -1,0 +1,33 @@
+<mujoco model="lab_table">
+  <default>
+    <default class="visual">
+      <geom group="1" type="mesh" contype="0" conaffinity="0" density="100"/>
+    </default>
+    <default class="collision">
+      <geom group="0" type="mesh" density="100" solimp="0.95 0.98 0.001" solref="0.004 1" rgba="1 1 1 0.25"/>
+    </default>
+  </default>
+  <asset>
+    <texture type="2d" name="Image_0" file="textures/Image_0.png"/>
+    <material name="PBR_Material" texture="Image_0" specular="0.5" shininess="0.25"/>
+    <mesh file="meshes/lab_table.obj" name="lab_table"/>
+  </asset>
+  <worldbody>
+    <body>
+      <body name="object">
+        <geom material="PBR_Material" mesh="lab_table" class="visual"/>
+        <geom name="collider_box_2f4d7726" type="box" pos="0.4843686625509804 -0.000730093650563612 0.3342451038217457" size="0.04263440320922718 0.04285815157647449 0.2785983345803944" quat="0.005135747294760671 0.9998119259901994 0.0186999519307263 0.00022032993656703975" class="collision"/>
+        <geom name="collider_box_f3b4e739" type="box" pos="0 0.003 0.658" size="0.587 0.368 0.026" class="collision"/>
+        <geom name="collider_box_90f1e61f" type="box" pos="-0.00954106500000005 0.0029612799999999993 0.62735063" size="0.014453629999999995 0.05161405327501812 0.43084086355897366" quat="9.14067532065674e-05 -0.7071067752785329 9.140675320652676e-05 0.7071067752785327" class="collision"/>
+        <geom name="collider_box_5bc23038" type="box" pos="-0.490715503853547 0.002950882518163021 0.02401571" size="0.0313436 0.039379695186117364 0.26608269445757937" quat="0.4999840367343198 -0.5000159627560445 0.49998403673431996 0.5000159627560447" class="collision"/>
+        <geom name="collider_box_25591b6e" type="box" pos="-0.48929601084175645 0.002471445296000595 0.333870825" size="0.04208595265213852 0.04300403156756598 0.278456965" quat="0.0 -0.9999450792382256 0.010480386789563123 0.0" class="collision"/>
+        <geom name="collider_box_737e359a" type="box" pos="0.4862727667260499 0.003058549031851817 0.024393834739060927" size="0.03166195583702207 0.03920107069552364 0.2658917817754224" quat="0.5006412500091809 0.5005636633450814 0.49929226103709484 -0.49950134714158967" class="collision"/>
+        <geom name="collider_box_6633a536" type="box" pos="0.48068282999999995 -0.001122674999999979 0.627093285" size="0.014710975000000015 0.05939634999999996 0.24522559500000002" quat="0.4999999999999999 -0.4999999999999998 -0.5000000000000001 -0.4999999999999997" class="collision"/>
+        <geom name="collider_box_f9f8fcce" type="box" pos="-0.49178033000000004 0.00173824500000001 0.627093285" size="0.014710975000000015 0.05140170000000002 0.243484215" quat="0.4999999999999999 -0.4999999999999998 -0.5000000000000001 -0.4999999999999997" class="collision"/>
+      </body>
+      <site name="bottom_site" pos="0 0 -0.00108" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="top_site" pos="0 0 0.684446" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="horizontal_radius_site" pos="0.581634 0.371296 0" rgba="1 1 1 0.5" size="0.005"/>
+    </body>
+  </worldbody>
+</mujoco>

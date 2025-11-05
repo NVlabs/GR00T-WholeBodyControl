@@ -1,0 +1,44 @@
+<mujoco model="shelf_a12">
+  <default>
+    <default class="visual">
+      <geom group="1" type="mesh" contype="0" conaffinity="0" density="100"/>
+    </default>
+    <default class="collision">
+      <geom group="0" type="mesh" density="100" solimp="0.95 0.98 0.001" solref="0.004 1" rgba="1 1 1 0.25"/>
+    </default>
+    <default class="spawn">
+      <geom group="0" rgba="1 1 1 0.5" contype="0" conaffinity="0" density="0" mass="0"/>
+    </default>
+  </default>
+  <asset>
+    <texture type="2d" name="Shelf_A12_Shelves" file="textures/Shelf_A12_Shelves.png"/>
+    <material name="Shefl_A12_Shelves" texture="Shelf_A12_Shelves" specular="0.5" shininess="0.64"/>
+    <texture type="2d" name="Shelf_A12_Poles" file="textures/Shelf_A12_Poles.png"/>
+    <material name="Shelf_A12_Poles" texture="Shelf_A12_Poles" specular="0.5" shininess="0.25"/>
+    <mesh file="meshes/shelf_a12_0.obj" name="shelf_a12_0"/>
+    <mesh file="meshes/shelf_a12_1.obj" name="shelf_a12_1"/>
+  </asset>
+  <worldbody>
+    <body>
+      <body name="object">
+        <geom mesh="shelf_a12_0" material="Shefl_A12_Shelves" class="visual"/>
+        <geom mesh="shelf_a12_1" material="Shelf_A12_Poles" class="visual"/>
+        <geom name="collider_box_02efb0bf" type="box" pos="0.0013450899999999939 0 0.42" size="0.02 0.3 0.608216275" quat="0.5 0.5 0.5 -0.5" class="collision"/>
+        <geom name="collider_box_9d67299e" type="box" pos="0.001345500201015522 0 0.89" size="0.02 0.3 0.6077063541004534" quat="0.5 0.5 0.5 -0.5" class="collision"/>
+        <geom name="collider_box_6e777308" type="box" pos="0.0013450899999999828 0 1.51" size="0.02 0.3 0.6081581249943651" quat="0.5 -0.5 -0.5 -0.5" class="collision"/>
+        <geom name="collider_box_2da42924" type="box" pos="0.16048454499999998 0 2.19798714" size="0.034 0.160534095 0.62843143" quat="0.5 0.5 0.5 -0.5" class="collision"/>
+        <geom name="collider_box_bb9caf5c" type="box" pos="-0.16053409500000002 0 2.197898165" size="0.034 0.160484545 0.62843143" quat="0.5 -0.5 0.5 0.5" class="collision"/>
+        <geom name="collider_box_846d28b4" type="box" pos="-0.26697437500000004 0.58704646 1.1" size="0.03 0.04 1.1" class="collision"/>
+        <geom name="collider_box_846d28b4_1" type="box" pos="0.26697437500000004 0.58704646 1.1" size="0.03 0.04 1.1" class="collision"/>
+        <geom name="collider_box_846d28b4_2" type="box" pos="0.26697437500000004 -0.58704646 1.1" size="0.03 0.04 1.1" class="collision"/>
+        <geom name="collider_box_846d28b4_3" type="box" pos="-0.26697437500000004 -0.58704646 1.1" size="0.03 0.04 1.1" class="collision"/>
+        <geom class="spawn" size="0.3 0.6 0.2" type="box" pos="0 0 0.645" name="spawn_1"/>
+        <geom class="spawn" size="0.3 0.6 0.2" type="box" pos="0 0 1.115" name="spawn_2"/>
+        <geom class="spawn" size="0.3 0.6 0.2" type="box" pos="0 0 1.735" name="spawn_3"/>
+      </body>
+      <site name="bottom_site" pos="0 0 7.3e-05" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="top_site" pos="0 0 2.219827" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="horizontal_radius_site" pos="0.30881 0.616871 0" rgba="1 1 1 0.5" size="0.005"/>
+    </body>
+  </worldbody>
+</mujoco>

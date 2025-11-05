@@ -1,0 +1,48 @@
+<mujoco model="control_box">
+  <default>
+    <default class="visual">
+      <geom group="1" type="mesh" contype="0" conaffinity="0" density="100"/>
+    </default>
+    <default class="collision">
+      <geom group="0" type="mesh" density="100" solimp="0.95 0.98 0.001" solref="0.004 1" rgba="1 1 1 0.25"/>
+    </default>
+  </default>
+  <asset>
+    <texture type="2d" name="Switch_Box_Rack_AO" file="textures/Switch_Box_Rack_AO.png"/>
+    <material name="Black_Paint_01" texture="Switch_Box_Rack_AO" specular="0.5" shininess="0.25" rgba="0.1 0.1 0.1 1"/>
+    <material name="Grey_Paint_01" texture="Switch_Box_Rack_AO" specular="0.5" shininess="0.25" rgba="0.4 0.4 0.4 1"/>
+    <material name="Metal_Car_Body" texture="Switch_Box_Rack_AO" specular="0.5" shininess="0.25"/>
+    <material name="White_Paint_01" texture="Switch_Box_Rack_AO" specular="0.5" shininess="0.25"/>
+    <mesh file="meshes/control_box_0.obj" name="control_box_0"/>
+    <mesh file="meshes/control_box_1.obj" name="control_box_1"/>
+    <mesh file="meshes/control_box_2.obj" name="control_box_2"/>
+    <mesh file="meshes/control_box_3.obj" name="control_box_3"/>
+  </asset>
+  <worldbody>
+    <body>
+      <body name="object">
+        <geom mesh="control_box_0" material="Grey_Paint_01" class="visual"/>
+        <geom mesh="control_box_1" material="Black_Paint_01" class="visual"/>
+        <geom mesh="control_box_2" material="White_Paint_01" class="visual"/>
+        <geom mesh="control_box_3" material="Metal_Car_Body" class="visual"/>
+        <geom name="collider_box_ebe8eabb" type="box" pos="-0.7523774546429488 0.055325995 0.08321655404005365" size="0.03716009943989884 0.0930225309904091 0.187409905" quat="0.0027438639802001073 0.0027438639802000583 -0.7071014575083681 0.7071014575083678" class="collision"/>
+        <geom name="collider_box_dfb1d16f" type="box" pos="-0.23248127499999993 1.1042268201446442e-17 0.18033392499999998" size="0.06947789500000001 0.30964686 0.416825745" quat="2.164890140588733e-17 0.7071067811865475 0.0 -0.7071067811865475" class="collision"/>
+        <geom name="collider_box_d1b3535b" type="box" pos="0.75788137 -0.21537172999999998 1.22656863" size="0.03131927000000001 0.09419833999999999 0.47005331" quat="0.0 0.0 1.0 0.0" class="collision"/>
+        <geom name="collider_box_8998e903" type="box" pos="0.75788739 0.21086863 1.22656863" size="0.03131308999999999 0.09870143999999999 0.47005331" quat="0.0 0.0 1.0 0.0" class="collision"/>
+        <geom name="collider_box_ff97e606" type="box" pos="-0.719134747618195 0.27961773907366216 0.8427010012182151" size="0.03358422238979289 0.0702302728174371 0.8525763041737647" quat="0.7033101376993546 -0.0016277700689558067 0.001698996333175307 0.710879254153177" class="collision"/>
+        <geom name="collider_box_3e2e4da6" type="box" pos="0.7425197161333342 -0.20986200712943953 0.3733753213987177" size="0.04692252372068123 0.10191625897510465 0.38409277509730266" quat="0.0001248556050212677 -0.00169189853553736 0.9999864673979844 0.004918019044643969" class="collision"/>
+        <geom name="collider_box_835b2739" type="box" pos="0.44023669000000004 2.6956722663786284e-17 0.18028169" size="0.06942572 0.25576059 0.30950737" quat="0.5000000000000001 -0.5000000000000001 0.5000000000000001 0.5000000000000001" class="collision"/>
+        <geom name="collider_box_698475ae" type="box" pos="0.25227429500000004 6.830008130623851e-06 0.9768140494090914" size="0.07292492832885222 0.30966203317423635 0.474287805" quat="7.423379164761322e-05 0.7071067772899253 -7.423379164765577e-05 -0.7071067772899255" class="collision"/>
+        <geom name="collider_box_e7a2e543" type="box" pos="-0.403212145 2.4689623137579423e-17 1.49208214" size="0.17319690499999998 0.20306891000000005 0.30964686" quat="2.1648901405887348e-17 -0.0 0.7071067811865472 0.7071067811865476" class="collision"/>
+        <geom name="collider_box_16580149" type="box" pos="0.7430019419495995 0.10166285589324099 0.09211309999999999" size="0.04655626591901202 0.10182063 0.20770286699007384" quat="0.7071059834816489 0.7071059834816489 0.0010621320304139376 0.001062132030414003" class="collision"/>
+        <geom name="collider_box_dfcb42c3" type="box" pos="-0.7203299514363931 -0.2275788788003295 0.8426981332485832" size="0.06992813082131594 0.0888452267272427 0.853296738521863" quat="0.9999869604782904 0.004989505924029776 -0.0007677871357757662 0.0007708481940371842" class="collision"/>
+        <geom name="collider_box_d9d57bc6" type="box" pos="-0.43836051499999995 -2.6841840078366762e-17 0.7694193699999999" size="0.21634700499999998 0.30964686 0.5195939199999999" quat="0.0 0.0 1.0 0.0" class="collision"/>
+        <geom name="collider_box_84f7739e" type="box" pos="0.7375058921086203 0.2087561142233311 0.475224525" size="0.03223058932562728 0.1049120576169541 0.281290795" quat="0.0 -0.9906322185182546 0.13655697577788195 0.0" class="collision"/>
+        <geom name="collider_box_2e902726" type="box" pos="2.9336369543128617e-08 4.788507338612207e-18 1.7349295062304169" size="0.0397765175140532 0.3096468600000001 0.7890267399736532" quat="0.7071038919179167 -0.0 -0.7071096704433723 3.528247968548471e-17" class="collision"/>
+      </body>
+      <site name="bottom_site" pos="0 0 -0.0" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="top_site" pos="0 0 1.765" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="horizontal_radius_site" pos="0.78 0.3 0" rgba="1 1 1 0.5" size="0.005"/>
+    </body>
+  </worldbody>
+</mujoco>

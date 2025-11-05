@@ -1,0 +1,29 @@
+<mujoco model="pallet_c1">
+  <default>
+    <default class="visual">
+      <geom group="1" type="mesh" contype="0" conaffinity="0" density="100"/>
+    </default>
+    <default class="collision">
+      <geom group="0" type="mesh" density="100" solimp="0.95 0.98 0.001" solref="0.004 1" rgba="1 1 1 0.25"/>
+    </default>
+  </default>
+  <asset>
+    <texture type="2d" name="T_Pallet_A3_Albedo" file="textures/T_Pallet_A3_Albedo.png"/>
+    <material name="Pallet.003" texture="T_Pallet_A3_Albedo" specular="0.5" shininess="0.25"/>
+    <mesh file="meshes/pallet_c1.obj" name="pallet_c1"/>
+  </asset>
+  <worldbody>
+    <body>
+      <body name="object">
+        <geom material="Pallet.003" mesh="pallet_c1" class="visual"/>
+        <geom type="box" pos="0.48058129040560554 0.43205089947639624 0.104357" size="0.103815 0.4314971266496818 0.48101530109945007" quat="0.00015899455366083493 0.7071067633114054 0.00015899455366092752 -0.7071067633114057" class="collision"/>
+        <geom type="box" pos="-0.48144921451557676 0.4316182699884387 0.104357" size="0.103815 0.4314971266496818 0.48101530109945007" quat="0.00015899455366083493 0.7071067633114054 0.00015899455366092752 -0.7071067633114057" class="collision"/>
+        <geom type="box" pos="0.48096938280210705 -0.4309432665595151 0.104357" size="0.103815 0.4314971266496818 0.48101530109945007" quat="0.00015899455366083493 0.7071067633114054 0.00015899455366092752 -0.7071067633114057" class="collision"/>
+        <geom type="box" pos="-0.48106112211907526 -0.4313758960474726 0.104357" size="0.103815 0.4314971266496818 0.48101530109945007" quat="0.00015899455366083493 0.7071067633114054 0.00015899455366092752 -0.7071067633114057" class="collision"/>
+      </body>
+      <site name="bottom_site" pos="0 0 0.000542" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="top_site" pos="0 0 0.208172" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="horizontal_radius_site" pos="0.962177 0.863023 0" rgba="1 1 1 0.5" size="0.005"/>
+    </body>
+  </worldbody>
+</mujoco>

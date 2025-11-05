@@ -1,0 +1,32 @@
+<mujoco model="tote_f01">
+  <default>
+    <default class="visual">
+      <geom group="1" type="mesh" contype="0" conaffinity="0" density="100"/>
+    </default>
+    <default class="collision">
+      <geom group="0" type="mesh" density="100" solimp="0.95 0.98 0.001" solref="0.004 1" rgba="1 1 1 0.25"/>
+    </default>
+  </default>
+  <asset>
+    <material name="opaque__plastic__gray.001" specular="0.5" shininess="0.36" rgba="0.050389 0.050389 0.050389 1.000000"/>
+    <material name="opaque__plastic__white.001" specular="0.5" shininess="0.25" rgba="0.800000 0.800000 0.800000 1.000000"/>
+    <mesh file="meshes/tote_f01_0.obj" name="tote_f01_0"/>
+    <mesh file="meshes/tote_f01_1.obj" name="tote_f01_1"/>
+  </asset>
+  <worldbody>
+    <body>
+      <body name="object">
+        <geom mesh="tote_f01_0" material="opaque__plastic__gray.001" class="visual"/>
+        <geom mesh="tote_f01_1" material="opaque__plastic__white.001" class="visual"/>
+        <geom name="collider_box_cb92007b" type="box" pos="0.070889545 -0.03478815 0.24138967500000003" size="0.017964765000000008 0.08994487500000001 0.09283863" quat="0.5000000000000001 -0.5000000000000001 0.5000000000000001 0.5000000000000001" class="collision"/>
+        <geom name="collider_box_d69e040c" type="box" pos="7.4400000000140285e-06 0.13538329999999998 0.240409235" size="0.016987835000000007 0.07733282 0.16083340000000002" quat="0.7071067811865476 0.0 0.7071067811865472 -4.3297802811774695e-17" class="collision"/>
+        <geom name="collider_box_a47505b5" type="box" pos="-0.08994709000000001 -0.077390755 0.24041107499999997" size="0.016986354999999995 0.07089175 0.135441235" quat="0.5000000000000001 0.5000000000000001 0.5000000000000001 -0.5000000000000001" class="collision"/>
+        <geom name="collider_box_85e0036b" type="box" pos="-7.285614012862304e-06 5.577544530395313e-05 0.11056478500286834" size="0.11286876933290152 0.1501230020814523 0.19892934896578765" quat="0.5000240928866677 0.4999943632778841 0.500023614941359 -0.4999579259539585" class="collision"/>
+        <geom name="collider_box_67b0d103" type="box" pos="0.07088399999999997 -0.170233665 0.24041243499999995" size="0.016987715 0.042606885 0.08993932999999998" quat="0.7071067811865476 0.0 0.7071067811865472 0.0" class="collision"/>
+      </body>
+      <site name="bottom_site" pos="0 0 6e-06" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="top_site" pos="0 0 0.257046" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="horizontal_radius_site" pos="0.158937 0.210934 0" rgba="1 1 1 0.5" size="0.005"/>
+    </body>
+  </worldbody>
+</mujoco>

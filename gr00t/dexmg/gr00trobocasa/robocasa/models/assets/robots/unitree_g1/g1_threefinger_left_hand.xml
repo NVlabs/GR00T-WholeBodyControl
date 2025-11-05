@@ -1,0 +1,146 @@
+<mujoco model="g1_threefinger_left_hand">
+  <compiler angle="radian" />
+
+  <default>
+    <default class="finger_motor">
+      <joint damping="0.01" armature="0.01" frictionloss="0.01"/>
+    </default>
+  </default>
+
+  <asset>
+    <mesh name="left_hand_palm_link" file="meshes/left_hand_palm_link.STL" />
+    <mesh name="left_hand_thumb_0_link" file="meshes/left_hand_thumb_0_link.STL" />
+    <mesh name="left_hand_thumb_1_link" file="meshes/left_hand_thumb_1_link.STL" />
+    <mesh name="left_hand_thumb_2_link" file="meshes/left_hand_thumb_2_link.STL" />
+    <mesh name="left_hand_middle_0_link" file="meshes/left_hand_middle_0_link.STL" />
+    <mesh name="left_hand_middle_1_link" file="meshes/left_hand_middle_1_link.STL" />
+    <mesh name="left_hand_index_0_link" file="meshes/left_hand_index_0_link.STL" />
+    <mesh name="left_hand_index_1_link" file="meshes/left_hand_index_1_link.STL" />
+  </asset>
+
+  <worldbody>
+    <body name="left_hand_palm_link" pos="0 0 0.04" quat="0.5 0.5 0.5 -0.5">
+      <site name="ft_frame" pos="0 0 0" size="0.01 0.01 0.01" rgba="1 1 0 1" type="sphere" group="1" />
+      <geom pos="0.0415 0.003 0" quat="1 0 0 0" type="mesh" contype="0"
+        conaffinity="0" group="1" density="0" rgba="0.1 0.1 0.1 1"
+        mesh="left_hand_palm_link" />
+      <geom pos="0.0415 0.003 0" quat="1 0 0 0" type="mesh" rgba="0.1 0.1 0.1 1"
+        mesh="left_hand_palm_link" />
+      <body name="eef" pos="0 0 0" quat="0.5 0.5 -0.5 0.5">
+        <site name="grip_site" pos="0 0 0" size="0.01 0.01 0.01" rgba="1 1 0 1" type="sphere"
+          group="2" />
+        <site name="ee_x" pos="0.1 0 0" size="0.005 .1" quat="0.707105  0 0.707108 0 "
+          rgba="1 0 0 0"
+          type="cylinder" group="1" />
+        <site name="ee_y" pos="0 0.1 0" size="0.005 .1" quat="0.707105 0.707108 0 0" rgba="0 1 0 0"
+          type="cylinder" group="1" />
+        <site name="ee_z" pos="0 0 0.1" size="0.005 .1" quat="1 0 0 0" rgba="0 0 1 0"
+          type="cylinder"
+          group="1" />
+        <!-- This site was added for visualization. -->
+        <site name="grip_site_cylinder" pos="0 0 0" quat="-0.5 -0.5 -0.5 0.5" size="0.005 0.5"
+          rgba="0 1 0 0.3" type="cylinder" group="1" />
+      </body>
+      <geom pos="0.0415 0.003 0" quat="1 0 0 0" type="mesh" rgba="0.1 0.1 0.1 1"
+        mesh="left_hand_palm_link" />
+      <body name="left_hand_thumb_0_link" pos="0.067 0.003 0">
+        <inertial pos="-0.000884246 -0.00863407 0.000944293"
+          quat="0.462991 0.643965 -0.460173 0.398986" mass="0.0862366"
+          diaginertia="1.6546e-05 1.60058e-05 1.43741e-05" />
+        <joint name="left_hand_thumb_0_joint" pos="0 0 0" axis="0 1 0"
+          range="-1.0472 1.0472" actuatorfrcrange="-2.45 2.45"
+          class="finger_motor" />
+        <geom type="mesh" contype="0" conaffinity="0" group="1" density="0"
+          rgba="0.1 0.1 0.1 1" mesh="left_hand_thumb_0_link" name="left_hand_thumb_0_link_vis" />
+        <geom type="mesh" rgba="0.1 0.1 0.1 1" mesh="left_hand_thumb_0_link" name="left_hand_thumb_0_link_col" />
+        <body name="left_hand_thumb_1_link" pos="-0.0025 -0.0193 0">
+          <inertial pos="-0.000827888 -0.0354744 -0.0003809"
+            quat="0.685598 0.705471 -0.15207 0.0956069" mass="0.0588507"
+            diaginertia="1.28514e-05 1.22902e-05 5.9666e-06" />
+          <joint name="left_hand_thumb_1_joint" pos="0 0 0" axis="0 0 1"
+            range="-0.724312 1.0472" actuatorfrcrange="-1.4 1.4"
+            class="finger_motor" />
+          <geom type="mesh" contype="0" conaffinity="0" group="1" density="0"
+            rgba="0.1 0.1 0.1 1" mesh="left_hand_thumb_1_link" name="left_hand_thumb_1_link_vis" />
+          <geom size="0.01 0.015 0.01" pos="-0.001 -0.032 0" type="box"
+            rgba="0.1 0.1 0.1 1" name="left_hand_thumb_1_link_col" />
+          <body name="left_hand_thumb_2_link" pos="0 -0.0458 0">
+            <inertial pos="-0.00171735 -0.0262819 0.000107789"
+              quat="0.703174 0.710977 -0.00017564 -0.00766553" mass="0.0203063"
+              diaginertia="4.61314e-06 3.86645e-06 1.53495e-06" />
+            <joint name="left_hand_thumb_2_joint" pos="0 0 0" axis="0 0 1"
+              range="0 1.74533" actuatorfrcrange="-1.4 1.4" class="finger_motor" />
+            <geom type="mesh" contype="0" conaffinity="0" group="1" density="0"
+              rgba="0.1 0.1 0.1 1" mesh="left_hand_thumb_2_link" name="left_hand_thumb_2_link_vis" />
+            <geom type="mesh" rgba="0.1 0.1 0.1 1" mesh="left_hand_thumb_2_link" name="left_hand_thumb_2_link_col" />
+          </body>
+        </body>
+      </body>
+      <body name="left_hand_index_0_link" pos="0.1192 0.0046 0.0285">
+        <inertial pos="0.0354744 0.000827888 0.0003809"
+          quat="0.391313 0.552395 0.417187 0.606373" mass="0.0588507"
+          diaginertia="1.28514e-05 1.22902e-05 5.9666e-06" />
+        <joint name="left_hand_index_0_joint" pos="0 0 0" axis="0 0 1"
+          range="-1.5708 0" actuatorfrcrange="-1.4 1.4" class="finger_motor" />
+        <geom type="mesh" contype="0" conaffinity="0" group="1" density="0"
+          rgba="0.1 0.1 0.1 1" mesh="left_hand_index_0_link" name="left_hand_index_0_link_vis" />
+        <geom type="mesh" rgba="0.1 0.1 0.1 1" mesh="left_hand_index_0_link" name="left_hand_index_0_link_col" />
+        <body name="left_hand_index_1_link" pos="0.0458 0 0">
+          <inertial pos="0.0262819 0.00171735 -0.000107789"
+            quat="0.502612 0.491799 0.502639 0.502861" mass="0.0203063"
+            diaginertia="4.61314e-06 3.86645e-06 1.53495e-06" />
+          <joint name="left_hand_index_1_joint" pos="0 0 0" axis="0 0 1"
+            range="-1.74533 0" actuatorfrcrange="-1.4 1.4" class="finger_motor" />
+          <geom type="mesh" contype="0" conaffinity="0" group="1" density="0"
+            rgba="0.1 0.1 0.1 1" mesh="left_hand_index_1_link" name="left_hand_index_1_link_vis" />
+          <geom type="mesh" rgba="0.1 0.1 0.1 1" mesh="left_hand_index_1_link" name="left_hand_index_1_link_col" />
+        </body>
+      </body>
+      <body name="left_hand_middle_0_link" pos="0.1192 0.0046 -0.0285">
+        <inertial pos="0.0354744 0.000827888 0.0003809"
+          quat="0.391313 0.552395 0.417187 0.606373" mass="0.0588507"
+          diaginertia="1.28514e-05 1.22902e-05 5.9666e-06" />
+        <joint name="left_hand_middle_0_joint" pos="0 0 0" axis="0 0 1"
+          range="-1.5708 0" actuatorfrcrange="-1.4 1.4" class="finger_motor" />
+        <geom type="mesh" contype="0" conaffinity="0" group="1" density="0"
+          rgba="0.1 0.1 0.1 1" mesh="left_hand_middle_0_link" name="left_hand_middle_0_link_vis" />
+        <geom type="mesh" rgba="0.1 0.1 0.1 1" mesh="left_hand_middle_0_link" name="left_hand_middle_0_link_col" />
+        <body name="left_hand_middle_1_link" pos="0.0458 0 0">
+          <inertial pos="0.0262819 0.00171735 -0.000107789"
+            quat="0.502612 0.491799 0.502639 0.502861" mass="0.0203063"
+            diaginertia="4.61314e-06 3.86645e-06 1.53495e-06" />
+          <joint name="left_hand_middle_1_joint" pos="0 0 0" axis="0 0 1"
+            range="-1.74533 0" actuatorfrcrange="-1.4 1.4" class="finger_motor" />
+          <geom type="mesh" contype="0" conaffinity="0" group="1" density="0"
+            rgba="0.1 0.1 0.1 1" mesh="left_hand_middle_1_link" name="left_hand_middle_1_link_vis" />
+          <geom type="mesh" rgba="0.1 0.1 0.1 1" mesh="left_hand_middle_1_link" name="left_hand_middle_1_link_col" />
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <!-- Note that originally, they are torque actuators. -->
+    <position name="left_hand_thumb_0_joint" joint="left_hand_thumb_0_joint"
+      ctrlrange="-1.0472 1.0472" kp="15.0" kv="0.5" forcelimited="true"
+      forcerange="-2.45 2.45" />
+    <position name="left_hand_thumb_1_joint" joint="left_hand_thumb_1_joint"
+      ctrlrange="-0.724312 1.0472" kp="15.0" kv="0.5" forcelimited="true"
+      forcerange="-1.4 1.4" />
+    <position name="left_hand_thumb_2_joint" joint="left_hand_thumb_2_joint"
+      ctrlrange="0 1.74533" kp="15.0" kv="0.5" forcelimited="true" forcerange="-1.4 1.4" />
+      <position name="left_hand_index_0_joint" joint="left_hand_index_0_joint"
+        ctrlrange="-1.5708 0" kp="15.0" kv="0.5" forcelimited="true" forcerange="-1.4 1.4" />
+      <position name="left_hand_index_1_joint" joint="left_hand_index_1_joint"
+        ctrlrange="-1.74533 0" kp="15.0" kv="0.5" forcelimited="true" forcerange="-1.4 1.4" />
+    <position name="left_hand_middle_0_joint" joint="left_hand_middle_0_joint"
+      ctrlrange="-1.5708 0" kp="15.0" kv="0.5" forcelimited="true" forcerange="-1.4 1.4" />
+    <position name="left_hand_middle_1_joint" joint="left_hand_middle_1_joint"
+      ctrlrange="-1.74533 0" kp="15.0" kv="0.5" forcelimited="true" forcerange="-1.4 1.4" />
+  </actuator>
+
+  <sensor>
+    <force name="force_ee" site="ft_frame" />
+    <torque name="torque_ee" site="ft_frame" />
+  </sensor>
+</mujoco>

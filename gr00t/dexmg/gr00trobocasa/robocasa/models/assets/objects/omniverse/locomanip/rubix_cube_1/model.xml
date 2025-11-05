@@ -1,0 +1,34 @@
+<mujoco model="rubix_cube_1_0">
+  <default>
+    <default class="visual">
+      <geom group="1" type="mesh" contype="0" conaffinity="0" density="100"/>
+    </default>
+    <default class="collision">
+      <geom group="0" type="mesh" density="100" solimp="0.95 0.98 0.001" solref="0.004 1" rgba="1 1 1 0.25"/>
+    </default>
+    <mesh scale="0.075 0.075 0.075"/>
+  </default>
+  <asset>
+    <texture type="2d" name="Material.002_baseColor" file="textures/Material.002_baseColor.png"/>
+    <material name="material_0.153" texture="Material.002_baseColor" specular="0.501961" shininess="0.25"/>
+    <mesh file="meshes/rubix_cube_1_0.obj" name="rubix_cube_1_0" scale="0.075 0.075 0.075"/>
+    <mesh file="meshes/rubix_cube_1_0_collision_0_0.obj" name="rubix_cube_1_0_collision_0_0" scale="0.075 0.075 0.075"/>
+    <mesh file="meshes/rubix_cube_1_0_collision_0_1.obj" name="rubix_cube_1_0_collision_0_1" scale="0.075 0.075 0.075"/>
+    <mesh file="meshes/rubix_cube_1_0_collision_0_2.obj" name="rubix_cube_1_0_collision_0_2" scale="0.075 0.075 0.075"/>
+    <mesh file="meshes/rubix_cube_1_0_collision_0_3.obj" name="rubix_cube_1_0_collision_0_3" scale="0.075 0.075 0.075"/>
+  </asset>
+  <worldbody>
+    <body>
+      <body name="object">
+        <geom material="material_0.153" mesh="rubix_cube_1_0" class="visual"/>
+        <geom mesh="rubix_cube_1_0_collision_0_0" class="collision"/>
+        <geom mesh="rubix_cube_1_0_collision_0_1" class="collision"/>
+        <geom mesh="rubix_cube_1_0_collision_0_2" class="collision"/>
+        <geom mesh="rubix_cube_1_0_collision_0_3" class="collision"/>
+      </body>
+      <site name="bottom_site" pos="0 0 -0.037489575" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="top_site" pos="0 0 0.037489575" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="horizontal_radius_site" pos="0.0375 0.03749835 0" rgba="1 1 1 0.5" size="0.005"/>
+    </body>
+  </worldbody>
+</mujoco>

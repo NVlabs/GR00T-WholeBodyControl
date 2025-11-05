@@ -1,0 +1,35 @@
+<mujoco model="apple_41">
+  <asset>
+    <mesh file="visual/model_normalized_0.obj" name="model_normalized_0_vis" scale="0.07500000000000001 0.07500000000000001 0.07500000000000001" refquat="1.0 0.0 0.0 0.0"/>
+    <texture type="2d" name="image0" file="visual/image0.png"/>
+    <material name="defaultMat.011" texture="image0" specular="0.5" shininess="0.25"/>
+    <mesh file="collision/tmpm_h04v7s_collision_4.obj" name="tmpm_h04v7s_collision_4" scale="0.07500000000000001 0.07500000000000001 0.07500000000000001"/>
+    <mesh file="collision/tmpm_h04v7s_collision_0.obj" name="tmpm_h04v7s_collision_0" scale="0.07500000000000001 0.07500000000000001 0.07500000000000001"/>
+    <mesh file="collision/tmpm_h04v7s_collision_1.obj" name="tmpm_h04v7s_collision_1" scale="0.07500000000000001 0.07500000000000001 0.07500000000000001"/>
+    <mesh file="collision/tmpm_h04v7s_collision_3.obj" name="tmpm_h04v7s_collision_3" scale="0.07500000000000001 0.07500000000000001 0.07500000000000001"/>
+    <mesh file="collision/tmpm_h04v7s_collision_2.obj" name="tmpm_h04v7s_collision_2" scale="0.07500000000000001 0.07500000000000001 0.07500000000000001"/>
+  </asset>
+  <worldbody>
+    <body>
+      <body name="object">
+        <geom type="mesh" mesh="model_normalized_0_vis" conaffinity="0" contype="0" group="1" material="defaultMat.011"/>
+        <geom class="collision" type="mesh" mesh="tmpm_h04v7s_collision_4"/>
+        <geom class="collision" type="mesh" mesh="tmpm_h04v7s_collision_0"/>
+        <geom class="collision" type="mesh" mesh="tmpm_h04v7s_collision_1"/>
+        <geom class="collision" type="mesh" mesh="tmpm_h04v7s_collision_3"/>
+        <geom class="collision" type="mesh" mesh="tmpm_h04v7s_collision_2"/>
+      </body>
+      <site rgba="0 0 0 0" size="0.005" pos="-0.00028711012500000084 -0.0001968427499999995 -0.0368284545" name="bottom_site"/>
+      <site rgba="0 0 0 0" size="0.005" pos="-0.00028711012500000084 -0.0001968427499999995 0.036928177500000006" name="top_site"/>
+      <site rgba="0 0 0 0" size="0.005" pos="0.0368138235 0.036646608000000004 4.986150000000079e-05" name="horizontal_radius_site"/>
+    </body>
+  </worldbody>
+  <default>
+    <default class="visual">
+      <geom group="1" density="100"/>
+    </default>
+    <default class="collision">
+      <geom group="0" density="100" solimp="0.95 0.98 0.001" solref="0.004 1" rgba="1 1 1 0.25"/>
+    </default>
+  </default>
+</mujoco>

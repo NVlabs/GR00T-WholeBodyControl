@@ -1,0 +1,31 @@
+<mujoco model="jug_a01">
+  <default>
+    <default class="visual">
+      <geom group="1" type="mesh" contype="0" conaffinity="0" density="100"/>
+    </default>
+    <default class="collision">
+      <geom group="0" type="mesh" density="100" solimp="0.95 0.98 0.001" solref="0.004 1" rgba="1 1 1 0.25"/>
+    </default>
+  </default>
+  <asset>
+    <texture type="2d" name="Jug_A" file="textures/Jug_A.png"/>
+    <material name="opaque__plastic__utilityjug_translucent.001" texture="Jug_A" specular="0.5" shininess="0.25"/>
+    <mesh file="meshes/jug_a01.obj" name="jug_a01"/>
+  </asset>
+  <worldbody>
+    <body>
+      <body name="object">
+        <geom material="opaque__plastic__utilityjug_translucent.001" mesh="jug_a01" class="visual"/>
+        <geom type="box" pos="0 0 0.09" quat="1 0 0 0" size="0.048 0.028 0.09" class="collision"/>
+        <geom type="box" pos="0 0 0.09" quat="0.5 0 0 0.8660254" size="0.048 0.028 0.09" class="collision"/>
+        <geom type="box" pos="0 0 0.09" quat="-0.5 0 0 0.8660254" size="0.048 0.028 0.09" class="collision"/>
+        <geom type="box" pos="-0.005 0 0.2" size="0.03 0.03 0.06" class="collision"/>
+        <geom type="box" pos="0.025 0 0.2" size="0.02 0.01 0.05" class="collision"/>
+        <geom type="box" pos="0 0 0.27" size="0.015 0.015 0.01" class="collision"/>
+      </body>
+      <site name="bottom_site" pos="0 0 8.7e-05" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="top_site" pos="0 0 0.280272" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="horizontal_radius_site" pos="0.048308 0.048283 0" rgba="1 1 1 0.5" size="0.005"/>
+    </body>
+  </worldbody>
+</mujoco>

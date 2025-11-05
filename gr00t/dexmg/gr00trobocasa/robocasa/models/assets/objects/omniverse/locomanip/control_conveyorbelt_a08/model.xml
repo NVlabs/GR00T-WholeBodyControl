@@ -1,0 +1,59 @@
+<mujoco model="control_conveyorbelt_a08">
+  <compiler angle="radian"/>
+  <default>
+    <default class="visual">
+      <geom group="1" type="mesh" contype="0" conaffinity="0" density="100"/>
+    </default>
+    <default class="collision">
+      <geom group="0" type="mesh" density="10" solimp="0.95 0.98 0.001" solref="0.004 1" rgba="1 1 1 0.25"/>
+    </default>
+  </default>
+  <asset>
+    <texture type="2d" name="ControlPanel_AO" file="textures/ControlPanel_AO.png"/>
+    <material name="Plastic_Blue_A.002" texture="ControlPanel_AO" specular="0.5" shininess="0.25" rgba="0.003283 0.005926 0.015909 1.000000"/>
+    <material name="Plastic_Orange_A.001" specular="0.5" shininess="0.25" rgba="0.800828 0.581137 0.046755 1.000000"/>
+    <material name="Plastic_Red_A.001" specular="0.5" shininess="0.6316066889999999" rgba="0.800490 0.026550 0.011947 1.000000"/>
+    <material name="Plastic_Rough_Black_A.002" specular="0.5" shininess="0.25" rgba="0.007488 0.007488 0.007488 1.000000"/>
+    <material name="Plastic_Yellow_A.002" texture="ControlPanel_AO" specular="0.5" shininess="0.25" rgba="1.0 0.9 0.1 1.000000"/>
+    <material name="Steel_A.002" specular="0.5" shininess="0.25" rgba="0.358317 0.358317 0.358317 1.000000"/>
+    <mesh file="meshes/control_conveyorbelt_a08_0.obj" name="control_conveyorbelt_a08_0"/>
+    <mesh file="meshes/control_conveyorbelt_a08_1.obj" name="control_conveyorbelt_a08_1"/>
+    <mesh file="meshes/control_conveyorbelt_a08_body.obj" name="control_conveyorbelt_a08_body"/>
+    <mesh file="meshes/control_conveyorbelt_a08_4.obj" name="control_conveyorbelt_a08_4"/>
+    <mesh file="meshes/control_conveyorbelt_a08_collision_0.obj" name="control_conveyorbelt_a08_collision_0"/>
+    <mesh file="meshes/control_conveyorbelt_a08_collision_1.obj" name="control_conveyorbelt_a08_collision_1"/>
+    <mesh file="meshes/control_conveyorbelt_a08_collision_2.obj" name="control_conveyorbelt_a08_collision_2"/>
+    <!--Button-->
+    <mesh file="meshes/control_conveyorbelt_a08_button.obj" name="control_conveyorbelt_a08_button"/>
+    <!--Lever-->
+    <mesh file="meshes/control_conveyorbelt_a08_lever.obj" name="control_conveyorbelt_a08_lever"/>
+  </asset>
+  <worldbody>
+    <body>
+      <body name="object">
+        <body name="main_body" quat="0.5 -0.5 -0.5 -0.5">
+          <geom mesh="control_conveyorbelt_a08_0" material="Plastic_Orange_A.001" class="visual"/>
+          <geom mesh="control_conveyorbelt_a08_1" material="Plastic_Rough_Black_A.002" class="visual"/>
+          <geom mesh="control_conveyorbelt_a08_body" material="Plastic_Yellow_A.002" class="visual"/>
+          <geom mesh="control_conveyorbelt_a08_4" material="Steel_A.002" class="visual"/>
+          <geom mesh="control_conveyorbelt_a08_collision_0" class="collision"/>
+          <geom mesh="control_conveyorbelt_a08_collision_1" class="collision"/>
+          <geom mesh="control_conveyorbelt_a08_collision_2" class="collision"/>
+          <body name="button" pos="0.045464 0 0.0688" gravcomp="1">
+            <joint name="button_z" type="slide" axis="0 0 1" range="-0.015 0" ref="0" damping="0.1" stiffness="1"/>
+            <geom material="Plastic_Red_A.001" mesh="control_conveyorbelt_a08_button" class="visual"/>
+            <geom class="collision" type="cylinder" size="0.025 0.005" pos="0 0 0.005"/>
+          </body>
+          <body name="lever" pos="-0.035 0 0.05393" gravcomp="1">
+            <joint name="lever_zrot" type="hinge" axis="0 0 1" range="-0.4363 0.4363" ref="0" damping="1e-5" stiffness="1e-4"/>
+            <geom material="Plastic_Blue_A.002" mesh="control_conveyorbelt_a08_lever" class="visual"/>
+            <geom class="collision" type="box" size="0.02 0.01 0.005" pos="-0.02 0 0"/>
+          </body>
+        </body>
+      </body>
+      <site name="bottom_site" pos="0 -0.000236 0" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="top_site" pos="0 0.054132 0" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="horizontal_radius_site" pos="0.035138 0 0.111209" rgba="1 1 1 0.5" size="0.005"/>
+    </body>
+  </worldbody>
+</mujoco>

@@ -1,0 +1,72 @@
+<mujoco model="clock_0_0">
+  <default>
+    <default class="visual">
+      <geom group="1" type="mesh" contype="0" conaffinity="0" density="100"/>
+    </default>
+    <default class="collision">
+      <geom group="0" type="mesh" density="100" solimp="0.95 0.98 0.001" solref="0.004 1" rgba="1 1 1 0.25"/>
+    </default>
+    <mesh scale="0.2 0.2 0.2"/>
+  </default>
+  <asset>
+    <material name="material_0.040" specular="0.501961" shininess="1.0" rgba="0.400000 0.400000 0.400000 0.100000"/>
+    <texture type="2d" name="korpus_baseColor" file="textures/korpus_baseColor.png"/>
+    <material name="material_0.041" texture="korpus_baseColor" specular="0.501961" shininess="0.25"/>
+    <texture type="2d" name="minutnaya_baseColor" file="textures/minutnaya_baseColor.png"/>
+    <material name="material_0.042" texture="minutnaya_baseColor" specular="0.501961" shininess="0.25"/>
+    <texture type="2d" name="chasovaya_baseColor" file="textures/chasovaya_baseColor.png"/>
+    <material name="material_0.043" texture="chasovaya_baseColor" specular="0.501961" shininess="0.25"/>
+    <texture type="2d" name="ciferblat_baseColor" file="textures/ciferblat_baseColor.png"/>
+    <material name="material_0.044" texture="ciferblat_baseColor" specular="0.501961" shininess="0.25"/>
+    <texture type="2d" name="hrom_baseColor" file="textures/hrom_baseColor.png"/>
+    <material name="material_0.045" texture="hrom_baseColor" specular="0.501961" shininess="0.25"/>
+    <material name="material_0.046" texture="korpus_baseColor" specular="0.501961" shininess="0.25"/>
+    <mesh file="meshes/clock_0_0_0.obj" name="clock_0_0_0" scale="0.2 0.2 0.2"/>
+    <mesh file="meshes/clock_0_0_1.obj" name="clock_0_0_1" scale="0.2 0.2 0.2"/>
+    <mesh file="meshes/clock_0_0_2.obj" name="clock_0_0_2" scale="0.2 0.2 0.2"/>
+    <mesh file="meshes/clock_0_0_3.obj" name="clock_0_0_3" scale="0.2 0.2 0.2"/>
+    <mesh file="meshes/clock_0_0_4.obj" name="clock_0_0_4" scale="0.2 0.2 0.2"/>
+    <mesh file="meshes/clock_0_0_5.obj" name="clock_0_0_5" scale="0.2 0.2 0.2"/>
+    <mesh file="meshes/clock_0_0_6.obj" name="clock_0_0_6" scale="0.2 0.2 0.2"/>
+    <mesh file="meshes/clock_0_0_collision_0_0.obj" name="clock_0_0_collision_0_0" scale="0.2 0.2 0.2"/>
+    <mesh file="meshes/clock_0_0_collision_0_1.obj" name="clock_0_0_collision_0_1" scale="0.2 0.2 0.2"/>
+    <mesh file="meshes/clock_0_0_collision_0_2.obj" name="clock_0_0_collision_0_2" scale="0.2 0.2 0.2"/>
+    <mesh file="meshes/clock_0_0_collision_0_3.obj" name="clock_0_0_collision_0_3" scale="0.2 0.2 0.2"/>
+    <mesh file="meshes/clock_0_0_collision_0_4.obj" name="clock_0_0_collision_0_4" scale="0.2 0.2 0.2"/>
+    <mesh file="meshes/clock_0_0_collision_0_5.obj" name="clock_0_0_collision_0_5" scale="0.2 0.2 0.2"/>
+    <mesh file="meshes/clock_0_0_collision_0_6.obj" name="clock_0_0_collision_0_6" scale="0.2 0.2 0.2"/>
+    <mesh file="meshes/clock_0_0_collision_0_7.obj" name="clock_0_0_collision_0_7" scale="0.2 0.2 0.2"/>
+    <mesh file="meshes/clock_0_0_collision_0_8.obj" name="clock_0_0_collision_0_8" scale="0.2 0.2 0.2"/>
+    <mesh file="meshes/clock_0_0_collision_0_9.obj" name="clock_0_0_collision_0_9" scale="0.2 0.2 0.2"/>
+    <mesh file="meshes/clock_0_0_collision_0_10.obj" name="clock_0_0_collision_0_10" scale="0.2 0.2 0.2"/>
+    <mesh file="meshes/clock_0_0_collision_0_11.obj" name="clock_0_0_collision_0_11" scale="0.2 0.2 0.2"/>
+  </asset>
+  <worldbody>
+    <body>
+      <body name="object">
+        <geom mesh="clock_0_0_0" material="material_0.046" class="visual"/>
+        <geom mesh="clock_0_0_1" material="material_0.045" class="visual"/>
+        <geom mesh="clock_0_0_2" material="material_0.044" class="visual"/>
+        <geom mesh="clock_0_0_3" material="material_0.043" class="visual"/>
+        <geom mesh="clock_0_0_4" material="material_0.042" class="visual"/>
+        <geom mesh="clock_0_0_5" material="material_0.041" class="visual"/>
+        <geom mesh="clock_0_0_6" material="material_0.040" class="visual"/>
+        <geom mesh="clock_0_0_collision_0_0" class="collision"/>
+        <geom mesh="clock_0_0_collision_0_1" class="collision"/>
+        <geom mesh="clock_0_0_collision_0_2" class="collision"/>
+        <geom mesh="clock_0_0_collision_0_3" class="collision"/>
+        <geom mesh="clock_0_0_collision_0_4" class="collision"/>
+        <geom mesh="clock_0_0_collision_0_5" class="collision"/>
+        <geom mesh="clock_0_0_collision_0_6" class="collision"/>
+        <geom mesh="clock_0_0_collision_0_7" class="collision"/>
+        <geom mesh="clock_0_0_collision_0_8" class="collision"/>
+        <geom mesh="clock_0_0_collision_0_9" class="collision"/>
+        <geom mesh="clock_0_0_collision_0_10" class="collision"/>
+        <geom mesh="clock_0_0_collision_0_11" class="collision"/>
+      </body>
+      <site name="bottom_site" pos="0 0 -0.1" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="top_site" pos="0 0 0.1" rgba="1 1 1 0.5" size="0.005"/>
+      <site name="horizontal_radius_site" pos="0.049462200000000005 0.07503220000000001 0" rgba="1 1 1 0.5" size="0.005"/>
+    </body>
+  </worldbody>
+</mujoco>

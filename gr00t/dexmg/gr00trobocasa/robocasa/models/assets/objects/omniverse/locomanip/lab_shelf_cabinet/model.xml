@@ -1,0 +1,86 @@
+<mujoco model="lab_shelf_cabinet">
+  <default>
+    <default class="visual">
+      <geom group="1" type="box" contype="0" conaffinity="0" density="100"/>
+    </default>
+    <default class="collision">
+      <geom group="0" type="box" density="100" solimp="0.95 0.98 0.001" solref="0.004 1" rgba="1 1 1 0.25"/>
+    </default>
+    <default class="spawn">
+      <geom group="1" rgba="1 1 1 0" contype="0" conaffinity="0" density="0" mass="0"/>
+    </default>
+  </default>
+
+  <asset>
+    <texture name="white_tex" builtin="flat" rgb1="1 1 1" rgb2="1 1 1" width="32" height="32"/>
+    <material name="white_mat" texture="white_tex" shininess="0.2" reflectance="0.05" rgba="1 1 1 1"/>
+  </asset>
+
+  <!-- H = 1.80797 m; shelf z tops = 0.3317, 0.5888, 0.9159, 1.2174, 1.5001, 1.8080 -->
+  <worldbody>
+    <body>
+      <body name="object">
+        <!-- Sides (centered at H/2) -->
+        <geom class="collision" name="side_left" size="0.008255 0.146050 0.903985" pos="-0.302895 0 0.903985"/>
+        <geom class="visual" name="side_left_vis" size="0.008255 0.146050 0.903985" pos="-0.302895 0 0.903985"/>
+        <geom class="collision" name="side_right" size="0.008255 0.146050 0.903985" pos="0.302895 0 0.903985"/>
+        <geom class="visual" name="side_right_vis" size="0.008255 0.146050 0.903985" pos="0.302895 0 0.903985"/>
+        <!-- Bottom panel (sits on floor) -->
+        <geom class="collision" name="bottom" size="0.311150 0.146050 0.007938" pos="0 0 0.007938"/>
+        <geom class="visual" name="bottom_vis" size="0.311150 0.146050 0.007938" pos="0 0 0.007938"/>
+        <!-- Back panel -->
+        <geom class="collision" name="back" size="0.311150 0.001270 0.903985" pos="0 -0.144780 0.903985"/>
+        <geom class="visual" name="back_vis" size="0.311150 0.001270 0.903985" pos="0 -0.144780 0.903985"/>
+        <!-- Top panel -->
+        <geom class="collision" name="top" size="0.294640 0.144780 0.007938" pos="0 0 1.800035"/>
+        <geom class="visual" name="top_vis" size="0.294640 0.144780 0.007938" pos="0 0 1.800035"/>
+
+        <!-- Fixed Shelf Separator, id: 0-->
+        <geom class="spawn" name="spawn_0" type="box" size="0.05 0.05 0.001" pos="0 0 0.903986"/>
+        <!-- Shelf Pegs, Lower Part, ids: 1-19 -->
+        <geom class="spawn" name="spawn_peg_1" type="box" size="0.05 0.05 0.001" pos="0 0 0.210"/>
+        <geom class="spawn" name="spawn_peg_2" type="box" size="0.05 0.05 0.001" pos="0 0 0.242"/>
+        <geom class="spawn" name="spawn_peg_3" type="box" size="0.05 0.05 0.001" pos="0 0 0.274"/>
+        <geom class="spawn" name="spawn_peg_4" type="box" size="0.05 0.05 0.001" pos="0 0 0.306"/>
+        <geom class="spawn" name="spawn_peg_5" type="box" size="0.05 0.05 0.001" pos="0 0 0.338"/>
+        <geom class="spawn" name="spawn_peg_6" type="box" size="0.05 0.05 0.001" pos="0 0 0.370"/>
+        <geom class="spawn" name="spawn_peg_7" type="box" size="0.05 0.05 0.001" pos="0 0 0.402"/>
+        <geom class="spawn" name="spawn_peg_8" type="box" size="0.05 0.05 0.001" pos="0 0 0.434"/>
+        <geom class="spawn" name="spawn_peg_9" type="box" size="0.05 0.05 0.001" pos="0 0 0.466"/>
+        <geom class="spawn" name="spawn_peg_10" type="box" size="0.05 0.05 0.001" pos="0 0 0.498"/>
+        <geom class="spawn" name="spawn_peg_11" type="box" size="0.05 0.05 0.001" pos="0 0 0.530"/>
+        <geom class="spawn" name="spawn_peg_12" type="box" size="0.05 0.05 0.001" pos="0 0 0.562"/>
+        <geom class="spawn" name="spawn_peg_13" type="box" size="0.05 0.05 0.001" pos="0 0 0.594"/>
+        <geom class="spawn" name="spawn_peg_14" type="box" size="0.05 0.05 0.001" pos="0 0 0.626"/>
+        <geom class="spawn" name="spawn_peg_15" type="box" size="0.05 0.05 0.001" pos="0 0 0.658"/>
+        <geom class="spawn" name="spawn_peg_16" type="box" size="0.05 0.05 0.001" pos="0 0 0.690"/>
+        <geom class="spawn" name="spawn_peg_17" type="box" size="0.05 0.05 0.001" pos="0 0 0.722"/>
+        <geom class="spawn" name="spawn_peg_18" type="box" size="0.05 0.05 0.001" pos="0 0 0.754"/>
+        <!-- Shelf Pegs, Upper Part, ids: 20-37 -->
+        <geom class="spawn" name="spawn_peg_19" type="box" size="0.05 0.05 0.001" pos="0 0 1.120"/>
+        <geom class="spawn" name="spawn_peg_20" type="box" size="0.05 0.05 0.001" pos="0 0 1.152"/>
+        <geom class="spawn" name="spawn_peg_21" type="box" size="0.05 0.05 0.001" pos="0 0 1.184"/>
+        <geom class="spawn" name="spawn_peg_22" type="box" size="0.05 0.05 0.001" pos="0 0 1.216"/>
+        <geom class="spawn" name="spawn_peg_23" type="box" size="0.05 0.05 0.001" pos="0 0 1.248"/>
+        <geom class="spawn" name="spawn_peg_24" type="box" size="0.05 0.05 0.001" pos="0 0 1.280"/>
+        <geom class="spawn" name="spawn_peg_25" type="box" size="0.05 0.05 0.001" pos="0 0 1.312"/>
+        <geom class="spawn" name="spawn_peg_26" type="box" size="0.05 0.05 0.001" pos="0 0 1.344"/>
+        <geom class="spawn" name="spawn_peg_27" type="box" size="0.05 0.05 0.001" pos="0 0 1.376"/>
+        <geom class="spawn" name="spawn_peg_28" type="box" size="0.05 0.05 0.001" pos="0 0 1.408"/>
+        <geom class="spawn" name="spawn_peg_29" type="box" size="0.05 0.05 0.001" pos="0 0 1.440"/>
+        <geom class="spawn" name="spawn_peg_30" type="box" size="0.05 0.05 0.001" pos="0 0 1.472"/>
+        <geom class="spawn" name="spawn_peg_31" type="box" size="0.05 0.05 0.001" pos="0 0 1.504"/>
+        <geom class="spawn" name="spawn_peg_32" type="box" size="0.05 0.05 0.001" pos="0 0 1.536"/>
+        <geom class="spawn" name="spawn_peg_33" type="box" size="0.05 0.05 0.001" pos="0 0 1.568"/>
+        <geom class="spawn" name="spawn_peg_34" type="box" size="0.05 0.05 0.001" pos="0 0 1.600"/>
+        <geom class="spawn" name="spawn_peg_35" type="box" size="0.05 0.05 0.001" pos="0 0 1.632"/>
+        <geom class="spawn" name="spawn_peg_36" type="box" size="0.05 0.05 0.001" pos="0 0 1.664"/>
+      </body>
+
+      <!-- Sites for reference points -->
+      <site name="top_site" pos="0 0 1.807972" size="0.01 0.01 0.01" rgba="1 0 0 0.3"/>
+      <site name="bottom_site" pos="0 0 0.000000" size="0.01 0.01 0.01" rgba="0 1 0 0.3"/>
+      <site name="horizontal_radius_site" pos="0 0 0.903985" size="0.01 0.01 0.01" rgba="0 0 1 0.3"/>
+    </body>
+  </worldbody>
+</mujoco>
