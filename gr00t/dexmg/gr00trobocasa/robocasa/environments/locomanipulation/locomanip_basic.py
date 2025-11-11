@@ -574,3 +574,160 @@ class LMNavPickBottleShelfLow(LMNavPickBottleShelf):
             )
         )
         return [self.shelf, self.bottle]
+
+
+class LMPnPBottleToPlate(LMPnPBottle):
+    def _get_objects(self) -> list[SceneObject]:
+        super()._get_objects()
+        self.plate = SceneObject(
+            ObjectConfig(
+                name="plate",
+                mjcf_path="objects/omniverse/locomanip/plate_1/model.xml",
+                scale=1.0,
+                static=True,
+                sampler_config=SamplingConfig(
+                    x_range=np.array([-0.2 - 0.08, -0.2 + 0.04]),
+                    y_range=np.array([-0.08, 0.08]),
+                    rotation=np.array([-np.pi, np.pi]),
+                    reference=ReferenceConfig(self.table_target),
+                ),
+            )
+        )
+        return [self.table, self.table_target, self.bottle, self.plate]
+
+    def _get_success_criteria(self) -> SuccessCriteria:
+        return AllCriteria(
+            IsUpright(self.bottle, symmetric=True), IsInContact(self.bottle, self.plate)
+        )
+
+    def _get_instruction(self) -> str:
+        return "Pick up the bottle and place it on the plate."
+
+    def get_object(self):
+        return dict(
+            bottle=dict(obj_name=self.bottle.mj_obj.root_body, obj_type="body"),
+            plate=dict(obj_name=self.plate.mj_obj.root_body, obj_type="body"),
+        )
+
+    def get_subtask_term_signals(self):
+        obj_z = self.sim.data.body_xpos[self.obj_body_id(self.bottle.mj_obj.name)][2]
+        target_table_pos = self.sim.data.body_xpos[self.obj_body_id(self.table_target.mj_obj.name)]
+        target_table_z = target_table_pos[2] + self.table_target.mj_obj.top_offset[2]
+        return dict(obj_off_table=int(obj_z - target_table_z > self.LIFT_OFFSET))
+
+    @staticmethod
+    def task_config():
+        task = DexMGConfigHelper.AttrDict()
+        task.task_spec_0.subtask_1 = dict(
+            object_ref="bottle",
+            subtask_term_signal="obj_off_table",
+            subtask_term_offset_range=(5, 10),
+            selection_strategy="random",
+            selection_strategy_kwargs=None,
+            action_noise=0.05,
+            num_interpolation_steps=5,
+            num_fixed_steps=0,
+            apply_noise_during_interpolation=False,
+        )
+        # Second subtask for placing on plate
+        task.task_spec_0.subtask_2 = dict(
+            object_ref="plate",
+            subtask_term_signal=None,
+            subtask_term_offset_range=None,
+            selection_strategy="random",
+            selection_strategy_kwargs=None,
+            action_noise=0.05,
+            num_interpolation_steps=5,
+            num_fixed_steps=0,
+            apply_noise_during_interpolation=False,
+        )
+        task.task_spec_1.subtask_1 = dict(
+            object_ref=None,
+            subtask_term_signal=None,
+            subtask_term_offset_range=None,
+            selection_strategy="random",
+            selection_strategy_kwargs=None,
+            action_noise=0.05,
+            num_interpolation_steps=5,
+            num_fixed_steps=0,
+            apply_noise_during_interpolation=False,
+        )
+        return task.to_dict()
+
+
+class LMPnPAppleToPlate(LMPnPBottleToPlate):
+    def _get_objects(self) -> list[SceneObject]:
+        super()._get_objects()
+        self.apple = SceneObject(
+            ObjectConfig(
+                name="apple",
+                mjcf_path="objects/omniverse/locomanip/apple_0/model.xml",
+                static=False,
+                scale=1.0,
+                sampler_config=SamplingConfig(
+                    x_range=np.array([-0.08, 0.04]),
+                    y_range=np.array([-0.08, 0.08]),
+                    rotation=np.array([-np.pi, np.pi]),
+                    reference_pos=np.array([0.4, 0, self.table.mj_obj.top_offset[2]]),
+                ),
+                rgba=(0.85, 0.1, 0.1, 1.0),
+            )
+        )
+        return [self.table, self.table_target, self.apple, self.plate]
+
+    def _get_success_criteria(self) -> SuccessCriteria:
+        return IsInContact(self.apple, self.plate)
+
+    def _get_instruction(self) -> str:
+        return "pick up the apple, walk left and place the apple on the plate."
+
+    def get_object(self):
+        return dict(
+            apple=dict(obj_name=self.apple.mj_obj.root_body, obj_type="body"),
+            plate=dict(obj_name=self.plate.mj_obj.root_body, obj_type="body"),
+        )
+
+    def get_subtask_term_signals(self):
+        obj_z = self.sim.data.body_xpos[self.obj_body_id(self.apple.mj_obj.name)][2]
+        target_table_pos = self.sim.data.body_xpos[self.obj_body_id(self.table_target.mj_obj.name)]
+        target_table_z = target_table_pos[2] + self.table_target.mj_obj.top_offset[2]
+        return dict(obj_off_table=int(obj_z - target_table_z > self.LIFT_OFFSET))
+
+    @staticmethod
+    def task_config():
+        task = DexMGConfigHelper.AttrDict()
+        task.task_spec_0.subtask_1 = dict(
+            object_ref="apple",
+            subtask_term_signal="obj_off_table",
+            subtask_term_offset_range=(5, 10),
+            selection_strategy="random",
+            selection_strategy_kwargs=None,
+            action_noise=0.05,
+            num_interpolation_steps=5,
+            num_fixed_steps=0,
+            apply_noise_during_interpolation=False,
+        )
+        # Second subtask for placing on plate
+        task.task_spec_0.subtask_2 = dict(
+            object_ref="plate",
+            subtask_term_signal=None,
+            subtask_term_offset_range=None,
+            selection_strategy="random",
+            selection_strategy_kwargs=None,
+            action_noise=0.05,
+            num_interpolation_steps=5,
+            num_fixed_steps=0,
+            apply_noise_during_interpolation=False,
+        )
+        task.task_spec_1.subtask_1 = dict(
+            object_ref=None,
+            subtask_term_signal=None,
+            subtask_term_offset_range=None,
+            selection_strategy="random",
+            selection_strategy_kwargs=None,
+            action_noise=0.05,
+            num_interpolation_steps=5,
+            num_fixed_steps=0,
+            apply_noise_during_interpolation=False,
+        )
+        return task.to_dict()
