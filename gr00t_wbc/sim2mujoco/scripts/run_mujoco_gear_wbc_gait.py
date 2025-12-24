@@ -1,4 +1,5 @@
 import collections
+import copy
 import os
 import threading
 import time
@@ -7,7 +8,7 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 import onnxruntime as ort
-from pynput import keyboard as pkb
+from sshkeyboard import listen_keyboard
 import torch
 import yaml
 
@@ -24,6 +25,7 @@ class GearWbcController:
             "rpy_cmd": self.config.get("rpy_cmd", [0.0, 0.0, 0.0]),
             "freq_cmd": self.config.get("freq_cmd", 1.5),
         }
+        self.control_dict_default = copy.deepcopy(self.control_dict)
 
         self.model = mujoco.MjModel.from_xml_path(self.config["xml_path"])
         self.data = mujoco.MjData(self.model)
@@ -48,63 +50,64 @@ class GearWbcController:
             maxlen=self.config["obs_history_len"],
         )
         self.obs = np.zeros(self.config["num_obs"], dtype=np.float32)
-        self.keyboard_listener(self.control_dict, self.config)
 
-    def keyboard_listener(self, control_dict, config):
-        """Listen to key press events and update cmd and height_cmd"""
+    def handle_keyboard_button(self, key):
+        """Handle key press from terminal (same pattern as real robot)"""
+        with self.cmd_lock:
+            if key == "w":
+                self.control_dict["loco_cmd"][0] += 0.1
+            elif key == "s":
+                self.control_dict["loco_cmd"][0] -= 0.1
+            elif key == "a":
+                self.control_dict["loco_cmd"][1] += 0.1
+            elif key == "d":
+                self.control_dict["loco_cmd"][1] -= 0.1
+            elif key == "q":
+                self.control_dict["loco_cmd"][2] += 0.1
+            elif key == "e":
+                self.control_dict["loco_cmd"][2] -= 0.1
+            elif key == "z":
+                self.control_dict["loco_cmd"][0] = 0.0
+                self.control_dict["loco_cmd"][1] = 0.0
+                self.control_dict["loco_cmd"][2] = 0.0
+            elif key == "x":
+                self.control_dict = copy.deepcopy(self.control_dict_default)
+            elif key == "1":
+                self.control_dict["height_cmd"] += 0.05
+            elif key == "2":
+                self.control_dict["height_cmd"] -= 0.05
+            elif key == "3":
+                self.control_dict["rpy_cmd"][0] += 0.2
+            elif key == "4":
+                self.control_dict["rpy_cmd"][0] -= 0.2
+            elif key == "5":
+                self.control_dict["rpy_cmd"][1] += 0.2
+            elif key == "6":
+                self.control_dict["rpy_cmd"][1] -= 0.2
+            elif key == "7":
+                self.control_dict["rpy_cmd"][2] += 0.2
+            elif key == "8":
+                self.control_dict["rpy_cmd"][2] -= 0.2
+            elif key == "m":
+                self.control_dict["freq_cmd"] += 0.1
+            elif key == "n":
+                self.control_dict["freq_cmd"] -= 0.1
+            else:
+                return  # Unknown key, don't print
 
-        def on_press(key):
-            try:
-                k = key.char
-            except AttributeError:
-                return  # Special keys ignored
+            print(
+                f"Commands: loco_cmd={self.control_dict['loco_cmd']}, "
+                f"height={self.control_dict['height_cmd']:.2f}, "
+                f"rpy={self.control_dict['rpy_cmd']}, "
+                f"freq={self.control_dict['freq_cmd']:.2f}"
+            )
 
-            with self.cmd_lock:
-                if k == "w":
-                    control_dict["loco_cmd"][0] += 0.2
-                elif k == "s":
-                    control_dict["loco_cmd"][0] -= 0.2
-                elif k == "a":
-                    control_dict["loco_cmd"][1] += 0.5
-                elif k == "d":
-                    control_dict["loco_cmd"][1] -= 0.5
-                elif k == "q":
-                    control_dict["loco_cmd"][2] += 0.5
-                elif k == "e":
-                    control_dict["loco_cmd"][2] -= 0.5
-                elif k == "z":
-                    control_dict["loco_cmd"][:] = config["cmd_init"]
-                    control_dict["height_cmd"] = config["height_cmd"]
-                    control_dict["rpy_cmd"][:] = config["rpy_cmd"]
-                    control_dict["freq_cmd"] = config["freq_cmd"]
-                elif k == "1":
-                    control_dict["height_cmd"] += 0.05
-                elif k == "2":
-                    control_dict["height_cmd"] -= 0.05
-                elif k == "3":
-                    control_dict["rpy_cmd"][0] += 0.2
-                elif k == "4":
-                    control_dict["rpy_cmd"][0] -= 0.2
-                elif k == "5":
-                    control_dict["rpy_cmd"][1] += 0.2
-                elif k == "6":
-                    control_dict["rpy_cmd"][1] -= 0.2
-                elif k == "7":
-                    control_dict["rpy_cmd"][2] += 0.2
-                elif k == "8":
-                    control_dict["rpy_cmd"][2] -= 0.2
-                elif k == "m":
-                    control_dict["freq_cmd"] += 0.1
-                elif k == "n":
-                    control_dict["freq_cmd"] -= 0.1
-
-                print(
-                    f"Current Commands: loco_cmd = {control_dict['loco_cmd']}, height_cmd = {control_dict['height_cmd']}, rpy_cmd = {control_dict['rpy_cmd']}, freq_cmd = {control_dict['freq_cmd']}"
-                )
-
-        listener = pkb.Listener(on_press=on_press)
-        listener.daemon = True
-        listener.start()
+    def start_keyboard_listener(self):
+        """Start keyboard listener thread (same pattern as real robot)"""
+        def listen():
+            listen_keyboard(on_press=self.handle_keyboard_button)
+        self._keyboard_thread = threading.Thread(target=listen, daemon=True)
+        self._keyboard_thread.start()
 
     def load_config(self, config_path):
         with open(config_path, "r") as f:
@@ -244,13 +247,29 @@ class GearWbcController:
         def run_inference(input_tensor):
             ort_inputs = {model.get_inputs()[0].name: input_tensor.cpu().numpy()}
             ort_outs = model.run(None, ort_inputs)
-            return torch.tensor(ort_outs[0], device="cuda:0")
+            return torch.tensor(ort_outs[0], device="cpu")
 
         return run_inference
 
     def run(self):
 
         self.counter = 0
+        self.start_keyboard_listener()
+        print("\n" + "=" * 50)
+        print("MuJoCo G1 Whole-Body Controller (Gait)")
+        print("=" * 50)
+        print("Keyboard controls (type in terminal):")
+        print("  w/s  - Forward/backward")
+        print("  a/d  - Strafe left/right")
+        print("  q/e  - Rotate left/right")
+        print("  z    - Zero velocity commands")
+        print("  x    - Reset all to defaults")
+        print("  1/2  - Raise/lower height")
+        print("  3/4  - Roll +/-")
+        print("  5/6  - Pitch +/-")
+        print("  7/8  - Yaw +/-")
+        print("  m/n  - Freq +/-")
+        print("=" * 50 + "\n")
 
         with mujoco.viewer.launch_passive(self.model, self.data) as viewer:
             start = time.time()

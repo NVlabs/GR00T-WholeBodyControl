@@ -1,6 +1,6 @@
 # Policy and model paths
-policy_path: "policy/ft92.onnx" #best ft 49     71?  75
-walk_policy_path: "policy/ft109.onnx" #best ft 49     71?  75
+policy_path: "policy/GR00T-WholeBodyControl-Balance.onnx"
+walk_policy_path: "policy/GR00T-WholeBodyControl-Walk.onnx"
 xml_path: "g1_gear_wbc.xml"
 
 # Simulation parameters
