@@ -1,0 +1,2 @@
+add_executable(test_jsonize test_jsonize.cpp)
+target_link_libraries(test_jsonize unitree_sdk2)

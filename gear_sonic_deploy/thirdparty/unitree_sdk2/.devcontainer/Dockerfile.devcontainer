@@ -1,0 +1,35 @@
+FROM ubuntu:20.04
+
+ENV TZ=Asia/Shanghai
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone 
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+USER root
+
+# install zsh and oh-my-zsh
+RUN apt update && apt-get install -y git wget zsh && \
+    wget https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh && chmod +x install.sh
+RUN ./install.sh
+RUN git clone https://github.com/zsh-users/zsh-autosuggestions.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions && \
+    apt install zsh-syntax-highlighting
+# configure zsh
+RUN echo 'export ZSH=$HOME/.oh-my-zsh' >> ~/.zshrc && \
+    echo 'ZSH_THEME="ys"' >> ~/.zshrc && \
+    echo 'plugins=(git zsh-autosuggestions)' >> ~/.zshrc && \
+    echo 'source $ZSH/oh-my-zsh.sh' >> ~/.zshrc && \
+    echo 'source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh' >> ~/.zshrc
+RUN chsh -s /bin/zsh 
+
+# install build tools
+RUN apt-get install -y build-essential gcc-9  g++-9 gdb  cmake  ninja-build
+
+RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 100 \
+    && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-9 100
+
+# install libraries
+RUN apt-get install -y libyaml-cpp-dev libeigen3-dev
+
+WORKDIR /workspace
+
+CMD ["zsh"]

@@ -1,0 +1,29 @@
+{
+	"name": "Existing Docker Compose (Extend)",
+	"dockerComposeFile": [
+		"docker-compose.yml"
+	],
+	"service": "devcontainer",
+	"workspaceFolder": "/workspace",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"gitlab.gitlab-workflow",
+				"llvm-vs-code-extensions.vscode-clangd",
+				"xaver.clang-format",
+				"ms-vscode.cmake-tools",
+				"zxh404.vscode-proto3",
+				"donjayamanne.githistory",
+				"mhutchie.git-graph",
+				"matepek.vscode-catch2-test-adapter",
+				"ryanluker.vscode-coverage-gutters",
+				"donjayamanne.python-extension-pack",
+				"adam-bender.commit-message-editor",
+				"axetroy.vscode-changelog-generator",
+				"vsliveshare.vsliveshare",
+				"bierner.markdown-mermaid",
+				"vadimcn.vscode-lldb"
+			]
+		}
+	}
+}

@@ -1,0 +1,1069 @@
+/* dds-xtypes_typeobject.idl */
+
+// The types in this file shall be serialized with XCDR encoding version 2
+module DDS { module XTypes {
+
+    // ---------- Equivalence Kinds -------------------
+    typedef octet EquivalenceKind;
+    const octet EK_MINIMAL   = 0xF1; // 0x1111 0001
+    const octet EK_COMPLETE  = 0xF2; // 0x1111 0010
+    const octet EK_BOTH      = 0xF3; // 0x1111 0011
+
+    // ---------- TypeKinds (begin) -------------------
+    typedef octet TypeKind;
+
+    // Primitive TKs
+    const octet TK_NONE       = 0x00;
+    const octet TK_BOOLEAN    = 0x01;
+    const octet TK_BYTE       = 0x02;
+    const octet TK_INT16      = 0x03;
+    const octet TK_INT32      = 0x04;
+    const octet TK_INT64      = 0x05;
+    const octet TK_UINT16     = 0x06;
+    const octet TK_UINT32     = 0x07;
+    const octet TK_UINT64     = 0x08;
+    const octet TK_FLOAT32    = 0x09;
+    const octet TK_FLOAT64    = 0x0A;
+    const octet TK_FLOAT128   = 0x0B;
+    const octet TK_CHAR8      = 0x10;
+    const octet TK_CHAR16     = 0x11;
+
+    // String TKs
+    const octet TK_STRING8    = 0x20;
+    const octet TK_STRING16   = 0x21;
+
+    // Constructed/Named types
+    const octet TK_ALIAS      = 0x30;
+
+    // Enumerated TKs
+    const octet TK_ENUM       = 0x40;
+    const octet TK_BITMASK    = 0x41;
+
+    // Structured TKs
+    const octet TK_ANNOTATION = 0x50;
+    const octet TK_STRUCTURE  = 0x51;
+    const octet TK_UNION      = 0x52;
+    const octet TK_BITSET     = 0x53;
+
+    // Collection TKs
+    const octet TK_SEQUENCE   = 0x60;
+    const octet TK_ARRAY      = 0x61;
+    const octet TK_MAP        = 0x62;
+    // ---------- TypeKinds (end) -------------------
+
+    // ---------- Extra TypeIdentifiers (begin) ------------
+    typedef octet TypeIdentiferKind;
+    const octet TI_STRING8_SMALL        = 0x70;
+    const octet TI_STRING8_LARGE        = 0x71;
+    const octet TI_STRING16_SMALL       = 0x72;
+    const octet TI_STRING16_LARGE       = 0x73;
+
+    const octet TI_PLAIN_SEQUENCE_SMALL = 0x80;
+    const octet TI_PLAIN_SEQUENCE_LARGE = 0x81;
+
+    const octet TI_PLAIN_ARRAY_SMALL    = 0x90;
+    const octet TI_PLAIN_ARRAY_LARGE    = 0x91;
+
+    const octet TI_PLAIN_MAP_SMALL      = 0xA0;
+    const octet TI_PLAIN_MAP_LARGE      = 0xA1;
+
+    const octet TI_STRONGLY_CONNECTED_COMPONENT = 0xB0;
+    // ---------- Extra TypeIdentifiers (end) --------------
+
+    // The name of some element (e.g. type, type member, module)
+    // Valid characters are alphanumeric plus the "_" cannot start with digit
+    const long MEMBER_NAME_MAX_LENGTH = 256;
+    typedef string<MEMBER_NAME_MAX_LENGTH> MemberName;
+
+    // Qualified type name includes the name of containing modules
+    // using "::" as separator. No leading "::". E.g. "MyModule::MyType"
+    const long TYPE_NAME_MAX_LENGTH = 256;
+    typedef string<TYPE_NAME_MAX_LENGTH> QualifiedTypeName;
+
+    // Every type has an ID. Those of the primitive types are pre-defined.
+    typedef octet PrimitiveTypeId;
+
+    // First 14 bytes of MD5 of the serialized TypeObject using XCDR
+    // version 2 with Little Endian encoding
+    typedef octet EquivalenceHash[14];
+
+    // First 4 bytes of MD5 of of a member name converted to bytes
+    // using UTF-8 encoding and without a 'nul' terminator.
+    // Example: the member name "color" has NameHash {0x70, 0xDD, 0xA5, 0xDF}
+    typedef octet NameHash[4];
+
+    // Long Bound of a collection type
+    typedef unsigned long LBound;
+    typedef sequence<LBound> LBoundSeq;
+    const LBound INVALID_LBOUND = 0;
+
+    // Short Bound of a collection type
+    typedef octet SBound;
+    typedef sequence<SBound> SBoundSeq;
+    const SBound INVALID_SBOUND = 0;
+
+    @extensibility(FINAL) @nested
+    union TypeObjectHashId switch (octet) {
+        case EK_COMPLETE:
+        case EK_MINIMAL:
+            EquivalenceHash  hash;
+    };
+
+    // Flags that apply to struct/union/collection/enum/bitmask/bitset
+    // members/elements and DO affect type assignability
+    // Depending on the flag it may not apply to members of all types
+    // When not all, the applicable member types are listed
+    @bit_bound(16)
+    bitmask MemberFlag {
+        @position(0)  TRY_CONSTRUCT1,     // T1 | 00 = INVALID, 01 = DISCARD
+        @position(1)  TRY_CONSTRUCT2,     // T2 | 10 = USE_DEFAULT, 11 = TRIM
+        @position(2)  IS_EXTERNAL,        // X  StructMember, UnionMember,
+                                          //    CollectionElement
+        @position(3)  IS_OPTIONAL,        // O  StructMember
+        @position(4)  IS_MUST_UNDERSTAND, // M  StructMember
+        @position(5)  IS_KEY,          // K  StructMember, UnionDiscriminator
+        @position(6)  IS_DEFAULT       // D  UnionMember, EnumerationLiteral
+    };
+    typedef MemberFlag   CollectionElementFlag;   // T1, T2, X
+    typedef MemberFlag   StructMemberFlag;        // T1, T2, O, M, K, X
+    typedef MemberFlag   UnionMemberFlag;         // T1, T2, D, X
+    typedef MemberFlag   UnionDiscriminatorFlag;  // T1, T2, K
+    typedef MemberFlag   EnumeratedLiteralFlag;   // D
+    typedef MemberFlag   AnnotationParameterFlag; // Unused. No flags apply
+    typedef MemberFlag   AliasMemberFlag;         // Unused. No flags apply
+    typedef MemberFlag   BitflagFlag;             // Unused. No flags apply
+    typedef MemberFlag   BitsetMemberFlag;        // Unused. No flags apply
+
+    // Mask used to remove the flags that do no affect assignability
+    // Selects  T1, T2, O, M, K, D
+    const   unsigned short  MemberFlagMinimalMask = 0x003f;
+
+    // Flags that apply to type declarationa and DO affect assignability
+    // Depending on the flag it may not apply to all types
+    // When not all, the applicable  types are listed
+    @bit_bound(16)
+    bitmask TypeFlag {
+        @position(0) IS_FINAL,        // F |
+        @position(1) IS_APPENDABLE,   // A |-  Struct, Union
+        @position(2) IS_MUTABLE,      // M |   (exactly one flag)
+
+        @position(3) IS_NESTED,       // N     Struct, Union
+        @position(4) IS_AUTOID_HASH   // H     Struct
+    };
+    typedef TypeFlag   StructTypeFlag;      // All flags apply
+    typedef TypeFlag   UnionTypeFlag;       // All flags apply
+    typedef TypeFlag   CollectionTypeFlag;  // Unused. No flags apply
+    typedef TypeFlag   AnnotationTypeFlag;  // Unused. No flags apply
+    typedef TypeFlag   AliasTypeFlag;       // Unused. No flags apply
+    typedef TypeFlag   EnumTypeFlag;        // Unused. No flags apply
+    typedef TypeFlag   BitmaskTypeFlag;     // Unused. No flags apply
+    typedef TypeFlag   BitsetTypeFlag;      // Unused. No flags apply
+
+    // Mask used to remove the flags that do no affect assignability
+    const   unsigned short TypeFlagMinimalMask = 0x0007; // Selects  M, A, F
+
+   // Forward declaration
+   union TypeIdentifier;
+
+    // 1 Byte
+    @extensibility(FINAL) @nested
+    struct StringSTypeDefn {
+        SBound                  bound;
+    };
+
+    // 4 Bytes
+    @extensibility(FINAL) @nested
+    struct StringLTypeDefn {
+        LBound                  bound;
+    };
+
+    @extensibility(FINAL) @nested
+    struct PlainCollectionHeader {
+        EquivalenceKind        equiv_kind;
+        CollectionElementFlag  element_flags;
+    };
+
+    @extensibility(FINAL) @nested
+    struct PlainSequenceSElemDefn {
+        PlainCollectionHeader  header;
+        SBound                 bound;
+        @external TypeIdentifier element_identifier;
+    };
+
+    @extensibility(FINAL) @nested
+    struct PlainSequenceLElemDefn {
+        PlainCollectionHeader  header;
+        LBound                 bound;
+        @external TypeIdentifier element_identifier;
+    };
+
+    @extensibility(FINAL) @nested
+    struct PlainArraySElemDefn {
+        PlainCollectionHeader  header;
+        SBoundSeq              array_bound_seq;
+        @external TypeIdentifier element_identifier;
+    };
+
+    @extensibility(FINAL) @nested
+    struct PlainArrayLElemDefn {
+        PlainCollectionHeader  header;
+        LBoundSeq              array_bound_seq;
+        @external TypeIdentifier element_identifier;
+    };
+
+    @extensibility(FINAL) @nested
+    struct PlainMapSTypeDefn {
+        PlainCollectionHeader  header;
+        SBound                 bound;
+        @external TypeIdentifier element_identifier;
+        CollectionElementFlag  key_flags;
+        @external TypeIdentifier key_identifier;
+    };
+
+    @extensibility(FINAL) @nested
+    struct PlainMapLTypeDefn {
+        PlainCollectionHeader  header;
+        LBound                 bound;
+        @external TypeIdentifier element_identifier;
+        CollectionElementFlag  key_flags;
+        @external TypeIdentifier key_identifier;
+    };
+
+    // Used for Types that have cyclic depencencies with other types
+    @extensibility(APPENDABLE) @nested
+    struct StronglyConnectedComponentId {
+        TypeObjectHashId sc_component_id; // Hash StronglyConnectedComponent
+        long   scc_length; // StronglyConnectedComponent.length
+        long   scc_index ; // identify type in Strongly Connected Comp.
+    };
+
+    // Future extensibility
+    @extensibility(MUTABLE) @nested
+    struct ExtendedTypeDefn {
+    };
+
+
+
+    // The TypeIdentifier uniquely identifies a type (a set of equivalent
+    // types according to an equivalence relationship:  COMPLETE, MNIMAL).
+    //
+    // In some cases (primitive types, strings, plain types) the identifier
+    // is a explicit description of the type.
+    // In other cases the Identifier is a Hash of the type description
+    //
+    // In the case of primitive types and strings the implied equivalence
+    // relation is the identity.
+    //
+    // For Plain Types and Hash-defined TypeIdentifiers there are three
+    //  possibilities: MINIMAL, COMPLETE, and COMMON:
+    //   - MINIMAL indicates the TypeIdentifier identifies equivalent types
+    //     according to the MINIMAL equivalence relation
+    //   - COMPLETE indicates the TypeIdentifier identifies equivalent types
+    //     according to the COMPLETE equivalence relation
+    //   - COMMON indicates the TypeIdentifier identifies equivalent types
+    //     according to both the MINIMAL and the COMMON equivalence relation.
+    //     This means the TypeIdentifier is the same for both relationships
+    //
+    @extensibility(FINAL) @nested(FALSE)
+    union TypeIdentifier switch (octet) {
+        // ============  Primitive types - use TypeKind ====================
+        // All primitive types fall here.
+        // Commented-out because Unions cannot have cases with no member.
+        /*
+        case TK_NONE:
+        case TK_BOOLEAN:
+        case TK_BYTE_TYPE:
+        case TK_INT16_TYPE:
+        case TK_INT32_TYPE:
+        case TK_INT64_TYPE:
+        case TK_UINT16_TYPE:
+        case TK_UINT32_TYPE:
+        case TK_UINT64_TYPE:
+        case TK_FLOAT32_TYPE:
+        case TK_FLOAT64_TYPE:
+        case TK_FLOAT128_TYPE:
+        case TK_CHAR8_TYPE:
+        case TK_CHAR16_TYPE:
+            // No Value
+        */
+
+        // ============ Strings - use TypeIdentifierKind ===================
+        case TI_STRING8_SMALL:
+        case TI_STRING16_SMALL:
+            StringSTypeDefn         string_sdefn;
+
+        case TI_STRING8_LARGE:
+        case TI_STRING16_LARGE:
+            StringLTypeDefn         string_ldefn;
+
+        // ============  Plain collectios - use TypeIdentifierKind =========
+        case TI_PLAIN_SEQUENCE_SMALL:
+            PlainSequenceSElemDefn  seq_sdefn;
+        case TI_PLAIN_SEQUENCE_LARGE:
+            PlainSequenceLElemDefn  seq_ldefn;
+
+        case TI_PLAIN_ARRAY_SMALL:
+            PlainArraySElemDefn     array_sdefn;
+        case TI_PLAIN_ARRAY_LARGE:
+            PlainArrayLElemDefn     array_ldefn;
+
+        case TI_PLAIN_MAP_SMALL:
+            PlainMapSTypeDefn       map_sdefn;
+        case TI_PLAIN_MAP_LARGE:
+            PlainMapLTypeDefn       map_ldefn;
+
+        // ============  Types that are mutually dependent on each other ===
+        case TI_STRONGLY_CONNECTED_COMPONENT:
+            StronglyConnectedComponentId  sc_component_id;
+
+        // ============  The remaining cases - use EquivalenceKind =========
+        case EK_COMPLETE:
+        case EK_MINIMAL:
+            EquivalenceHash         equivalence_hash;
+
+        // ===================  Future extensibility  ============
+        // Future extensions
+
+        /* Disabled default so that cases with no member do not
+           map to the default member */
+        // default:
+        //     ExtendedTypeDefn        extended_defn;
+    };
+    typedef sequence<TypeIdentifier> TypeIdentifierSeq;
+
+
+    // --- Annotation usage: -----------------------------------------------
+
+    // ID of a type member
+    typedef unsigned long MemberId;
+    const unsigned long ANNOTATION_STR_VALUE_MAX_LEN = 128;
+    const unsigned long ANNOTATION_OCTETSEC_VALUE_MAX_LEN = 128;
+
+    // Empty. Available for future extension
+    @extensibility(MUTABLE) @nested
+    struct ExtendedAnnotationParameterValue {
+    };
+
+    /* Literal value of an annotation member: either the default value in its definition or the value applied in its usage. */
+    @extensibility(FINAL) @nested
+    union AnnotationParameterValue switch (octet) {
+        case TK_BOOLEAN:
+            boolean             boolean_value;
+        case TK_BYTE:
+            octet               byte_value;
+        case TK_INT16:
+            short               int16_value;
+        case TK_UINT16:
+            unsigned short      uint_16_value;
+        case TK_INT32:
+            long                int32_value;
+        case TK_UINT32:
+            unsigned long       uint32_value;
+        case TK_INT64:
+            long long           int64_value;
+        case TK_UINT64:
+            unsigned long long  uint64_value;
+        case TK_FLOAT32:
+            float               float32_value;
+        case TK_FLOAT64:
+            double              float64_value;
+        // case TK_FLOAT128:
+        //     long double         float128_value;
+        case TK_CHAR8:
+            char                char_value;
+        // case TK_CHAR16:
+        //     wchar               wchar_value;
+        case TK_ENUM:
+            long                enumerated_value;
+        case TK_STRING8:
+            string<ANNOTATION_STR_VALUE_MAX_LEN>  string8_value;
+        // case TK_STRING16:
+        //     wstring<ANNOTATION_STR_VALUE_MAX_LEN> string16_value;
+        default:
+            ExtendedAnnotationParameterValue      extended_value;
+    };
+
+    // The application of an annotation to some type or type member
+    @extensibility(APPENDABLE) @nested
+    struct AppliedAnnotationParameter {
+       NameHash                  paramname_hash;
+       AnnotationParameterValue  value;
+    };
+    // Sorted by AppliedAnnotationParameter.paramname_hash
+    typedef
+    sequence<AppliedAnnotationParameter> AppliedAnnotationParameterSeq;
+
+    @extensibility(APPENDABLE) @nested
+    struct AppliedAnnotation {
+        TypeIdentifier                     annotation_typeid;
+        @optional AppliedAnnotationParameterSeq   param_seq;
+    };
+    // Sorted by AppliedAnnotation.annotation_typeid
+    typedef sequence<AppliedAnnotation> AppliedAnnotationSeq;
+
+    // @verbatim(placement="<placement>", language="<lang>", text="<text>")
+    @extensibility(FINAL) @nested
+    struct AppliedVerbatimAnnotation {
+        string<32> placement;
+        string<32> language;
+        string     text;
+    };
+
+
+    // --- Aggregate types: ------------------------------------------------
+    @extensibility(APPENDABLE) @nested
+    struct AppliedBuiltinMemberAnnotations {
+        @optional string                  unit; // @unit("<unit>")
+        @optional AnnotationParameterValue min; // @min , @range
+        @optional AnnotationParameterValue max; // @max , @range
+        @optional string               hash_id; // @hash_id("<membername>")
+    };
+
+    @extensibility(FINAL) @nested
+    struct CommonStructMember {
+        MemberId                                   member_id;
+        StructMemberFlag                           member_flags;
+        TypeIdentifier                             member_type_id;
+    };
+
+    // COMPLETE Details for a member of an aggregate type
+    @extensibility(FINAL) @nested
+    struct CompleteMemberDetail {
+       MemberName                                 name;
+       @optional AppliedBuiltinMemberAnnotations  ann_builtin;
+       @optional AppliedAnnotationSeq             ann_custom;
+    };
+
+    // MINIMAL Details for a member of an aggregate type
+    @extensibility(FINAL) @nested
+    struct MinimalMemberDetail {
+        NameHash                                  name_hash;
+    };
+
+    // Member of an aggregate type
+    @extensibility(APPENDABLE) @nested
+    struct CompleteStructMember {
+        CommonStructMember                         common;
+        CompleteMemberDetail                       detail;
+    };
+    // Ordered by the member_index
+    typedef sequence<CompleteStructMember> CompleteStructMemberSeq;
+
+    // Member of an aggregate type
+    @extensibility(APPENDABLE) @nested
+    struct MinimalStructMember {
+        CommonStructMember                         common;
+        MinimalMemberDetail                        detail;
+    };
+    // Ordered by common.member_id
+    typedef sequence<MinimalStructMember> MinimalStructMemberSeq;
+
+
+    @extensibility(APPENDABLE) @nested
+    struct AppliedBuiltinTypeAnnotations {
+        @optional AppliedVerbatimAnnotation verbatim;  // @verbatim(...)
+    };
+
+    @extensibility(FINAL) @nested
+    struct MinimalTypeDetail {
+        // Empty. Available for future extension
+    };
+
+    @extensibility(FINAL) @nested
+    struct CompleteTypeDetail {
+         @optional AppliedBuiltinTypeAnnotations  ann_builtin;
+         @optional AppliedAnnotationSeq           ann_custom;
+         QualifiedTypeName                        type_name;
+    };
+
+    @extensibility(APPENDABLE) @nested
+    struct CompleteStructHeader {
+        TypeIdentifier                           base_type;
+        CompleteTypeDetail                       detail;
+    };
+
+    @extensibility(APPENDABLE) @nested
+    struct MinimalStructHeader {
+        TypeIdentifier                           base_type;
+        MinimalTypeDetail                        detail;
+    };
+
+    @extensibility(FINAL) @nested
+    struct CompleteStructType {
+        StructTypeFlag             struct_flags;
+        CompleteStructHeader       header;
+        CompleteStructMemberSeq    member_seq;
+    };
+
+    @extensibility(FINAL) @nested
+    struct MinimalStructType {
+        StructTypeFlag             struct_flags;
+        MinimalStructHeader        header;
+        MinimalStructMemberSeq     member_seq;
+    };
+
+    // --- Union: ----------------------------------------------------------
+
+    // Case labels that apply to a member of a union type
+    // Ordered by their values
+    typedef sequence<long> UnionCaseLabelSeq;
+
+    @extensibility(FINAL) @nested
+    struct CommonUnionMember {
+        MemberId                    member_id;
+        UnionMemberFlag             member_flags;
+        TypeIdentifier              type_id;
+        UnionCaseLabelSeq           label_seq;
+    };
+
+    // Member of a union type
+    @extensibility(APPENDABLE) @nested
+    struct CompleteUnionMember {
+        CommonUnionMember      common;
+        CompleteMemberDetail   detail;
+    };
+    // Ordered by member_index
+    typedef sequence<CompleteUnionMember> CompleteUnionMemberSeq;
+
+    // Member of a union type
+    @extensibility(APPENDABLE) @nested
+    struct MinimalUnionMember {
+        CommonUnionMember   common;
+        MinimalMemberDetail detail;
+    };
+    // Ordered by MinimalUnionMember.common.member_id
+    typedef sequence<MinimalUnionMember> MinimalUnionMemberSeq;
+
+    @extensibility(FINAL) @nested
+    struct CommonDiscriminatorMember {
+        UnionDiscriminatorFlag       member_flags;
+        TypeIdentifier               type_id;
+    };
+
+    // Member of a union type
+    @extensibility(APPENDABLE) @nested
+    struct CompleteDiscriminatorMember {
+        CommonDiscriminatorMember                common;
+        @optional AppliedBuiltinTypeAnnotations  ann_builtin;
+        @optional AppliedAnnotationSeq           ann_custom;
+    };
+
+    // Member of a union type
+    @extensibility(APPENDABLE) @nested
+    struct MinimalDiscriminatorMember {
+        CommonDiscriminatorMember   common;
+    };
+
+    @extensibility(APPENDABLE) @nested
+    struct CompleteUnionHeader {
+        CompleteTypeDetail          detail;
+    };
+
+    @extensibility(APPENDABLE) @nested
+    struct MinimalUnionHeader {
+        MinimalTypeDetail           detail;
+    };
+
+    @extensibility(FINAL) @nested
+    struct CompleteUnionType {
+        UnionTypeFlag                union_flags;
+        CompleteUnionHeader          header;
+        CompleteDiscriminatorMember  discriminator;
+        CompleteUnionMemberSeq       member_seq;
+    };
+
+    @extensibility(FINAL) @nested
+    struct MinimalUnionType {
+        UnionTypeFlag                union_flags;
+        MinimalUnionHeader           header;
+        MinimalDiscriminatorMember   discriminator;
+        MinimalUnionMemberSeq        member_seq;
+    };
+
+    // --- Annotation: ----------------------------------------------------
+    @extensibility(FINAL) @nested
+    struct CommonAnnotationParameter {
+        AnnotationParameterFlag      member_flags;
+        TypeIdentifier               member_type_id;
+    };
+
+    // Member of an annotation type
+    @extensibility(APPENDABLE) @nested
+    struct CompleteAnnotationParameter {
+        CommonAnnotationParameter  common;
+        MemberName                 name;
+        AnnotationParameterValue   default_value;
+    };
+    // Ordered by CompleteAnnotationParameter.name
+    typedef
+    sequence<CompleteAnnotationParameter> CompleteAnnotationParameterSeq;
+
+    @extensibility(APPENDABLE) @nested
+    struct MinimalAnnotationParameter {
+        CommonAnnotationParameter  common;
+        NameHash                   name_hash;
+        AnnotationParameterValue   default_value;
+    };
+    // Ordered by MinimalAnnotationParameter.name_hash
+    typedef
+    sequence<MinimalAnnotationParameter> MinimalAnnotationParameterSeq;
+
+    @extensibility(APPENDABLE) @nested
+    struct CompleteAnnotationHeader {
+        QualifiedTypeName         annotation_name;
+    };
+
+    @extensibility(APPENDABLE) @nested
+    struct MinimalAnnotationHeader {
+        // Empty. Available for future extension
+    };
+
+    @extensibility(FINAL) @nested
+    struct CompleteAnnotationType {
+        AnnotationTypeFlag             annotation_flag;
+        CompleteAnnotationHeader       header;
+        CompleteAnnotationParameterSeq member_seq;
+    };
+
+    @extensibility(FINAL) @nested
+    struct MinimalAnnotationType {
+        AnnotationTypeFlag             annotation_flag;
+        MinimalAnnotationHeader        header;
+        MinimalAnnotationParameterSeq  member_seq;
+    };
+
+
+    // --- Alias: ----------------------------------------------------------
+    @extensibility(FINAL) @nested
+    struct CommonAliasBody {
+        AliasMemberFlag       related_flags;
+        TypeIdentifier        related_type;
+    };
+
+    @extensibility(APPENDABLE) @nested
+    struct CompleteAliasBody {
+        CommonAliasBody       common;
+        @optional AppliedBuiltinMemberAnnotations  ann_builtin;
+        @optional AppliedAnnotationSeq             ann_custom;
+    };
+
+    @extensibility(APPENDABLE) @nested
+    struct MinimalAliasBody {
+        CommonAliasBody       common;
+    };
+
+    @extensibility(APPENDABLE) @nested
+    struct CompleteAliasHeader {
+        CompleteTypeDetail    detail;
+    };
+
+    @extensibility(APPENDABLE) @nested
+    struct MinimalAliasHeader {
+        // Empty. Available for future extension
+    };
+
+    @extensibility(FINAL) @nested
+    struct CompleteAliasType {
+        AliasTypeFlag         alias_flags;
+        CompleteAliasHeader   header;
+        CompleteAliasBody     body;
+    };
+
+    @extensibility(FINAL) @nested
+    struct MinimalAliasType {
+        AliasTypeFlag         alias_flags;
+        MinimalAliasHeader    header;
+        MinimalAliasBody      body;
+    };
+
+    // --- Collections: ----------------------------------------------------
+    @extensibility(FINAL) @nested
+    struct CompleteElementDetail {
+        @optional AppliedBuiltinMemberAnnotations  ann_builtin;
+        @optional AppliedAnnotationSeq             ann_custom;
+    };
+
+    @extensibility(FINAL) @nested
+    struct CommonCollectionElement {
+        CollectionElementFlag     element_flags;
+        TypeIdentifier            type;
+    };
+
+    @extensibility(APPENDABLE) @nested
+    struct CompleteCollectionElement {
+        CommonCollectionElement   common;
+        CompleteElementDetail     detail;
+    };
+
+    @extensibility(APPENDABLE) @nested
+    struct MinimalCollectionElement {
+        CommonCollectionElement   common;
+    };
+
+    @extensibility(FINAL) @nested
+    struct CommonCollectionHeader {
+        LBound                    bound;
+    };
+
+    @extensibility(APPENDABLE) @nested
+    struct CompleteCollectionHeader {
+        CommonCollectionHeader        common;
+        @optional CompleteTypeDetail  detail; // not present for anonymous
+    };
+
+    @extensibility(APPENDABLE) @nested
+    struct MinimalCollectionHeader {
+        CommonCollectionHeader        common;
+    };
+
+    // --- Sequence: ------------------------------------------------------
+    @extensibility(FINAL) @nested
+    struct CompleteSequenceType {
+        CollectionTypeFlag         collection_flag;
+        CompleteCollectionHeader   header;
+        CompleteCollectionElement  element;
+    };
+
+    @extensibility(FINAL) @nested
+    struct MinimalSequenceType {
+        CollectionTypeFlag         collection_flag;
+        MinimalCollectionHeader    header;
+        MinimalCollectionElement   element;
+    };
+
+    // --- Array: ------------------------------------------------------
+    @extensibility(FINAL) @nested
+    struct CommonArrayHeader {
+        LBoundSeq           bound_seq;
+    };
+
+    @extensibility(APPENDABLE) @nested
+    struct CompleteArrayHeader {
+        CommonArrayHeader   common;
+        CompleteTypeDetail  detail;
+    };
+
+    @extensibility(APPENDABLE) @nested
+    struct MinimalArrayHeader {
+        CommonArrayHeader   common;
+    };
+
+    @extensibility(APPENDABLE) @nested
+    struct CompleteArrayType  {
+        CollectionTypeFlag          collection_flag;
+        CompleteArrayHeader         header;
+        CompleteCollectionElement   element;
+    };
+
+    @extensibility(FINAL) @nested
+    struct MinimalArrayType  {
+        CollectionTypeFlag         collection_flag;
+        MinimalArrayHeader         header;
+        MinimalCollectionElement   element;
+    };
+
+    // --- Map: ------------------------------------------------------
+    @extensibility(FINAL) @nested
+    struct CompleteMapType {
+        CollectionTypeFlag            collection_flag;
+        CompleteCollectionHeader      header;
+        CompleteCollectionElement     key;
+        CompleteCollectionElement     element;
+    };
+
+    @extensibility(FINAL) @nested
+    struct MinimalMapType {
+        CollectionTypeFlag          collection_flag;
+        MinimalCollectionHeader     header;
+        MinimalCollectionElement    key;
+        MinimalCollectionElement    element;
+    };
+
+    // --- Enumeration: ----------------------------------------------------
+    typedef unsigned short BitBound;
+
+    // Constant in an enumerated type
+    @extensibility(APPENDABLE) @nested
+    struct CommonEnumeratedLiteral {
+        long                     value;
+        EnumeratedLiteralFlag    flags;
+    };
+
+    // Constant in an enumerated type
+    @extensibility(APPENDABLE) @nested
+    struct CompleteEnumeratedLiteral {
+        CommonEnumeratedLiteral  common;
+        CompleteMemberDetail     detail;
+    };
+    // Ordered by EnumeratedLiteral.common.value
+    typedef sequence<CompleteEnumeratedLiteral> CompleteEnumeratedLiteralSeq;
+
+    // Constant in an enumerated type
+    @extensibility(APPENDABLE) @nested
+    struct MinimalEnumeratedLiteral {
+        CommonEnumeratedLiteral  common;
+        MinimalMemberDetail      detail;
+    };
+    // Ordered by EnumeratedLiteral.common.value
+    typedef sequence<MinimalEnumeratedLiteral> MinimalEnumeratedLiteralSeq;
+
+    @extensibility(FINAL) @nested
+    struct CommonEnumeratedHeader {
+        BitBound                bit_bound;
+    };
+
+    @extensibility(APPENDABLE) @nested
+    struct CompleteEnumeratedHeader {
+        CommonEnumeratedHeader  common;
+        CompleteTypeDetail      detail;
+    };
+
+    @extensibility(APPENDABLE) @nested
+    struct MinimalEnumeratedHeader {
+        CommonEnumeratedHeader  common;
+    };
+
+    // Enumerated type
+    @extensibility(FINAL) @nested
+    struct CompleteEnumeratedType  {
+        EnumTypeFlag                    enum_flags; // unused
+        CompleteEnumeratedHeader        header;
+        CompleteEnumeratedLiteralSeq    literal_seq;
+    };
+
+    // Enumerated type
+    @extensibility(FINAL) @nested
+    struct MinimalEnumeratedType  {
+        EnumTypeFlag                  enum_flags; // unused
+        MinimalEnumeratedHeader       header;
+        MinimalEnumeratedLiteralSeq   literal_seq;
+    };
+
+    // --- Bitmask: --------------------------------------------------------
+    // Bit in a bit mask
+    @extensibility(FINAL) @nested
+    struct CommonBitflag {
+        unsigned short         position;
+        BitflagFlag            flags;
+    };
+
+    @extensibility(APPENDABLE) @nested
+    struct CompleteBitflag {
+        CommonBitflag          common;
+        CompleteMemberDetail   detail;
+    };
+    // Ordered by Bitflag.position
+    typedef sequence<CompleteBitflag> CompleteBitflagSeq;
+
+    @extensibility(APPENDABLE) @nested
+    struct MinimalBitflag {
+        CommonBitflag        common;
+        MinimalMemberDetail  detail;
+    };
+    // Ordered by Bitflag.position
+    typedef sequence<MinimalBitflag> MinimalBitflagSeq;
+
+    @extensibility(FINAL) @nested
+    struct CommonBitmaskHeader {
+        BitBound             bit_bound;
+    };
+
+    typedef CompleteEnumeratedHeader CompleteBitmaskHeader;
+
+    typedef MinimalEnumeratedHeader  MinimalBitmaskHeader;
+
+    @extensibility(APPENDABLE) @nested
+    struct CompleteBitmaskType {
+        BitmaskTypeFlag          bitmask_flags; // unused
+        CompleteBitmaskHeader    header;
+        CompleteBitflagSeq       flag_seq;
+    };
+
+    @extensibility(APPENDABLE) @nested
+    struct MinimalBitmaskType {
+        BitmaskTypeFlag          bitmask_flags; // unused
+        MinimalBitmaskHeader     header;
+        MinimalBitflagSeq        flag_seq;
+    };
+
+    // --- Bitset: ----------------------------------------------------------
+    @extensibility(FINAL) @nested
+    struct CommonBitfield {
+        unsigned short        position;
+        BitsetMemberFlag      flags;
+        octet                 bitcount;
+        TypeKind              holder_type; // Must be primitive integer type
+    };
+
+    @extensibility(APPENDABLE) @nested
+    struct CompleteBitfield {
+        CommonBitfield           common;
+        CompleteMemberDetail     detail;
+    };
+    // Ordered by Bitfield.position
+    typedef sequence<CompleteBitfield> CompleteBitfieldSeq;
+
+    @extensibility(APPENDABLE) @nested
+    struct MinimalBitfield {
+        CommonBitfield       common;
+        NameHash             name_hash;
+    };
+    // Ordered by Bitfield.position
+    typedef sequence<MinimalBitfield> MinimalBitfieldSeq;
+
+    @extensibility(APPENDABLE) @nested
+    struct CompleteBitsetHeader {
+        CompleteTypeDetail   detail;
+    };
+
+    @extensibility(APPENDABLE) @nested
+    struct MinimalBitsetHeader {
+        // Empty. Available for future extension
+    };
+
+    @extensibility(APPENDABLE) @nested
+    struct CompleteBitsetType  {
+        BitsetTypeFlag         bitset_flags; // unused
+        CompleteBitsetHeader   header;
+        CompleteBitfieldSeq    field_seq;
+    };
+
+    @extensibility(APPENDABLE) @nested
+    struct MinimalBitsetType  {
+        BitsetTypeFlag       bitset_flags; // unused
+        MinimalBitsetHeader  header;
+        MinimalBitfieldSeq   field_seq;
+    };
+
+    // --- Type Object: ---------------------------------------------------
+    // The types associated with each case selection must have extensibility
+    // kind APPENDABLE or MUTABLE so that they can be extended in the future
+
+    @extensibility(MUTABLE) @nested
+    struct CompleteExtendedType {
+        // Empty. Available for future extension
+    };
+
+    @extensibility(FINAL)     @nested
+    union CompleteTypeObject switch (octet) {
+        case TK_ALIAS:
+            CompleteAliasType      alias_type;
+        case TK_ANNOTATION:
+            CompleteAnnotationType annotation_type;
+        case TK_STRUCTURE:
+            CompleteStructType     struct_type;
+        case TK_UNION:
+            CompleteUnionType      union_type;
+        case TK_BITSET:
+            CompleteBitsetType     bitset_type;
+        case TK_SEQUENCE:
+            CompleteSequenceType   sequence_type;
+        case TK_ARRAY:
+            CompleteArrayType      array_type;
+        case TK_MAP:
+            CompleteMapType        map_type;
+        case TK_ENUM:
+            CompleteEnumeratedType enumerated_type;
+        case TK_BITMASK:
+            CompleteBitmaskType    bitmask_type;
+
+        // ===================  Future extensibility  ============
+        default:
+            CompleteExtendedType   extended_type;
+    };
+
+    @extensibility(MUTABLE) @nested
+    struct MinimalExtendedType {
+        // Empty. Available for future extension
+    };
+
+
+    @extensibility(FINAL)     @nested
+    union MinimalTypeObject switch (octet) {
+        case TK_ALIAS:
+            MinimalAliasType       alias_type;
+        case TK_ANNOTATION:
+            MinimalAnnotationType  annotation_type;
+        case TK_STRUCTURE:
+            MinimalStructType      struct_type;
+        case TK_UNION:
+            MinimalUnionType       union_type;
+        case TK_BITSET:
+            MinimalBitsetType      bitset_type;
+        case TK_SEQUENCE:
+            MinimalSequenceType    sequence_type;
+        case TK_ARRAY:
+            MinimalArrayType       array_type;
+        case TK_MAP:
+            MinimalMapType         map_type;
+        case TK_ENUM:
+            MinimalEnumeratedType  enumerated_type;
+        case TK_BITMASK:
+            MinimalBitmaskType     bitmask_type;
+
+        // ===================  Future extensibility  ============
+        default:
+            MinimalExtendedType    extended_type;
+    };
+
+    @extensibility(APPENDABLE)  @nested(FALSE)
+    union TypeObject switch (octet) { // EquivalenceKind
+    case EK_COMPLETE:
+        CompleteTypeObject   complete;
+    case EK_MINIMAL:
+        MinimalTypeObject    minimal;
+    };
+    typedef sequence<TypeObject> TypeObjectSeq;
+
+    // Set of TypeObjects representing a strong component: Equivalence class
+    // for the Strong Connectivity relationship (mutual reachability between
+    // types).
+    // Ordered by fully qualified typename lexicographic order
+    typedef TypeObjectSeq        StronglyConnectedComponent;
+
+    @extensibility(FINAL)  @nested
+    struct TypeIdentifierTypeObjectPair {
+        TypeIdentifier  type_identifier;
+        TypeObject      type_object;
+    };
+    typedef
+    sequence<TypeIdentifierTypeObjectPair> TypeIdentifierTypeObjectPairSeq;
+
+    @extensibility(FINAL)  @nested
+    struct TypeIdentifierPair {
+        TypeIdentifier  type_identifier1;
+        TypeIdentifier  type_identifier2;
+    };
+    typedef sequence<TypeIdentifierPair> TypeIdentifierPairSeq;
+
+    @extensibility(APPENDABLE) @nested
+    struct TypeIdentifierWithSize {
+        DDS::XTypes::TypeIdentifier  type_id;
+        unsigned long                typeobject_serialized_size;
+    };
+    typedef sequence<TypeIdentifierWithSize> TypeIdentifierWithSizeSeq;
+
+    @extensibility(APPENDABLE) @nested
+    struct TypeIdentifierWithDependencies {
+        TypeIdentifierWithSize            typeid_with_size;
+        // The total additional types related to minimal_type
+        long                             dependent_typeid_count;
+        sequence<TypeIdentifierWithSize>  dependent_typeids;
+    };
+    typedef
+    sequence<TypeIdentifierWithDependencies> TypeIdentifierWithDependenciesSeq;
+
+    // This appears in the builtin DDS topics PublicationBuiltinTopicData
+    // and SubscriptionBuiltinTopicData
+    @extensibility(MUTABLE) @nested(FALSE)
+    struct TypeInformation {
+        @id(0x1001) TypeIdentifierWithDependencies minimal;
+        @id(0x1002) TypeIdentifierWithDependencies complete;
+    };
+    typedef sequence<TypeInformation> TypeInformationSeq;
+
+};  // end of module XTypes
+};  // end module DDS
+
+
+

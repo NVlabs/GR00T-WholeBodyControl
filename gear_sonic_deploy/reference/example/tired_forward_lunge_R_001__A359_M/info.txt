@@ -1,0 +1,51 @@
+Motion Information: tired_forward_lunge_R_001__A359_M
+==================================================
+
+joint_pos:
+  Shape: (810, 29)
+  Dtype: float32
+  Range: [-1.681, 2.251]
+  Sample: [ 0.10455281  0.12311819 -0.13420933  0.0210929   0.01301001]
+
+joint_vel:
+  Shape: (810, 29)
+  Dtype: float32
+  Range: [-29.172, 24.785]
+  Sample: [0. 0. 0. 0. 0.]
+
+body_pos_w:
+  Shape: (810, 14, 3)
+  Dtype: float32
+  Range: [-0.830, 1.122]
+  Sample: [ 0.00363829  0.01252624  0.78668284  0.11977606 -0.00450246]
+
+body_quat_w:
+  Shape: (810, 14, 4)
+  Dtype: float32
+  Range: [-0.707, 0.968]
+  Sample: [-0.6985865   0.04820039  0.04724668  0.71233517 -0.6972264 ]
+
+body_lin_vel_w:
+  Shape: (810, 14, 3)
+  Dtype: float32
+  Range: [-2.633, 2.705]
+  Sample: [ 0.00514652 -0.0242208   0.00147181  0.0059143  -0.02151402]
+
+body_ang_vel_w:
+  Shape: (810, 14, 3)
+  Dtype: float32
+  Range: [-9.584, 12.844]
+  Sample: [ 0.01855543 -0.00674082  0.00205783  0.04113024  0.00938711]
+
+_body_indexes:
+  Shape: (14,)
+  Dtype: int64
+  Range: [0.000, 29.000]
+  Sample: [ 0  4 10 18  5]
+
+time_step_total:
+  Shape: ()
+  Dtype: int64
+  Range: [810.000, 810.000]
+  Sample: [810]
+

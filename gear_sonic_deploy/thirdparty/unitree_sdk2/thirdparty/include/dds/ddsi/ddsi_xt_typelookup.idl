@@ -1,0 +1,144 @@
+#include "ddsi_xt_typeinfo.idl"
+
+@default_nested(TRUE)
+module DDS {
+
+typedef octet GuidPrefix_t[12];
+
+@final
+struct EntityId_t {
+    octet entityKey[3]; octet entityKind;
+};
+
+@final
+struct GUID_t {
+    GuidPrefix_t guidPrefix;
+    EntityId_t entityId;
+};
+
+@final
+struct SequenceNumber {
+    long high;
+    unsigned long low;
+};
+
+@final
+struct SampleIdentity {
+    GUID_t writer_guid;
+    SequenceNumber sequence_number;
+};
+
+const long DDS_RETCODE_OK = 0;
+
+}; // module DDS
+
+@default_nested(TRUE)
+module DDS { module RPC {
+
+typedef octet UnknownOperation;
+typedef octet UnknownException;
+typedef octet UnusedMember;
+
+enum RemoteExceptionCode {
+    REMOTE_EX_OK,
+    REMOTE_EX_UNSUPPORTED,
+    REMOTE_EX_INVALID_ARGUMENT,
+    REMOTE_EX_OUT_OF_RESOURCES,
+    REMOTE_EX_UNKNOWN_OPERATION,
+    REMOTE_EX_UNKNOWN_EXCEPTION
+};
+
+typedef string<255> InstanceName;
+
+@final
+struct RequestHeader {
+    DDS::SampleIdentity requestId;
+    DDS::RPC::InstanceName instanceName;
+};
+
+@final
+struct ReplyHeader {
+    DDS::SampleIdentity relatedRequestId;
+    DDS::RPC::RemoteExceptionCode remoteEx;
+};
+
+}; }; // module DDS::RPC
+
+
+@default_nested(TRUE)
+module DDS { module Builtin {
+
+// computed from @hashid("getTypes")
+const unsigned long TypeLookup_getTypes_HashId = 0x018252d3;
+
+// computed from @hashid("getDependencies");
+const unsigned long TypeLookup_getDependencies_HashId = 0x05aafb31;
+
+// Query the TypeObjects associated with one or more TypeIdentifiers
+@extensibility(MUTABLE)
+struct TypeLookup_getTypes_In {
+    @hashid sequence<DDS::XTypes::TypeIdentifier> type_ids;
+};
+
+@extensibility(MUTABLE)
+struct TypeLookup_getTypes_Out {
+    @hashid sequence<DDS::XTypes::TypeIdentifierTypeObjectPair> types;
+    @hashid sequence<DDS::XTypes::TypeIdentifierPair> complete_to_minimal;
+};
+
+union TypeLookup_getTypes_Result switch(long) {
+    case DDS_RETCODE_OK:
+        TypeLookup_getTypes_Out result;
+};
+
+// Query TypeIdentifiers that the specified types depend on
+@extensibility(MUTABLE)
+struct TypeLookup_getTypeDependencies_In {
+    @hashid sequence<DDS::XTypes::TypeIdentifier> type_ids;
+    @hashid sequence<octet, 32> continuation_point;
+};
+
+@extensibility(MUTABLE)
+struct TypeLookup_getTypeDependencies_Out {
+    @hashid sequence<DDS::XTypes::TypeIdentifierWithSize> dependent_typeids;
+    @hashid sequence<octet, 32> continuation_point;
+};
+
+union TypeLookup_getTypeDependencies_Result switch(long){
+    case DDS_RETCODE_OK:
+        TypeLookup_getTypeDependencies_Out result;
+};
+
+// Service Request
+union TypeLookup_Call switch(long) {
+    case TypeLookup_getTypes_HashId:
+        TypeLookup_getTypes_In getTypes;
+    case TypeLookup_getDependencies_HashId:
+        TypeLookup_getTypeDependencies_In getTypeDependencies;
+};
+
+@nested(FALSE)
+@RPCRequestType
+@final
+struct TypeLookup_Request {
+    DDS::RPC::RequestHeader header;
+    TypeLookup_Call data;
+};
+
+// Service Reply
+union TypeLookup_Return switch(long) {
+    case TypeLookup_getTypes_HashId:
+        TypeLookup_getTypes_Result getType;
+    case TypeLookup_getDependencies_HashId:
+        TypeLookup_getTypeDependencies_Result getTypeDependencies;
+};
+
+@nested(FALSE)
+@RPCReplyType
+@final
+struct TypeLookup_Reply {
+    DDS::RPC::ReplyHeader header;
+    TypeLookup_Return return_data; // changed from return to return_data to avoid collision with return keyword
+};
+
+}; }; // dds::builtin

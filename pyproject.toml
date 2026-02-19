@@ -1,99 +1,7 @@
-[build-system]
-requires = ["setuptools>=67", "wheel", "pip"]
-build-backend = "setuptools.build_meta"
-
-[project]
-# See https://setuptools.pypa.io/en/latest/userguide/quickstart.html for more project configuration options.
-name = "gr00t_wbc"
-dynamic = ["version"]
-readme = "README.md"
-classifiers = [
-    "Intended Audience :: Science/Research",
-    "Development Status :: 3 - Alpha",
-    "License :: OSI Approved :: Apache Software License",
-    "Programming Language :: Python :: 3",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
-]
-authors = [
-    {name = "NVIDIA Gear Lab"}
-]
-requires-python = "~=3.10"
-dependencies = [
-    "av>=14.2",
-    "torch",
-    "pyttsx3==2.90",
-    "scipy==1.15.3",
-    "numpy==1.26.4",
-    "matplotlib",
-    "hydra-core",
-    "ray[default]",
-    "click",
-    "gymnasium",
-    "mujoco",
-    "termcolor",
-    "flask",
-    "python-socketio>=5.13.0",
-    "flask_socketio",
-    "loguru", 
-    "meshcat",
-    "meshcat-shapes",
-    "onnxruntime",
-    "rerun-sdk==0.21.0",
-    "pygame",
-    "sshkeyboard",
-    "msgpack",
-    "msgpack-numpy",
-    "pyzmq",
-    "PyQt6; platform_machine != 'aarch64'",
-    "pin",
-    "pin-pink",
-    "pyrealsense2; sys_platform != 'darwin'",
-    "pyrealsense2-macosx; sys_platform == 'darwin'",
-    "qpsolvers[osqp,quadprog]",
-    "tyro",
-    "cv-bridge",
-    "lark",
-    "lerobot @ git+https://github.com/huggingface/lerobot.git@a445d9c9da6bea99a8972daa4fe1fdd053d711d2",
-    "datasets==3.6.0",
-    "pandas",
-    "evdev; sys_platform == 'linux'"
-]
-license = {file = "LICENSE"}
-
-[project.optional-dependencies]
-dev = [
-    "pytest==7.4.0",
-    "build",
-    "setuptools",
-    "wheel",
-    "ruff",
-    "black",
-    "ipdb"
-]
-
-[project.scripts]
-gr00t_wbc = "gr00t_wbc.control.teleop.gui.cli:cli"
-
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["gr00t_wbc*"]
-exclude = [
-    "*.tests",
-    "*.tests.*",
-    "tests.*",
-    "tests",
-    "docs*",
-    "scripts*"
-]
-
-[tool.setuptools]
-include-package-data = true
-
-[tool.setuptools.package-data]
-gr00t_wbc = ["py.typed", "**/*.json", "**/*.yaml"]
-
-[tool.setuptools.dynamic]
-version = {attr = "gr00t_wbc.version.VERSION"}
+# Root pyproject.toml — tooling configuration only.
+# To install packages, use:
+#   pip install -e decoupled_wbc/        (or decoupled_wbc[full], decoupled_wbc[dev])
+#   pip install -e gear_sonic/           (or gear_sonic[teleop], gear_sonic[sim])
 
 [tool.black]
 line-length = 100
@@ -135,7 +43,7 @@ reportPrivateImportUsage = false
 line-length = 115
 target-version = "py310"
 exclude = [
-    "gr00t_wbc/dexmg",
+    "gear_sonic/dexmg",
     "external_dependencies",
     "external_dependencies/**",
     "./external_dependencies/**",
@@ -170,7 +78,7 @@ module = "tests.*"
 strict_optional = false
 
 [tool.pytest.ini_options]
-testpaths = "tests/"
+testpaths = "decoupled_wbc/tests/"
 python_classes = [
   "Test*",
   "*Test"

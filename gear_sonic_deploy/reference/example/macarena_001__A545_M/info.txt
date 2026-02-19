@@ -1,0 +1,52 @@
+Motion Information: macarena_001__A545_M
+==================================================
+
+joint_pos:
+  Shape: (1375, 29)
+  Dtype: float32
+  Range: [-1.752, 1.839]
+  Sample: [-0.12627211 -0.1081429   0.04614829 -0.03699337 -0.17927563]
+
+joint_vel:
+  Shape: (1375, 29)
+  Dtype: float32
+  Range: [-17.410, 16.353]
+  Sample: [ 0.         -0.6198224  -0.19615404 -0.22224468 -0.4047744 ]
+
+body_pos_w:
+  Shape: (1375, 14, 3)
+  Dtype: float32
+  Range: [-0.428, 1.258]
+  Sample: [5.7239551e-04 1.5415414e-02 7.8600442e-01 1.1899064e-01 2.5980033e-02]
+
+body_quat_w:
+  Shape: (1375, 14, 4)
+  Dtype: float32
+  Range: [-0.707, 1.000]
+  Sample: [ 7.4192613e-01  1.2869124e-02  5.1390840e-04 -6.7035794e-01
+  7.3185688e-01]
+
+body_lin_vel_w:
+  Shape: (1375, 14, 3)
+  Dtype: float32
+  Range: [-1.572, 2.181]
+  Sample: [ 0.07525253  0.0134165  -0.02684434  0.09596311 -0.00692309]
+
+body_ang_vel_w:
+  Shape: (1375, 14, 3)
+  Dtype: float32
+  Range: [-15.288, 16.576]
+  Sample: [-0.00054383 -0.14689815 -0.18050767  0.00343074  0.08365735]
+
+_body_indexes:
+  Shape: (14,)
+  Dtype: int64
+  Range: [0.000, 29.000]
+  Sample: [ 0  4 10 18  5]
+
+time_step_total:
+  Shape: ()
+  Dtype: int64
+  Range: [1375.000, 1375.000]
+  Sample: [1375]
+

@@ -67,7 +67,7 @@ instance/
 .scrapy
 
 # Sphinx documentation
-docs/_build/
+
 
 # PyBuilder
 .pybuilder/
@@ -166,10 +166,29 @@ outputs/
 
 .DS_Store
 
+# Hugging Face upload/maintenance scripts (internal use only)
+huggingface/
+
+# Model checkpoints (download via download_from_hf.py)
+*.onnx
+!decoupled_wbc/sim2mujoco/resources/robots/g1/policy/GR00T-WholeBodyControl-Balance.onnx
+!decoupled_wbc/sim2mujoco/resources/robots/g1/policy/GR00T-WholeBodyControl-Walk.onnx
+
 
 # Mujoco
 MUJOCO_LOG.TXT
 
 # IsaacDeploy
 external_dependencies/isaac_teleop_app/isaac-deploy
+external_dependencies/doc/
 
+# XRoboToolkit pybind (cloned locally on aarch64 by install_pico.sh)
+external_dependencies/XRoboToolkit-PC-Service-Pybind/
+
+# UV
+uv.lock
+
+# XRoboToolkit-PC-Service-Pybind
+xrobotoolkit_sdk.cpython-*-*-*.so
+teleop_vids/
+*.code-workspace

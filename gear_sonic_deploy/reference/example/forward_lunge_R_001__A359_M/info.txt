@@ -1,0 +1,51 @@
+Motion Information: forward_lunge_R_001__A359_M
+==================================================
+
+joint_pos:
+  Shape: (399, 29)
+  Dtype: float32
+  Range: [-1.516, 1.847]
+  Sample: [ 0.21495092  0.21319595 -0.0629773  -0.03622465  0.0364784 ]
+
+joint_vel:
+  Shape: (399, 29)
+  Dtype: float32
+  Range: [-6.573, 7.911]
+  Sample: [ 0.         -0.07231236  0.          0.          0.        ]
+
+body_pos_w:
+  Shape: (399, 14, 3)
+  Dtype: float32
+  Range: [-0.749, 1.083]
+  Sample: [0.00151141 0.01061182 0.79061526 0.11847792 0.00413224]
+
+body_quat_w:
+  Shape: (399, 14, 4)
+  Dtype: float32
+  Range: [-0.707, 0.951]
+  Sample: [ 0.7101441  -0.0368785  -0.03962614 -0.70197237  0.71026546]
+
+body_lin_vel_w:
+  Shape: (399, 14, 3)
+  Dtype: float32
+  Range: [-2.788, 2.510]
+  Sample: [ 0.00209634 -0.00167504 -0.01071004 -0.00232031  0.00457859]
+
+body_ang_vel_w:
+  Shape: (399, 14, 3)
+  Dtype: float32
+  Range: [-6.113, 7.547]
+  Sample: [ 0.1587345   0.02668758 -0.10707712  0.09136587  0.00318161]
+
+_body_indexes:
+  Shape: (14,)
+  Dtype: int64
+  Range: [0.000, 29.000]
+  Sample: [ 0  4 10 18  5]
+
+time_step_total:
+  Shape: ()
+  Dtype: int64
+  Range: [399.000, 399.000]
+  Sample: [399]
+

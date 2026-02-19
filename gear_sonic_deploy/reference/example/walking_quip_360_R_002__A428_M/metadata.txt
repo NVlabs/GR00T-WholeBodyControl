@@ -1,0 +1,17 @@
+Metadata for: walking_quip_360_R_002__A428_M
+==============================
+
+Body part indexes:
+[ 0  4 10 18  5 11 19  9 16 22 28 17 23 29]
+
+Total timesteps: 455
+
+Data arrays summary:
+  joint_pos: (455, 29) (float32)
+  joint_vel: (455, 29) (float32)
+  body_pos_w: (455, 14, 3) (float32)
+  body_quat_w: (455, 14, 4) (float32)
+  body_lin_vel_w: (455, 14, 3) (float32)
+  body_ang_vel_w: (455, 14, 3) (float32)
+  _body_indexes: (14,) (int64)
+  time_step_total: () (int64)

@@ -1,0 +1,8 @@
+# IDE
+.vscode
+
+# cpp
+build
+
+#cland
+.cache

@@ -1,0 +1,51 @@
+Motion Information: walking_quip_360_R_002__A428_M
+==================================================
+
+joint_pos:
+  Shape: (455, 29)
+  Dtype: float32
+  Range: [-1.003, 1.403]
+  Sample: [ 0.01109954  0.02397734  0.06473204  0.05247362 -0.01430147]
+
+joint_vel:
+  Shape: (455, 29)
+  Dtype: float32
+  Range: [-10.128, 10.542]
+  Sample: [-0.06343862  0.          0.          0.          0.        ]
+
+body_pos_w:
+  Shape: (455, 14, 3)
+  Dtype: float32
+  Range: [-5.178, 1.205]
+  Sample: [-0.00239508  0.01172869  0.7911661   0.1148396   0.00817287]
+
+body_quat_w:
+  Shape: (455, 14, 4)
+  Dtype: float32
+  Range: [-0.707, 0.993]
+  Sample: [-0.702888    0.00456196  0.00883033  0.7112312  -0.70121443]
+
+body_lin_vel_w:
+  Shape: (455, 14, 3)
+  Dtype: float32
+  Range: [-2.853, 1.454]
+  Sample: [0.00306987 0.01037478 0.00453062 0.00270815 0.00906713]
+
+body_ang_vel_w:
+  Shape: (455, 14, 3)
+  Dtype: float32
+  Range: [-10.691, 10.791]
+  Sample: [ 0.0003236   0.00011099 -0.00044414 -0.02917245  0.00046786]
+
+_body_indexes:
+  Shape: (14,)
+  Dtype: int64
+  Range: [0.000, 29.000]
+  Sample: [ 0  4 10 18  5]
+
+time_step_total:
+  Shape: ()
+  Dtype: int64
+  Range: [455.000, 455.000]
+  Sample: [455]
+

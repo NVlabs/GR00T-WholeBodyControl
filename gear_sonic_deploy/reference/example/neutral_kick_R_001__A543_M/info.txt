@@ -1,0 +1,52 @@
+Motion Information: neutral_kick_R_001__A543_M
+==================================================
+
+joint_pos:
+  Shape: (165, 29)
+  Dtype: float32
+  Range: [-1.511, 2.231]
+  Sample: [-0.02438436  0.01020973  0.0067296  -0.01478768 -0.01928544]
+
+joint_vel:
+  Shape: (165, 29)
+  Dtype: float32
+  Range: [-18.290, 20.364]
+  Sample: [-0.5047629  -0.20612705  0.          0.06651222  0.        ]
+
+body_pos_w:
+  Shape: (165, 14, 3)
+  Dtype: float32
+  Range: [-0.351, 1.138]
+  Sample: [-2.5653988e-04 -2.1049839e-03  7.8969407e-01 -1.1784680e-01
+ -6.2525691e-03]
+
+body_quat_w:
+  Shape: (165, 14, 4)
+  Dtype: float32
+  Range: [-0.674, 0.962]
+  Sample: [ 0.71037376 -0.0131016   0.01907985  0.703444    0.7091498 ]
+
+body_lin_vel_w:
+  Shape: (165, 14, 3)
+  Dtype: float32
+  Range: [-3.077, 4.037]
+  Sample: [ 0.00510508 -0.00776416 -0.01248534  0.01384882 -0.0365492 ]
+
+body_ang_vel_w:
+  Shape: (165, 14, 3)
+  Dtype: float32
+  Range: [-10.156, 13.797]
+  Sample: [-0.18570669 -0.06071702  0.20189351  0.40606773  0.00312011]
+
+_body_indexes:
+  Shape: (14,)
+  Dtype: int64
+  Range: [0.000, 29.000]
+  Sample: [ 0  4 10 18  5]
+
+time_step_total:
+  Shape: ()
+  Dtype: int64
+  Range: [165.000, 165.000]
+  Sample: [165]
+

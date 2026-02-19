@@ -1,0 +1,51 @@
+Motion Information: squat_001__A359
+==================================================
+
+joint_pos:
+  Shape: (424, 29)
+  Dtype: float32
+  Range: [-2.215, 2.576]
+  Sample: [ 0.15727139  0.15096666  0.04344312 -0.00495214  0.00737908]
+
+joint_vel:
+  Shape: (424, 29)
+  Dtype: float32
+  Range: [-4.688, 4.380]
+  Sample: [0.06294921 0.07401705 0.         0.         0.        ]
+
+body_pos_w:
+  Shape: (424, 14, 3)
+  Dtype: float32
+  Range: [-0.364, 1.085]
+  Sample: [-0.00253593  0.01265665  0.79256266  0.11277536  0.00799088]
+
+body_quat_w:
+  Shape: (424, 14, 4)
+  Dtype: float32
+  Range: [-0.707, 0.778]
+  Sample: [ 0.7121807  -0.03302116 -0.02697971 -0.70069987  0.711816  ]
+
+body_lin_vel_w:
+  Shape: (424, 14, 3)
+  Dtype: float32
+  Range: [-1.232, 1.069]
+  Sample: [-0.00345908  0.01068808  0.00030054 -0.00323385  0.01278332]
+
+body_ang_vel_w:
+  Shape: (424, 14, 3)
+  Dtype: float32
+  Range: [-4.028, 3.743]
+  Sample: [ 0.00429551 -0.00147157  0.01170849 -0.00151611 -0.00085008]
+
+_body_indexes:
+  Shape: (14,)
+  Dtype: int64
+  Range: [0.000, 29.000]
+  Sample: [ 0  4 10 18  5]
+
+time_step_total:
+  Shape: ()
+  Dtype: int64
+  Range: [424.000, 424.000]
+  Sample: [424]
+

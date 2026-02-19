@@ -1,0 +1,15 @@
+
+#include "ddsi_xt_typeinfo.idl"
+
+module DDS { module XTypes {
+
+    @extensibility(FINAL) @nested(FALSE)
+    struct TypeMapping {
+        sequence<TypeIdentifierTypeObjectPair> identifier_object_pair_minimal;
+        sequence<TypeIdentifierTypeObjectPair> identifier_object_pair_complete;
+        sequence<TypeIdentifierPair> identifier_complete_minimal;
+    };
+
+
+};  // end of module XTypes
+};  // end module DDS

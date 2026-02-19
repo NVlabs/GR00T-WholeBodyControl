@@ -1,0 +1,150 @@
+# ===================================================================
+# G1 Deploy - Observation Configuration Example
+# ===================================================================
+# This file demonstrates the complete observation configuration format
+# This example matches the default configuration exactly
+#
+# Instructions:
+# 1. Copy this file to create your custom configuration
+# 2. Modify enabled: true/false to enable/disable observations
+# 3. Reorder observations by changing their position in the list
+# 4. The system automatically calculates offsets based on order
+# 5. Ensure total enabled dimensions match your ONNX model input
+# ===================================================================
+
+# Observation definitions - processed in the order listed below
+observations:
+  # ---------------------------------------------------------------
+  # Motion Reference Data (from loaded motion sequences)
+  # ---------------------------------------------------------------
+  
+  - name: "motion_joint_positions"
+    enabled: true
+    # Description: Joint positions from motion reference data
+    # Dimension: 29 elements (one per joint)
+    # Units: radians
+    # Purpose: Provides target joint positions for the current motion frame
+    
+  - name: "motion_joint_velocities"
+    enabled: true
+    # Description: Joint velocities from motion reference data
+    # Dimension: 29 elements (one per joint)
+    # Units: radians/second
+    # Purpose: Provides target joint velocities for the current motion frame
+    # Note: Only active when motion is playing (is_playing_ = true)
+    
+  - name: "motion_anchor_orientation"
+    enabled: true
+    # Description: Motion anchor orientation relative to robot base
+    # Dimension: 6 elements (rotation matrix first 2 columns flattened)
+    # Units: dimensionless (rotation matrix elements)
+    # Purpose: Encodes relative orientation between robot and motion reference
+    # Calculation: Includes heading compensation and delta heading adjustments
+    
+  # ---------------------------------------------------------------
+  # Robot State Data (from sensors and estimation)
+  # ---------------------------------------------------------------
+  
+  - name: "base_angular_velocity"
+    enabled: true
+    # Description: Robot base angular velocity in body frame
+    # Dimension: 3 elements (roll, pitch, yaw rates)
+    # Units: radians/second
+    # Source: IMU sensor data
+    # Purpose: Provides current rotational motion of the robot base
+    
+  - name: "body_joint_positions"
+    enabled: true
+    # Description: Current robot joint positions
+    # Dimension: 29 elements (one per joint)
+    # Units: radians
+    # Source: Joint encoders via robot low-level state
+    # Purpose: Current actual joint positions for feedback control
+    
+  - name: "body_joint_velocities"
+    enabled: true
+    # Description: Current robot joint velocities
+    # Dimension: 29 elements (one per joint)
+    # Units: radians/second
+    # Source: Joint encoders via robot low-level state
+    # Purpose: Current actual joint velocities for feedback control
+    
+  # ---------------------------------------------------------------
+  # Control History
+  # ---------------------------------------------------------------
+  
+  - name: "last_actions"
+    enabled: true
+    # Description: Previous control action output
+    # Dimension: 29 elements (one per joint)
+    # Units: dimensionless (normalized action values)
+    # Purpose: Provides action history for temporal consistency
+    # Note: Helps with smooth control transitions
+
+# ===================================================================
+# Configuration Summary
+# ===================================================================
+# 
+# Default Configuration Totals:
+#   - motion_joint_positions:    29D (enabled)  [offset: 0]
+#   - motion_joint_velocities:   29D (enabled)  [offset: 29]
+#   - motion_anchor_orientation:  6D (enabled)  [offset: 58]
+#   - base_angular_velocity:      3D (enabled)  [offset: 64]
+#   - body_joint_positions:      29D (enabled)  [offset: 67]
+#   - body_joint_velocities:     29D (enabled)  [offset: 96]
+#   - last_actions:              29D (enabled)  [offset: 125]
+#   ----------------------------------------------------------------
+#   Total Enabled Dimension:    154D
+#
+# This matches the standard G1 policy model input dimension of 154
+#
+# ===================================================================
+# Customization Examples
+# ===================================================================
+#
+# Example 1: Disable motion velocities (for position-only policies)
+# - name: "motion_joint_velocities"
+#   enabled: false
+#
+# Example 2: Disable last actions (for non-temporal policies)
+# - name: "last_actions"
+#   enabled: false
+#
+# Example 3: Minimal configuration (position-only)
+# observations:
+#   - name: "motion_joint_positions"
+#     enabled: true
+#   - name: "body_joint_positions"
+#     enabled: true
+#   # Total: 58D (29+29)
+#
+# Example 4: Reorder observations (offsets calculated automatically)
+# observations:
+#   - name: "body_joint_positions"     # Will get offset: 0
+#     enabled: true
+#   - name: "motion_joint_positions"   # Will get offset: 29
+#     enabled: true
+#   # Automatic offset calculation based on order
+#
+# Example 5: Multi-frame observations with step intervals (for temporal dynamics)
+# observations:
+#   - name: "motion_joint_positions_5frame_step5"    # 145D (29 joints * 5 frames, step=5)
+#     enabled: true
+#   - name: "motion_joint_velocities_5frame_step5"   # 145D (29 joints * 5 frames, step=5)  
+#     enabled: true
+#   - name: "base_angular_velocity"                  # 3D (current frame only)
+#     enabled: true
+#   # Total: 293D (145+145+3)
+#   # Captures frames at: current, current+5, current+10, current+15, current+20
+#
+# Example 6: Multi-frame with different step sizes
+# observations:
+#   - name: "motion_joint_positions_5frame_step10"   # 145D (step=10 for longer intervals)
+#     enabled: true
+#   # Captures frames at: current, current+10, current+20, current+30, current+40
+#
+# Note: Multi-frame observations capture temporal patterns by sampling
+#       future frames at configurable intervals (step sizes)
+#       If future frames exceed motion length, repeats the last frame
+#
+# ===================================================================

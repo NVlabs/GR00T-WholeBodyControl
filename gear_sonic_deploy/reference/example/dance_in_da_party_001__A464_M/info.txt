@@ -1,0 +1,52 @@
+Motion Information: dance_in_da_party_001__A464_M
+==================================================
+
+joint_pos:
+  Shape: (497, 29)
+  Dtype: float32
+  Range: [-1.868, 2.226]
+  Sample: [ 0.10277859  0.12832902 -0.02010582 -0.0212364   0.01920657]
+
+joint_vel:
+  Shape: (497, 29)
+  Dtype: float32
+  Range: [-20.223, 20.504]
+  Sample: [0.14217682 0.14665052 0.         0.         0.        ]
+
+body_pos_w:
+  Shape: (497, 14, 3)
+  Dtype: float32
+  Range: [-0.537, 1.307]
+  Sample: [-2.83326663e-04  1.44427223e-02  7.92431474e-01  1.17636755e-01
+  1.22397467e-02]
+
+body_quat_w:
+  Shape: (497, 14, 4)
+  Dtype: float32
+  Range: [-0.707, 0.998]
+  Sample: [ 0.7101825  -0.01322068 -0.0210839  -0.7035777   0.70851105]
+
+body_lin_vel_w:
+  Shape: (497, 14, 3)
+  Dtype: float32
+  Range: [-2.763, 2.579]
+  Sample: [ 0.00117058 -0.02414531 -0.00281086  0.00139649 -0.02009862]
+
+body_ang_vel_w:
+  Shape: (497, 14, 3)
+  Dtype: float32
+  Range: [-16.230, 12.991]
+  Sample: [ 0.00225733 -0.00063545  0.00251273  0.10681088  0.0040871 ]
+
+_body_indexes:
+  Shape: (14,)
+  Dtype: int64
+  Range: [0.000, 29.000]
+  Sample: [ 0  4 10 18  5]
+
+time_step_total:
+  Shape: ()
+  Dtype: int64
+  Range: [497.000, 497.000]
+  Sample: [497]
+

@@ -1,0 +1,25 @@
+version: '3'
+services: 
+  devcontainer: 
+    volumes: 
+      - ..:/workspace:cached
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /mnt/wslg:/mnt/wslg
+      - /root/.gazebo/models/:/root/.gazebo/models/
+      - /var/run/docker.sock:/var/run/docker.sock 
+      - $HOME/.Xauthority:/tmp/.Xauthority:rw
+    environment:
+      - DISPLAY=${DISPLAY}
+      - XAUTHORITY=/tmp/.Xauthority
+
+    cap_add:
+      - SYS_PTRACE  
+    command: /bin/sh -c "while sleep 1000; do :; done"
+ 
+    build:
+      context: .
+      dockerfile: Dockerfile.devcontainer 
+
+    privileged: true
+    network_mode: "host"
+ 

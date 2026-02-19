@@ -1,0 +1,48 @@
+/* Copyright 2010, Object Management Group, Inc.
+* Copyright 2010, PrismTech, Corp.
+* Copyright 2010, Real-Time Innovations, Inc.
+* All rights reserved.
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+*     http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*/
+#ifndef __OMG_DDS_DDS_HPP__
+#define __OMG_DDS_DDS_HPP__
+
+/**
+ * @file
+ * This utility header includes the headers of all the DDS DCPS modules.
+ */
+
+#ifdef _WIN32
+#pragma warning( push )
+#pragma warning( disable : 4250 )
+#pragma warning( disable : 4251 )
+#pragma warning( disable : 4702 )
+#endif
+
+#include <dds/core/ddscore.hpp>
+#include <dds/domain/ddsdomain.hpp>
+#include <dds/topic/ddstopic.hpp>
+
+#include <dds/sub/ddssub.hpp>
+#include <dds/pub/ddspub.hpp>
+
+#include <dds/core/QosProvider.hpp>
+
+#ifdef _WIN32
+#pragma warning ( pop )
+#pragma warning( push )
+#pragma warning( disable : 4250 )
+#endif
+
+#endif /* __OMG_DDS_DDS_HPP__ */

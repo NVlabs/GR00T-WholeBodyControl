@@ -1,0 +1,17 @@
+Metadata for: neutral_kick_R_001__A543
+==============================
+
+Body part indexes:
+[ 0  4 10 18  5 11 19  9 16 22 28 17 23 29]
+
+Total timesteps: 165
+
+Data arrays summary:
+  joint_pos: (165, 29) (float32)
+  joint_vel: (165, 29) (float32)
+  body_pos_w: (165, 14, 3) (float32)
+  body_quat_w: (165, 14, 4) (float32)
+  body_lin_vel_w: (165, 14, 3) (float32)
+  body_ang_vel_w: (165, 14, 3) (float32)
+  _body_indexes: (14,) (int64)
+  time_step_total: () (int64)

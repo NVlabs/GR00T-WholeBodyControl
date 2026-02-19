@@ -1,0 +1,51 @@
+Motion Information: tired_one_leg_jumping_R_001__A359_M
+==================================================
+
+joint_pos:
+  Shape: (500, 29)
+  Dtype: float32
+  Range: [-2.466, 2.544]
+  Sample: [ 0.18195386  0.19815134 -0.05533458 -0.01181217  0.01394258]
+
+joint_vel:
+  Shape: (500, 29)
+  Dtype: float32
+  Range: [-25.521, 29.521]
+  Sample: [0.10270029 0.0821501  0.         0.         0.        ]
+
+body_pos_w:
+  Shape: (500, 14, 3)
+  Dtype: float32
+  Range: [-0.638, 1.389]
+  Sample: [0.00375429 0.0119299  0.7908045  0.12123838 0.00211857]
+
+body_quat_w:
+  Shape: (500, 14, 4)
+  Dtype: float32
+  Range: [-0.707, 0.994]
+  Sample: [ 0.70963436 -0.04173436 -0.04712047 -0.7017528   0.709552  ]
+
+body_lin_vel_w:
+  Shape: (500, 14, 3)
+  Dtype: float32
+  Range: [-2.468, 3.083]
+  Sample: [ 0.00727609  0.00323505 -0.00185661  0.00736587 -0.00425211]
+
+body_ang_vel_w:
+  Shape: (500, 14, 3)
+  Dtype: float32
+  Range: [-14.474, 12.502]
+  Sample: [-0.04819455 -0.00166482 -0.01665068  0.0203299   0.0001879 ]
+
+_body_indexes:
+  Shape: (14,)
+  Dtype: int64
+  Range: [0.000, 29.000]
+  Sample: [ 0  4 10 18  5]
+
+time_step_total:
+  Shape: ()
+  Dtype: int64
+  Range: [500.000, 500.000]
+  Sample: [500]
+

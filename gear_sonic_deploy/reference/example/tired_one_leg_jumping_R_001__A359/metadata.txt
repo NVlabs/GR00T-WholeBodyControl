@@ -1,0 +1,17 @@
+Metadata for: tired_one_leg_jumping_R_001__A359
+==============================
+
+Body part indexes:
+[ 0  4 10 18  5 11 19  9 16 22 28 17 23 29]
+
+Total timesteps: 500
+
+Data arrays summary:
+  joint_pos: (500, 29) (float32)
+  joint_vel: (500, 29) (float32)
+  body_pos_w: (500, 14, 3) (float32)
+  body_quat_w: (500, 14, 4) (float32)
+  body_lin_vel_w: (500, 14, 3) (float32)
+  body_ang_vel_w: (500, 14, 3) (float32)
+  _body_indexes: (14,) (int64)
+  time_step_total: () (int64)

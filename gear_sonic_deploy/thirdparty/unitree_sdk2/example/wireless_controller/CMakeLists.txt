@@ -1,0 +1,2 @@
+add_executable(advanced_gamepad main.cpp)
+target_link_libraries(advanced_gamepad unitree_sdk2)
