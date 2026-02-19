@@ -19,8 +19,9 @@ REPO_ID = "nvidia/GEAR-SONIC"
 
 # (filename in HF repo, local destination relative to output_dir)
 POLICY_FILES = [
-    ("model_releasev1-1_encoder.onnx", "policy/release/model_releasev1-1_encoder.onnx"),
-    ("model_releasev1-1_decoder.onnx", "policy/release/model_releasev1-1_decoder.onnx"),
+    ("model_encoder.onnx", "policy/release/model_encoder.onnx"),
+    ("model_decoder.onnx", "policy/release/model_decoder.onnx"),
+    ("observation_config.yaml", "policy/release/observation_config.yaml"),
 ]
 
 PLANNER_FILE = ("planner_sonic.onnx", "planner/target_vel/V2/planner_sonic.onnx")

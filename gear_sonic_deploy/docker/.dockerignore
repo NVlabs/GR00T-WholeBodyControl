@@ -1,0 +1,54 @@
+# Docker build context optimization
+# Exclude unnecessary files to speed up builds
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# NVIDIA CUDA build directory (used for --with-opengl builds)
+nvidia-cuda-build/
+
+# Build artifacts (will be mounted at runtime)
+build/
+install/
+log/
+*.o
+*.so
+*.a
+*.pyc
+__pycache__/
+
+# IDE and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.log
+*.bak
+
+# Large model files (will be mounted at runtime)
+*.onnx
+*.pt
+*.pth
+*.bin
+*.safetensors
+
+# Source code (will be mounted at runtime, not needed in image)
+src/
+
+# Policy files (will be mounted at runtime)
+policy/
+
+# Keep only what's needed for build
+!scripts/install_deps.sh
+!scripts/install_ros2_humble.sh
+

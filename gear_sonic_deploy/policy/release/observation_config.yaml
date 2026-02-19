@@ -1,0 +1,80 @@
+# G1 Deploy - Observation Configuration
+# ====================================
+# Total dimension: 436 (64+12+116+116+116+12)
+
+observations:
+
+  - name: "token_state"
+    enabled: true
+
+  - name: "his_base_angular_velocity_10frame_step1"
+    enabled: true
+    
+  - name: "his_body_joint_positions_10frame_step1"
+    enabled: true
+    
+  - name: "his_body_joint_velocities_10frame_step1"
+    enabled: true
+    
+  - name: "his_last_actions_10frame_step1"
+    enabled: true
+
+  - name: "his_gravity_dir_10frame_step1"
+    enabled: true
+
+encoder:
+  dimension: 64
+  use_fp16: false
+  encoder_observations:
+    - name: "encoder_mode_4"
+      enabled: true
+    - name: "motion_joint_positions_10frame_step5"
+      enabled: true
+    - name: "motion_joint_velocities_10frame_step5"
+      enabled: true
+    - name: "motion_root_z_position_10frame_step5"
+      enabled: true
+    - name: "motion_root_z_position"
+      enabled: true
+    - name: "motion_anchor_orientation"
+      enabled: true
+    - name: "motion_anchor_orientation_10frame_step5"
+      enabled: true
+    - name: "motion_joint_positions_lowerbody_10frame_step5"
+      enabled: true
+    - name: "motion_joint_velocities_lowerbody_10frame_step5"
+      enabled: true
+    - name: "vr_3point_local_target"
+      enabled: true
+    - name: "vr_3point_local_orn_target"
+      enabled: true
+    - name: "smpl_joints_10frame_step1"
+      enabled: true
+    - name: "smpl_anchor_orientation_10frame_step1" 
+      enabled: true
+    - name: "motion_joint_positions_wrists_10frame_step1" 
+      enabled: true
+  encoder_modes:
+    - name: "g1"
+      mode_id: 0
+      required_observations:
+        - encoder_mode_4
+        - motion_joint_positions_10frame_step5
+        - motion_joint_velocities_10frame_step5
+        - motion_anchor_orientation_10frame_step5
+    - name: "teleop"
+      mode_id: 1
+      required_observations:
+        - encoder_mode_4
+        - motion_joint_positions_lowerbody_10frame_step5
+        - motion_joint_velocities_lowerbody_10frame_step5
+        - vr_3point_local_target
+        - vr_3point_local_orn_target
+        - motion_anchor_orientation
+    - name: "smpl"
+      mode_id: 2
+      required_observations:
+        - encoder_mode_4
+        - smpl_joints_10frame_step1
+        - smpl_anchor_orientation_10frame_step1
+        - motion_joint_positions_wrists_10frame_step1

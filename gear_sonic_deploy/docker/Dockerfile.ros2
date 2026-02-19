@@ -1,0 +1,94 @@
+# Unified Multi-architecture G1 Deploy Development Environment
+# Based on NVIDIA CUDA official image
+# Supports: x86_64, ARM64, Jetson (auto-detected by install scripts)
+# Uses project install scripts for consistency with bare-metal installations
+#
+# Build args:
+#   CUDA_VERSION=12.4.1 (default for all platforms including Jetson)
+#
+# Supported platforms:
+#   - x86_64 with CUDA 12.4.1
+#   - ARM64 with CUDA 12.4.1
+#   - Jetson with CUDA 12.6 host (runs 12.4.1 container - forward compatible)
+#
+# Note: Official nvidia/cuda images are already multi-arch (x86_64 + arm64)
+#
+ARG CUDA_VERSION=12.4.1
+ARG CUDA_BASE_IMAGE=nvidia/cuda
+FROM ${CUDA_BASE_IMAGE}:${CUDA_VERSION}-devel-ubuntu22.04
+
+# Prevent interactive prompts during build
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=UTC
+
+# Display build information
+ARG CUDA_VERSION
+RUN echo "======================================" && \
+    echo "G1 Deploy Unified Development Container" && \
+    echo "Architecture: $(uname -m)" && \
+    echo "CUDA Version: ${CUDA_VERSION}" && \
+    echo "Base: Ubuntu 22.04 with NVIDIA CUDA" && \
+    echo "Jetson detection: Automatic via install scripts" && \
+    echo "======================================" && \
+    echo ""
+
+# Set timezone and install minimal prerequisites for running install scripts
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && \
+    echo $TZ > /etc/timezone && \
+    apt-get update && apt-get install -y \
+    sudo \
+    curl \
+    wget \
+    lsb-release \
+    software-properties-common \
+    tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy install scripts
+COPY scripts/install_deps.sh /tmp/
+COPY scripts/install_ros2_humble.sh /tmp/
+
+# Run install scripts (same as bare-metal installation)
+# Note: install_deps.sh auto-detects Jetson and installs appropriate packages
+RUN chmod +x /tmp/install_deps.sh /tmp/install_ros2_humble.sh && \
+    echo "📦 Running install_deps.sh (with auto Jetson detection)..." && \
+    DEBIAN_FRONTEND=noninteractive /tmp/install_deps.sh && \
+    echo "🤖 Running install_ros2_humble.sh..." && \
+    DEBIAN_FRONTEND=noninteractive /tmp/install_ros2_humble.sh && \
+    rm /tmp/install_deps.sh /tmp/install_ros2_humble.sh
+
+# TensorRT will be mounted from host system
+# No installation - uses host's TensorRT version
+
+# Set up CUDA environment variables
+ENV CUDA_HOME=/usr/local/cuda
+ENV CUDAToolkit_ROOT=/usr/local/cuda
+ENV PATH=$CUDA_HOME/bin:$PATH
+ENV LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
+
+# Set up TensorRT environment (will be mounted from host)
+ENV TensorRT_ROOT=/opt/TensorRT
+ENV LD_LIBRARY_PATH=$TensorRT_ROOT/lib:$LD_LIBRARY_PATH
+
+# Set up ONNX Runtime environment
+ENV onnxruntime_DIR=/opt/onnxruntime/lib/cmake/onnxruntime
+ENV LD_LIBRARY_PATH=/opt/onnxruntime/lib:$LD_LIBRARY_PATH
+
+WORKDIR /workspace
+
+# Note: Environment setup is now handled by install scripts and setup_env.sh
+# This maintains consistency between Docker and bare-metal installations
+
+# Final setup message
+ARG CUDA_VERSION
+RUN echo "" && \
+    echo "🚀 G1 Deploy Unified Container Ready!" && \
+    echo "=====================================" && \
+    echo "✅ Architecture: $(uname -m)" && \
+    echo "✅ NVIDIA CUDA ${CUDA_VERSION}" && \
+    echo "✅ ROS2 Humble Desktop" && \
+    echo "✅ ONNX Runtime 1.16.3" && \
+    echo "✅ TensorRT (via host mount)" && \
+    echo "✅ Jetson auto-detection enabled" && \
+    echo "=====================================" && \
+    echo ""
