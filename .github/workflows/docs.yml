@@ -33,6 +33,18 @@ jobs:
         with:
           lfs: false
 
+      - name: Restore docs static assets (bypass git-lfs smudge)
+        run: |
+          # git-lfs on the runner rewrites files tracked by *.png/*.gif
+          # even when our .gitattributes override removes filter=lfs.
+          # Use git cat-file to write real binary content directly from
+          # the object store, bypassing all smudge filters.
+          git ls-tree -r HEAD -- docs/source/_static \
+            | awk '{print $3, $4}' \
+            | while IFS=" " read -r hash path; do
+                git cat-file blob "$hash" > "$path"
+              done
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
