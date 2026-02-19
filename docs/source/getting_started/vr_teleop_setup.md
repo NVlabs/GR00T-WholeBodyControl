@@ -129,3 +129,4 @@ source .venv_teleop/bin/activate   # prompt: (gear_sonic_teleop)
 ## Next Steps
 
 Your PICO hardware and software are now ready. Proceed to the [ZMQ Manager (`zmq_manager`) tutorial](../tutorials/vr_wholebody_teleop.md) to run whole-body teleoperation in simulation or on the real robot.
+
