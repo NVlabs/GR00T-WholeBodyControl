@@ -8,12 +8,14 @@ on:
     paths:
       - "docs/**"
       - ".github/workflows/docs.yml"
+      - ".gitattributes"
   pull_request:
     branches:
       - main
     paths:
       - "docs/**"
       - ".github/workflows/docs.yml"
+      - ".gitattributes"
   workflow_dispatch:
 
 # Allow only one concurrent deployment; cancel in-flight runs
@@ -28,6 +30,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          lfs: false
 
       - name: Set up Python
         uses: actions/setup-python@v5
