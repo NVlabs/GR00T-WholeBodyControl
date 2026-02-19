@@ -144,6 +144,10 @@ Cycle through motion sets with **`N`** (next) / **`P`** (previous). Within each 
 | **5** | Stealth | — |
 | **6** | Injured | — |
 
+```{tip}
+For lateral (side-stepping) movement using **`,`** / **`.`**, we recommend keeping the target velocity at around **0.4 m/s**. Higher velocities during strafing can cause the robot's feet to collide due to the cross-legged foot placement required for lateral steps.
+```
+
 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1em; margin: 1em 0;">
 <figure style="margin: 0;">
 <video width="100%" autoplay loop muted playsinline style="border-radius: 8px;">

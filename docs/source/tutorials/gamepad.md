@@ -108,6 +108,10 @@ The gamepad cycles through 7 modes with **L1** / **R1**. Use **L2** / **R2** (ho
 | 5 | Kneel (two legs) |  — |  — |
 | 6 | Kneel |  — |  — |
 
+```{tip}
+For lateral (side-stepping) movement, we recommend keeping the target velocity at around **0.4 m/s**. Higher velocities during strafing can cause the robot's feet to collide due to the cross-legged foot placement required for lateral steps.
+```
+
 ```{note}
 When entering Squat (mode 4) from an adjacent mode, the height automatically initializes to 0.8 m.
 ```

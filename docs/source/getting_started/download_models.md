@@ -57,11 +57,12 @@ pip install huggingface_hub[cli]
 
 # Policy only
 huggingface-cli download nvidia/GEAR-SONIC \
-    model_releasev1-1_encoder.onnx \
-    model_releasev1-1_decoder.onnx \
+    model_encoder.onnx \
+    model_decoder.onnx \
+    observation_config.yaml \
     --local-dir gear_sonic_deploy
 
-# Everything (policy + planner + media)
+# Everything (policy + planner)
 huggingface-cli download nvidia/GEAR-SONIC --local-dir gear_sonic_deploy
 ```
 
@@ -74,25 +75,15 @@ from huggingface_hub import hf_hub_download
 
 REPO_ID = "nvidia/GEAR-SONIC"
 
-encoder = hf_hub_download(
-    repo_id=REPO_ID,
-    filename="policy/release/model_releasev1-1_encoder.onnx",
-    local_dir="gear_sonic_deploy",
-)
-decoder = hf_hub_download(
-    repo_id=REPO_ID,
-    filename="policy/release/model_releasev1-1_decoder.onnx",
-    local_dir="gear_sonic_deploy",
-)
-config = hf_hub_download(
-    repo_id=REPO_ID,
-    filename="policy/release/observation_config.yaml",
-    local_dir="gear_sonic_deploy",
-)
+encoder = hf_hub_download(repo_id=REPO_ID, filename="model_encoder.onnx")
+decoder = hf_hub_download(repo_id=REPO_ID, filename="model_decoder.onnx")
+config  = hf_hub_download(repo_id=REPO_ID, filename="observation_config.yaml")
+planner = hf_hub_download(repo_id=REPO_ID, filename="planner_sonic.onnx")
 
 print("Policy encoder :", encoder)
 print("Policy decoder :", decoder)
 print("Obs config     :", config)
+print("Planner        :", planner)
 ```
 
 ---
@@ -101,9 +92,10 @@ print("Obs config     :", config)
 
 ```
 nvidia/GEAR-SONIC/
-├── model_releasev1-1_encoder.onnx   # Policy encoder
-├── model_releasev1-1_decoder.onnx   # Policy decoder
-└── planner_sonic.onnx               # Kinematic planner
+├── model_encoder.onnx         # Policy encoder
+├── model_decoder.onnx         # Policy decoder
+├── observation_config.yaml    # Observation configuration
+└── planner_sonic.onnx         # Kinematic planner
 ```
 
 The download script places them into the layout the deployment binary expects:
@@ -111,8 +103,9 @@ The download script places them into the layout the deployment binary expects:
 ```
 gear_sonic_deploy/
 ├── policy/release/
-│   ├── model_releasev1-1_encoder.onnx
-│   └── model_releasev1-1_decoder.onnx
+│   ├── model_encoder.onnx
+│   ├── model_decoder.onnx
+│   └── observation_config.yaml
 └── planner/target_vel/V2/
     └── planner_sonic.onnx
 ```
