@@ -20,8 +20,8 @@ authors:
     given-names: "Jiefeng"
   - family-names: "Zhu"
     given-names: "Yuke"
-url: "https://github.com/ZhengyiLuo/GR00T-WholeBodyControl"
-repository-code: "https://github.com/ZhengyiLuo/GR00T-WholeBodyControl"
+url: "https://github.com/NVlabs/GR00T-WholeBodyControl"
+repository-code: "https://github.com/NVlabs/GR00T-WholeBodyControl"
 type: software
 keywords:
   - humanoid-robotics
