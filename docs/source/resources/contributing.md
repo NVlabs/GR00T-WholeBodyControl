@@ -1,0 +1,3 @@
+# Contributing
+
+We welcome contributions! Coming soon...
