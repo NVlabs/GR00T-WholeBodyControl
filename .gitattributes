@@ -21,3 +21,5 @@
 *.dae filter=lfs diff=lfs merge=lfs -text
 *.so filter=lfs diff=lfs merge=lfs -text
 *.so.* filter=lfs diff=lfs merge=lfs -text
+# Docs static assets must NOT use LFS — GitHub Pages can't serve LFS pointers
+docs/source/_static/** filter= diff= merge=
