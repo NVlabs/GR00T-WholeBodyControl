@@ -46,8 +46,9 @@ This is the codebase for the **GR00T Whole-Body Control (WBC)** projects. It hos
 
 <p style="font-size: 1.2em;">
     <a href="https://nvlabs.github.io/GEAR-SONIC/"><strong>Website</strong></a> | 
-    <a href="https://huggingface.co/"><strong>Model</strong></a> |
-    <a href="https://arxiv.org/abs/2511.07820"><strong>Paper</strong></a> 
+    <a href="https://huggingface.co/nvidia/GEAR-SONIC"><strong>Model</strong></a> | 
+    <a href="https://arxiv.org/abs/2511.07820"><strong>Paper</strong></a> | 
+    <a href="https://nvlabs.github.io/GR00T-WholeBodyControl/"><strong>Docs</strong></a>
   </p>
 
 <div align="center">
