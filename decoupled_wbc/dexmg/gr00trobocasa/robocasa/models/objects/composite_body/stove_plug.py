@@ -18,13 +18,11 @@ class StoveObjectNew(StoveObject):
 
     @property
     def bottom_offset(self):
-        # unused since we directly hardcode z
-        return np.array([0, 0, -0.02])
+        return np.array([0, 0, -self.stove_z_half_size])
 
     @property
     def top_offset(self):
-        # unused since we directly hardcode z
-        return np.array([0, 0, 0.02])
+        return np.array([0, 0, self.stove_z_half_size])
 
     @property
     def horizontal_radius(self):
