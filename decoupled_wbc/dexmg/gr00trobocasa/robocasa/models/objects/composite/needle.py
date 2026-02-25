@@ -16,12 +16,13 @@ class NeedleObject(CompositeObject):
     def __init__(
         self,
         name,
+        needle_size=(0.005, 0.06, 0.005),
+        handle_size=(0.02, 0.02, 0.02),
     ):
-
-        ### TODO: make this object more general (with more args and configuration options) later ###
-
         # Set object attributes
         self._name = name
+        self.needle_size = needle_size
+        self.handle_size = handle_size
         self.needle_mat_name = "darkwood_mat"
 
         # Other private attributes
@@ -57,7 +58,11 @@ class NeedleObject(CompositeObject):
         """
         # Initialize dict of obj args that we'll pass to the CompositeObject constructor
         base_args = {
-            "total_size": [0.02, 0.08, 0.02],
+            "total_size": [
+                max(self.needle_size[0], self.handle_size[0]), 
+                self.needle_size[1] + self.handle_size[1], 
+                max(self.needle_size[2], self.handle_size[2])
+            ],
             "name": self.name,
             "locations_relative_to_center": False,
             "obj_types": "all",
@@ -65,9 +70,8 @@ class NeedleObject(CompositeObject):
         }
         obj_args = {}
 
-        # make a skinny needle object with a large handle
-        needle_size = [0.005, 0.06, 0.005]
-        handle_size = [0.02, 0.02, 0.02]
+        needle_size = self.needle_size
+        handle_size = self.handle_size
 
         # Needle
         add_to_dict(
