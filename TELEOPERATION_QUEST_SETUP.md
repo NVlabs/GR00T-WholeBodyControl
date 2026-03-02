@@ -7,10 +7,32 @@ Guía completa para usar **Meta Quest 3** como controlador de teleoperación con
 ## Requisitos
 
 - **Meta Quest 3** con controladores
-- **PC** con Ubuntu (o Linux compatible)
-- **Python 3.10**
+- **PC** con **Ubuntu 22.04** (probado aquí)
+- Acceso a Internet (para instalar dependencias)
 - **ADB** (Android Debug Bridge)
 - **Conexión**: USB o WiFi (misma red que el Quest)
+
+---
+
+## 0. Dependencias de sistema (Ubuntu 22.04)
+
+Instala las herramientas básicas que usa este repo y el script `install_pico.sh`:
+
+```bash
+sudo apt update
+sudo apt install -y \
+    git git-lfs \
+    build-essential \
+    curl \
+    python3 python3-venv python3-pip \
+    libgl1 libegl1 libx11-6
+```
+
+- `git` / `git-lfs`: para clonar este repo (usa ficheros grandes, vídeos, etc.).
+- `build-essential`: compilar librerías nativas (XRoboToolkit, etc.).
+- `curl`: necesario para que `install_pico.sh` pueda instalar `uv`.
+- `python3*`: utilidades básicas de Python (aunque `uv` instalará su propio Python 3.10 gestionado).
+- `libgl*` y `libx11-6`: librerías gráficas mínimas para PyVista/VTK (visualización 3D).
 
 ---
 
