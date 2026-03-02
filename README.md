@@ -65,6 +65,14 @@ In this repo, we will release SONIC's training code, deployment framework, model
 
 SONIC supports real-time whole-body teleoperation via PICO VR headset, enabling natural human-to-robot motion transfer for data collection and interactive control.
 
+### Meta Quest 3
+
+También puedes usar **Meta Quest 3** como controlador de teleoperación. Ver la guía completa:
+
+**[→ Meta Quest 3 — Guía de instalación y uso](TELEOPERATION_QUEST_SETUP.md)**
+
+Requisitos: ADB, `meta_quest_teleop`, Quest en modo desarrollador. El script `install_scripts/install_pico.sh` instala las dependencias necesarias.
+
 <div align="center">
 <table>
 <tr>
