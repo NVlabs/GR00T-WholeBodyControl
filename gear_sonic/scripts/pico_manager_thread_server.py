@@ -590,16 +590,6 @@ def compute_from_body_poses(parent_indices: list, device, body_poses_np: np.ndar
     return process_smpl_joints(body_pose, global_orient, transl)
 
 
-# def compute_latest_frame(parent_indices: list, device) -> tuple[np.ndarray, np.ndarray]:
-#     """
-#     Pull body data from XRoboToolkit, compute local SMPL joints and body orientation.
-#     Returns (smpl_joints_local_np [24,3], global_orient_quat_np [4,])
-#     """
-#     body_poses = xrt.get_body_joints_pose()
-#     body_poses_np = np.array(body_poses)
-#     return compute_from_body_poses(parent_indices, device, body_poses_np)
-
-
 def init_hand_ik_solvers():
     """Initialize hand IK solvers if available."""
     if G1GripperInverseKinematicsSolver is not None:
@@ -1245,7 +1235,6 @@ class PoseStreamer:
         self.log_prefix = log_prefix
 
         # Injected dependencies
-        self.reader = reader
         self.three_point = three_point
 
         self.device = (

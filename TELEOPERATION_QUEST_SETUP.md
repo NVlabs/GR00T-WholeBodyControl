@@ -156,6 +156,48 @@ python gear_sonic/scripts/pico_manager_thread_server.py \
 
 ---
 
+## 7. Ejecutar todo completo (sim + deploy + Quest)
+
+Abre **3 terminales** y ejecuta en este orden:
+
+### Terminal 1 — Simulación MuJoCo
+
+```bash
+cd TELEOPERATION_SONIC   # o la ruta donde clonaste el repo
+source .venv_sim/bin/activate   # o .venv_teleop si solo usaste install_pico.sh
+python gear_sonic/scripts/run_sim_loop.py
+```
+
+### Terminal 2 — Deploy (C++ inference)
+
+```bash
+cd TELEOPERATION_SONIC/gear_sonic_deploy
+source scripts/setup_env.sh
+./deploy.sh sim --input-type zmq_manager
+```
+
+Espera hasta ver **"Init done"**.
+
+### Terminal 3 — Manager con Quest
+
+```bash
+cd TELEOPERATION_SONIC
+source .venv_teleop/bin/activate
+
+# USB (recomendado la primera vez)
+python gear_sonic/scripts/pico_manager_thread_server.py --manager --reader quest
+
+# Con visualización VR 3PT
+python gear_sonic/scripts/pico_manager_thread_server.py --manager --reader quest --vis_vr3pt
+
+# WiFi (sustituye por la IP de tu Quest)
+python gear_sonic/scripts/pico_manager_thread_server.py --manager --reader quest --quest-ip-address 192.168.x.x
+```
+
+**Orden**: 1 → 2 → 3. Calibra con el **trigger derecho** cuando el manager esté corriendo.
+
+---
+
 ## Resumen de comandos
 
 | Acción | Comando |
