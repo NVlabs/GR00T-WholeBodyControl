@@ -252,6 +252,14 @@ class ComposedCameraSensor(Sensor, SensorServer):
 
             print("Initializing ZED sensor for camera type: ", camera_type)
             return ZEDSensor(mount_position=mount_position)
+        elif camera_type == "realsense_remote":
+            from decoupled_wbc.control.sensor.remote_camera import RemoteCameraSensor
+
+            host, port_str = device_id.split(":")
+            print(f"Initializing remote RealSense sensor at {host}:{port_str}")
+            return RemoteCameraSensor(
+                server_ip=host, port=int(port_str), mount_position=mount_position
+            )
         elif camera_type.endswith(".mp4"):
             from decoupled_wbc.control.sensor.dummy import ReplayDummySensor
 
