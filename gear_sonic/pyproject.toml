@@ -33,6 +33,7 @@ teleop = [
     "msgpack",
     "pin",
     "pyvista; platform_machine != 'aarch64'",
+    "meta_quest_teleop @ git+https://github.com/BrikHMP18/meta_quest_teleop.git@07bc15437f767c3517138367b6b3e3910b388c76",
 ]
 # MuJoCo simulation (run_sim_loop.py and related scripts)
 # Usage: pip install -e "gear_sonic[sim]"

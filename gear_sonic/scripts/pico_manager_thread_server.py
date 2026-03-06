@@ -96,6 +96,11 @@ except ImportError:
     print("Warning: get_g1_key_frame_poses not available (pyvista may not be installed).")
     get_g1_key_frame_poses = None
 
+try:
+    from gear_sonic.utils.teleop.readers.quest_reader import QuestReader
+except ImportError:
+    QuestReader = None
+
 
 class LocomotionMode(IntEnum):
     """Locomotion mode enum for robot movement."""
@@ -585,16 +590,6 @@ def compute_from_body_poses(parent_indices: list, device, body_poses_np: np.ndar
     return process_smpl_joints(body_pose, global_orient, transl)
 
 
-# def compute_latest_frame(parent_indices: list, device) -> tuple[np.ndarray, np.ndarray]:
-#     """
-#     Pull body data from XRoboToolkit, compute local SMPL joints and body orientation.
-#     Returns (smpl_joints_local_np [24,3], global_orient_quat_np [4,])
-#     """
-#     body_poses = xrt.get_body_joints_pose()
-#     body_poses_np = np.array(body_poses)
-#     return compute_from_body_poses(parent_indices, device, body_poses_np)
-
-
 def init_hand_ik_solvers():
     """Initialize hand IK solvers if available."""
     if G1GripperInverseKinematicsSolver is not None:
@@ -690,6 +685,51 @@ def get_abxy_buttons():
         return a_pressed, b_pressed, x_pressed, y_pressed
     except Exception:
         return False, False, False, False
+
+
+def get_controller_from_quest_sample(sample):
+    """
+    Extract controller state from QuestReader sample (when source=meta_quest).
+
+    Returns:
+        abxy: (a, b, x, y) booleans
+        axes: (lx, ly, rx, ry) floats
+        inputs: (left_menu, left_trigger, right_trigger, left_grip, right_grip)
+        axis_clicks: (left_axis_click, right_axis_click) booleans
+    """
+    if sample is None:
+        return (
+            (False, False, False, False),
+            (0.0, 0.0, 0.0, 0.0),
+            (False, 0.0, 0.0, 0.0, 0.0),
+            (False, False),
+        )
+    abxy = (
+        bool(sample.get("button_a", False)),
+        bool(sample.get("button_b", False)),
+        bool(sample.get("button_x", False)),
+        bool(sample.get("button_y", False)),
+    )
+    la = sample.get("left_axis", (0.0, 0.0))
+    ra = sample.get("right_axis", (0.0, 0.0))
+    axes = (
+        float(la[0]) if len(la) >= 1 else 0.0,
+        float(la[1]) if len(la) >= 2 else 0.0,
+        float(ra[0]) if len(ra) >= 1 else 0.0,
+        float(ra[1]) if len(ra) >= 2 else 0.0,
+    )
+    inputs = (
+        bool(sample.get("left_menu_button", False)),
+        float(sample.get("left_trigger", 0.0)),
+        float(sample.get("right_trigger", 0.0)),
+        float(sample.get("left_grip", 0.0)),
+        float(sample.get("right_grip", 0.0)),
+    )
+    axis_clicks = (
+        bool(sample.get("left_axis_click", False)),
+        bool(sample.get("right_axis_click", False)),
+    )
+    return abxy, axes, inputs, axis_clicks
 
 
 def compute_hand_joints_from_inputs(
@@ -1006,11 +1046,21 @@ class ThreePointPose:
             except Exception as e:
                 print(f"[{self.log_prefix}] Warning: Error closing VR3pt visualizer: {e}")
 
-    def calibrate_now(self, body_poses_np: np.ndarray) -> bool:
-        """Calibrate using current SMPL frame against FK of all-zero body joints.
-        Operator should be in zero-reference pose when calling this."""
+    def calibrate_now(
+        self,
+        body_poses_np: np.ndarray | None = None,
+        vr_3pt_pose: np.ndarray | None = None,
+    ) -> bool:
+        """Calibrate using current SMPL frame or vr_3pt_pose against FK of all-zero body joints.
+        Operator should be in zero-reference pose when calling this.
+        Pass either body_poses_np (Pico SMPL) or vr_3pt_pose (Quest controllers)."""
         try:
-            vr_3pt_pose_raw = _process_3pt_pose(body_poses_np)
+            if vr_3pt_pose is not None:
+                vr_3pt_pose_raw = vr_3pt_pose
+            elif body_poses_np is not None:
+                vr_3pt_pose_raw = _process_3pt_pose(body_poses_np)
+            else:
+                return False
             self._override_robot_q = np.zeros(29, dtype=np.float64)
             self._capture_calibration(vr_3pt_pose_raw)
             print(f"[{self.log_prefix}] Calibration completed (zero-pose reference)")
@@ -1185,7 +1235,6 @@ class PoseStreamer:
         self.log_prefix = log_prefix
 
         # Injected dependencies
-        self.reader = reader
         self.three_point = three_point
 
         self.device = (
@@ -1620,15 +1669,17 @@ class PlannerStreamer:
     def __init__(
         self,
         socket,
-        reader: PicoReader,
+        reader,
         three_point: ThreePointPose,
         poll_hz: int = 20,
         zmq_feedback_host: str = "localhost",
         zmq_feedback_port: int = 5557,
+        use_quest_controller: bool = False,
     ):
         self.socket = socket
         self.reader = reader
         self.three_point = three_point
+        self.use_quest_controller = use_quest_controller
         self.feedback_reader = FeedbackReader(
             zmq_feedback_host=zmq_feedback_host, zmq_feedback_port=zmq_feedback_port
         )
@@ -1677,14 +1728,46 @@ class PlannerStreamer:
     def run_once(self, stream_mode: StreamMode):
         """Execute one iteration of the planner control loop."""
         try:
-            # Avoid sending old commands if XRT timestamp hasn't advanced, in case of headset disconnect
-            xrt_timestamp = xrt.get_time_stamp_ns()
-            if xrt_timestamp == self.last_xrt_timestamp:
-                return
-            self.last_xrt_timestamp = xrt_timestamp
+            if self.use_quest_controller:
+                sample = self.reader.get_latest()
+                if sample is None:
+                    return
+                # Use sample timestamp instead of xrt (no PICO)
+                ts = sample.get("timestamp_ns", 0)
+                if ts == self.last_xrt_timestamp:
+                    return
+                self.last_xrt_timestamp = ts
+                abxy, axes, inputs, axis_clicks = get_controller_from_quest_sample(sample)
+                a_pressed, b_pressed, x_pressed, y_pressed = abxy
+                lx, ly, rx, ry = axes
+                (
+                    left_menu_button,
+                    left_trigger,
+                    right_trigger,
+                    left_grip,
+                    right_grip,
+                ) = inputs
+                left_axis_click, right_axis_click = axis_clicks
+            else:
+                # Avoid sending old commands if XRT timestamp hasn't advanced
+                if xrt is None:
+                    return
+                xrt_timestamp = xrt.get_time_stamp_ns()
+                if xrt_timestamp == self.last_xrt_timestamp:
+                    return
+                self.last_xrt_timestamp = xrt_timestamp
 
-            # A+B => next mode; X+Y => previous mode (rising edges)
-            a_pressed, b_pressed, x_pressed, y_pressed = get_abxy_buttons()
+                # A+B => next mode; X+Y => previous mode (rising edges)
+                a_pressed, b_pressed, x_pressed, y_pressed = get_abxy_buttons()
+                lx, ly, rx, ry = get_controller_axes()
+                (
+                    left_menu_button,
+                    left_trigger,
+                    right_trigger,
+                    left_grip,
+                    right_grip,
+                ) = get_controller_inputs()
+                left_axis_click, right_axis_click = get_axis_clicks()
             ab_now = bool(a_pressed) and bool(b_pressed)
             xy_now = bool(x_pressed) and bool(y_pressed)
             if ab_now and not self.prev_ab:
@@ -1695,9 +1778,6 @@ class PlannerStreamer:
                 print(f"[PlannerLoop] Mode -> {self.mode.value}: {self.mode.name}")
             self.prev_ab = ab_now
             self.prev_xy = xy_now
-
-            # Read axes/joysticks to control movement, facing, speed and mode
-            lx, ly, rx, ry = get_controller_axes()
 
             # Facing from RIGHT stick: continuous yaw based on rx (right = turn right, left = turn left)
             facing = self.yaw_accumulator.update(rx, self.dt)
@@ -1746,20 +1826,25 @@ class PlannerStreamer:
             if stream_mode == StreamMode.PLANNER_VR_3PT:
                 sample = self.reader.get_latest()
                 if sample is not None:
-                    print("[PlannerLoop] Sending VR 3-point pose as target")
-                    vr_3pt_pose = self.three_point.process_smpl_pose(sample["body_poses_np"])
+                    # Use vr_3pt_pose directly when present (e.g. from QuestReader with meta_quest)
+                    if "vr_3pt_pose" in sample:
+                        vr_3pt_pose = sample["vr_3pt_pose"]
+                    else:
+                        vr_3pt_pose = self.three_point.process_smpl_pose(sample["body_poses_np"])
                     vr_3pt_position = (vr_3pt_pose[:, :3].flatten()).tolist()
                     vr_3pt_orientation = vr_3pt_pose[:, 3:].flatten().tolist()
 
                 # Compute hand joints from trigger/grip inputs so operator can
                 # control hand open/close while in VR 3PT mode
-                (
-                    left_menu_button,
-                    left_trigger,
-                    right_trigger,
-                    left_grip,
-                    right_grip,
-                ) = get_controller_inputs()
+                # (left_trigger etc. already set from sample when use_quest_controller)
+                if not self.use_quest_controller:
+                    (
+                        left_menu_button,
+                        left_trigger,
+                        right_trigger,
+                        left_grip,
+                        right_grip,
+                    ) = get_controller_inputs()
                 lh_joints, rh_joints = compute_hand_joints_from_inputs(
                     self.left_hand_ik_solver,
                     self.right_hand_ik_solver,
@@ -1814,23 +1899,35 @@ def run_pico_manager(
     with_g1_robot: bool = True,
     enable_waist_tracking: bool = False,
     enable_smpl_vis: bool = False,
+    reader_type: str = "pico",
+    quest_ip_address: str | None = None,
 ):
     """
     Manager: creates shared PUB socket and runs pose/planner streamers based on current mode.
     Controller input:
       A+X: Toggle between planner and pose mode
       A+B+X+Y: Toggle policy start/stop
+
+    reader_type: "pico" (default) or "quest" for Meta Quest via meta_quest_teleop
     """
-    if xrt is None:
-        raise ImportError(
-            "XRoboToolkit SDK not available. Install xrobotoolkit_sdk to run the manager."
-        )
-    subprocess.Popen(["bash", "/opt/apps/roboticsservice/runService.sh"])
-    xrt.init()
-    print("Waiting for body tracking data...")
-    while not xrt.is_body_data_available():
-        print("waiting for body data...")
-        time.sleep(1)
+    use_quest = reader_type.lower() == "quest"
+    if use_quest:
+        if QuestReader is None:
+            raise ImportError(
+                "QuestReader not available. Install gear_sonic with meta_quest_teleop."
+            )
+        print("[Manager] Using QuestReader (Meta Quest). Connect Quest and press right trigger to calibrate.")
+    else:
+        if xrt is None:
+            raise ImportError(
+                "XRoboToolkit SDK not available. Install xrobotoolkit_sdk to run the manager."
+            )
+        subprocess.Popen(["bash", "/opt/apps/roboticsservice/runService.sh"])
+        xrt.init()
+        print("Waiting for body tracking data...")
+        while not xrt.is_body_data_available():
+            print("waiting for body data...")
+            time.sleep(1)
 
     context = zmq.Context()
     socket = context.socket(zmq.PUB)
@@ -1847,9 +1944,7 @@ def run_pico_manager(
         pass
 
     # Create shared reader and 3-point pose processor
-    reader = PicoReader(max_queue_size=buffer_size)
-    reader.start()
-
+    # For Quest: create three_point first to get G1 FK default poses for calibration reference
     three_point = ThreePointPose(
         enable_vis_vr3pt=enable_vis_vr3pt,
         with_g1_robot=with_g1_robot,
@@ -1857,6 +1952,32 @@ def run_pico_manager(
         enable_smpl_vis=enable_smpl_vis,
         log_prefix="PoseLoop",
     )
+
+    if use_quest:
+        home_left_4x4 = None
+        home_right_4x4 = None
+        if get_g1_key_frame_poses is not None:
+            from gear_sonic.utils.teleop.readers.quest_reader import _g1_pose_to_4x4
+
+            g1_poses = get_g1_key_frame_poses(three_point._robot_model)
+            home_left_4x4 = _g1_pose_to_4x4(
+                g1_poses["left_wrist"]["position"],
+                g1_poses["left_wrist"]["orientation_wxyz"],
+            )
+            home_right_4x4 = _g1_pose_to_4x4(
+                g1_poses["right_wrist"]["position"],
+                g1_poses["right_wrist"]["orientation_wxyz"],
+            )
+            print("[Manager] Quest calibration will use G1 FK default pose as reference.")
+        reader = QuestReader(
+            source="meta_quest",
+            ip_address=quest_ip_address,
+            home_left_pose=home_left_4x4,
+            home_right_pose=home_right_4x4,
+        )
+    else:
+        reader = PicoReader(max_queue_size=buffer_size)
+    reader.start()
 
     pose_streamer = PoseStreamer(
         socket=socket,
@@ -1876,6 +1997,7 @@ def run_pico_manager(
         poll_hz=20,
         zmq_feedback_host=zmq_feedback_host,
         zmq_feedback_port=zmq_feedback_port,
+        use_quest_controller=use_quest,
     )
 
     # State machine diagram:
@@ -1904,12 +2026,20 @@ def run_pico_manager(
         prev_start_combo = False
         prev_left_axis_click = False
         while True:
-            # Poll Pico controller for buttons/axes
-            a_pressed, b_pressed, x_pressed, y_pressed = get_abxy_buttons()
-
-            left_menu_button, _, _, _, _ = get_controller_inputs()
-
-            left_axis_click, _ = get_axis_clicks()
+            # Poll controller for buttons/axes (Pico via xrt, or Quest from sample)
+            if use_quest:
+                sample = reader.get_latest()
+                if sample is None:
+                    time.sleep(0.02)
+                    continue
+                abxy, _, inputs, axis_clicks = get_controller_from_quest_sample(sample)
+                a_pressed, b_pressed, x_pressed, y_pressed = abxy
+                left_menu_button = inputs[0]
+                left_axis_click = axis_clicks[0]
+            else:
+                a_pressed, b_pressed, x_pressed, y_pressed = get_abxy_buttons()
+                left_menu_button, _, _, _, _ = get_controller_inputs()
+                left_axis_click, _ = get_axis_clicks()
 
             # Rising edge: A+X pressed together -> toggle POSE/PLANNER mode
             ax_pressed = (a_pressed) and (x_pressed)
@@ -1925,12 +2055,14 @@ def run_pico_manager(
                 if start_combo and not prev_start_combo:
                     new_mode = StreamMode.PLANNER
                     # Calibrate VR 3pt tracking NOW: operator should be in zero-ref pose.
-                    # Uses the current Pico SMPL frame + FK of all-zero body joints.
                     sample = reader.get_latest()
                     if sample is not None:
-                        three_point.calibrate_now(sample["body_poses_np"])
+                        if use_quest and "vr_3pt_pose" in sample:
+                            three_point.calibrate_now(vr_3pt_pose=sample["vr_3pt_pose"])
+                        else:
+                            three_point.calibrate_now(body_poses_np=sample["body_poses_np"])
                     else:
-                        print("[Manager] WARNING: No SMPL data available for calibration")
+                        print("[Manager] WARNING: No pose data available for calibration")
 
             elif current_mode == StreamMode.PLANNER:
                 # Chain 2: POSE <--(ax)--> PLANNER <--(left_axis_click)--> VR_3PT
@@ -2136,6 +2268,19 @@ if __name__ == "__main__":
         action="store_true",
         help="Enable SMPL body joint visualization (24 joint spheres) in the VR3pt viewer",
     )
+    parser.add_argument(
+        "--reader",
+        type=str,
+        default="pico",
+        choices=["pico", "quest"],
+        help="Input reader: 'pico' (default) or 'quest' for Meta Quest via meta_quest_teleop",
+    )
+    parser.add_argument(
+        "--quest-ip-address",
+        type=str,
+        default=None,
+        help="Meta Quest IP address (for --reader quest). If not set, uses USB or default WiFi.",
+    )
     args = parser.parse_args()
 
     # Standalone VR3Pt test modes (exit after finishing)
@@ -2176,6 +2321,8 @@ if __name__ == "__main__":
             with_g1_robot=with_g1_robot,
             enable_waist_tracking=args.waist_tracking,
             enable_smpl_vis=args.vis_smpl,
+            reader_type=args.reader,
+            quest_ip_address=args.quest_ip_address or None,
         )
     else:
         # Run legacy single-thread pose streaming

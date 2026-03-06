@@ -843,6 +843,7 @@ class VR3PtPoseVisualizer:
     WORLD_BALL_COLOR = "white"
 
     # VR pose ball colors - order: [0]=L-Wrist, [1]=R-Wrist, [2]=Head
+    # Row 2 (Head) = robot head frame; for Quest uses VR_3PT_HEAD_* default (quest_reader.py)
     VR_BALL_COLORS = ["lightgreen", "lightblue", "orange"]
     VR_POSE_LABELS = ["L-Wrist", "R-Wrist", "Head"]
 
