@@ -22,10 +22,10 @@ source .venv_sim/bin/activate
 python gear_sonic/scripts/run_sim_loop.py
 
 # Terminal 2 — C++ deployment (from gear_sonic_deploy/)
-bash deploy.sh sim --input-type zmq \
+bash deploy.sh --input-type zmq \
   --zmq-host <publisher-ip> \
   --zmq-port 5556 \
-  --zmq-topic pose
+  --zmq-topic pose sim
 ```
 
 **Real Robot:**
