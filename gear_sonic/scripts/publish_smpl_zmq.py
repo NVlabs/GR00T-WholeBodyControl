@@ -62,7 +62,6 @@ import zmq
 from scipy.spatial.transform import Rotation as R, Rotation as sRot
 import torch
 import torch.nn.functional as F
-import smplx
 
 # ===========================================================================
 # Inlined rotation math — replaces examples.torch_transform,
@@ -361,11 +360,64 @@ SMPL_JOINT_COLORS = [
     [0.75, 0.15, 0.05],  # 23 R_hand       (dark red)
 ]
 
+# Parent joint index for each of the 24 visualized joints (-1 = root).
+SMPL_BONE_PARENTS = [
+    -1,  #  0 pelvis (root)
+     0,  #  1 L_hip
+     0,  #  2 R_hip
+     0,  #  3 spine1
+     1,  #  4 L_knee
+     2,  #  5 R_knee
+     3,  #  6 spine2
+     4,  #  7 L_ankle
+     5,  #  8 R_ankle
+     6,  #  9 spine3
+     7,  # 10 L_foot
+     8,  # 11 R_foot
+     9,  # 12 neck
+     9,  # 13 L_collar
+     9,  # 14 R_collar
+    12,  # 15 head
+    13,  # 16 L_shoulder
+    14,  # 17 R_shoulder
+    16,  # 18 L_elbow
+    17,  # 19 R_elbow
+    18,  # 20 L_wrist
+    19,  # 21 R_wrist
+    20,  # 22 L_hand
+    21,  # 23 R_hand
+]
+
+# (child_idx, parent_idx) for every bone — skip root.
+SMPL_BONE_PAIRS = [(i, SMPL_BONE_PARENTS[i]) for i in range(24) if SMPL_BONE_PARENTS[i] != -1]
+
 _viz_queue = queue.Queue(maxsize=2)  # (joint_positions np.ndarray (24,3), frame_index int)
 
 
+def _align_cyl_verts(template: np.ndarray, p0: np.ndarray, p1: np.ndarray) -> np.ndarray:
+    """Transform unit-Z cylinder template vertices so the cylinder connects p0 → p1."""
+    d = p1 - p0
+    length = np.linalg.norm(d)
+    if length < 1e-8:
+        return np.tile(p0, (len(template), 1))
+    scaled = template.copy()
+    scaled[:, 2] *= length
+    u = d / length
+    z_axis = np.array([0.0, 0.0, 1.0])
+    v = np.cross(z_axis, u)
+    s = np.linalg.norm(v)
+    c = np.dot(z_axis, u)
+    if s < 1e-8:
+        rot = np.eye(3) if c > 0 else np.diag([1.0, -1.0, -1.0])
+    else:
+        vx = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
+        rot = np.eye(3) + vx + vx @ vx * ((1 - c) / (s * s))
+    return scaled @ rot.T + p0
+
+
 def _viz_worker() -> None:
-    """Visualization thread: renders 24 SMPL body joints as colored spheres."""
+    """Visualization thread: renders 24 SMPL body joints as colored spheres
+    and 23 bones as colored cylinders connecting parent–child joints."""
     import open3d as o3d
 
     _CAM_FRONT = np.array([0.0, 1.0, 0.2])   # look from -Y toward scene, Z-up
@@ -373,7 +425,7 @@ def _viz_worker() -> None:
     _CAM_UP    = np.array([0.0, 0.0, 1.0])   # Z is up
 
     vis = o3d.visualization.Visualizer()
-    vis.create_window("SMPL Joints", width=500, height=500, top=200, left=100)
+    vis.create_window("SMPL Joints", width=500, height=500, top=200, left=2000)
 
     opt = vis.get_render_option()
     opt.mesh_show_back_face = True
@@ -422,7 +474,36 @@ def _viz_worker() -> None:
     geom_joints = o3d.geometry.TriangleMesh()
     geom_joints.triangles    = o3d.utility.Vector3iVector(all_faces)
     geom_joints.vertex_colors = o3d.utility.Vector3dVector(all_colors)
+
+    # Build merged cylinder mesh for 23 bones (same batching strategy as spheres).
+    _BONE_RADIUS = 0.05 / 3
+    _cyl_tmpl = o3d.geometry.TriangleMesh.create_cylinder(
+        radius=_BONE_RADIUS, height=1.0, resolution=10, split=1,
+    )
+    _cv = np.asarray(_cyl_tmpl.vertices).copy()
+    _cv[:, 2] += 0.5  # shift from z ∈ [-0.5, 0.5] to z ∈ [0, 1]
+    _cf = np.asarray(_cyl_tmpl.triangles).copy()
+    N_cv, N_cf = len(_cv), len(_cf)
+    N_bones = len(SMPL_BONE_PAIRS)
+
+    all_bone_faces = np.zeros((N_bones * N_cf, 3), dtype=np.int32)
+    for b in range(N_bones):
+        all_bone_faces[b * N_cf:(b + 1) * N_cf] = _cf + b * N_cv
+
+    _bcolors = np.zeros((N_bones, 3))
+    for b, (child, parent) in enumerate(SMPL_BONE_PAIRS):
+        _bcolors[b] = (np.array(SMPL_JOINT_COLORS[child]) +
+                        np.array(SMPL_JOINT_COLORS[parent])) / 2.0
+    all_bone_colors = np.zeros((N_bones * N_cv, 3))
+    for b in range(N_bones):
+        all_bone_colors[b * N_cv:(b + 1) * N_cv] = _bcolors[b]
+
+    geom_bones = o3d.geometry.TriangleMesh()
+    geom_bones.triangles     = o3d.utility.Vector3iVector(all_bone_faces)
+    geom_bones.vertex_colors = o3d.utility.Vector3dVector(all_bone_colors)
+
     joints_added  = False
+    bones_added   = False
     cam_init      = False
     vis_frame_idx = -1
 
@@ -451,6 +532,20 @@ def _viz_worker() -> None:
                     joints_added = True
                 else:
                     vis.update_geometry(geom_joints)
+
+                # Place each cylinder along its bone
+                all_bone_verts = np.empty((N_bones * N_cv, 3))
+                for b, (child, parent) in enumerate(SMPL_BONE_PAIRS):
+                    all_bone_verts[b * N_cv:(b + 1) * N_cv] = _align_cyl_verts(
+                        _cv, joints[parent], joints[child],
+                    )
+                geom_bones.vertices = o3d.utility.Vector3dVector(all_bone_verts)
+
+                if not bones_added:
+                    vis.add_geometry(geom_bones)
+                    bones_added = True
+                else:
+                    vis.update_geometry(geom_bones)
 
                 # Snap ground grid to character's XY (1 m discrete steps)
                 centroid = joints.mean(axis=0)
@@ -571,7 +666,7 @@ def main() -> None:
     parser.add_argument("--hz",    type=float, default=50,
                         help="Target publish rate in Hz")
     parser.add_argument("--motion_file", help="Path to AMASS .npz motion file",
-                        default='/mnt/data/AMASS/ACCAD/Male2MartialArtsPunches_c3d/E12 - backfist right_poses.npz')
+                        default='/mnt/data/AMASS/DFaust_67/50002/50002_running_on_spot_poses.npz')
     args = parser.parse_args()
 
     interval = 1.0 / args.hz
