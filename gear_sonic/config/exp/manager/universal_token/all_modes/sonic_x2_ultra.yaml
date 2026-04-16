@@ -1,0 +1,104 @@
+# @package _global_
+# SONIC X2 Ultra config — 3 encoders (G1/motion tracking, teleop, SMPL) for Agibot X2 Ultra.
+# Based on sonic_h2 but targeting the X2 Ultra robot (32 bodies, 31 DOF).
+
+defaults:
+  - /algo: ppo_im_phc
+  - /manager_env: base_env
+  - /callbacks/read_eval
+  - /callbacks/im_resample
+  - /aux_losses: universal_token/g1_recon_and_all_latent
+  - override /trainer: trl_ppo_aux
+  - override /actor_critic: universal_token/all_mlp_v1
+  - override /manager_env/observations/tokenizer: unitoken_all_noz
+  - override /manager_env/observations/policy: local_dir_hist
+  - override /manager_env/observations/critic: privileged_mf_hist
+  - override /manager_env/events: tracking/level0_4
+  - override /manager_env/terminations: tracking/base_adaptive_strict_ori_foot_xyz
+  - override /manager_env/rewards: tracking/base_5point_local_feet_acc
+
+use_manager_env: true
+
+exp_base: ${hydra:runtime.choices.exp}
+exp_var: test
+experiment_name: ${exp_base}_${exp_var}
+experiment_dir: ${base_dir}/${project_name}/${experiment_name}-${timestamp}
+
+num_envs: 4096
+project_name: TRL_X2Ultra_Track
+
+actor_prop_history_length: 10
+actor_actions_history_length: 10
+
+critic_prop_history_length: 10
+critic_actions_history_length: 10
+
+manager_env:
+  rewards:
+    feet_acc:
+      weight: -2.5e-6
+  config:
+    robot:
+      type: x2_ultra
+    terrain_type: trimesh
+  commands:
+    motion:
+      reward_point_body: ["torso_link", "left_wrist_yaw_link", "right_wrist_yaw_link"]
+      reward_point_body_offset: [[0.0, 0.0, 0.5], [0.0, -0.0, 0.0], [0.0, -0.0, 0.0]]
+      num_future_frames: 10
+      dt_future_ref_frames: 0.1
+      smpl_num_future_frames: 10
+      smpl_dt_future_ref_frames: 0.02
+      cat_upper_body_poses: true
+      cat_upper_body_poses_prob: 0.5
+
+      freeze_frame_aug: true
+      teleop_sample_prob_when_smpl: 0.5
+
+      motion_lib_cfg:
+        adaptive_sampling:
+          adp_samp_failure_rate_max_over_mean: 200
+        motion_file: null
+        smpl_motion_file: dummy
+        smpl_y_up: true
+        asset:
+          assetFileName: "x2_ultra.xml"
+
+algo:
+  config:
+    empty_cache_every_n_ppo_epoch: -1
+    num_steps_per_env: 24
+    use_clampped_std: true
+    std_clamp_min: 0.001
+    std_clamp_max: 0.5
+    max_grad_norm: 0.1
+    actor:
+      backbone:
+        reencode_smpl_g1_recon: true
+        encoders:
+          g1:
+            inputs: ["command_multi_future_nonflat", "motion_anchor_ori_b_mf_nonflat"]
+          teleop:
+            inputs:
+              [
+                "command_multi_future_lower_body",
+                "vr_3point_local_target",
+                "vr_3point_local_orn_target",
+                "motion_anchor_ori_b",
+              ]
+          smpl:
+            inputs:
+              [
+                "smpl_joints_multi_future_local_nonflat",
+                "smpl_root_ori_b_multi_future",
+                "joint_pos_multi_future_wrist_for_smpl",
+              ]
+        decoders:
+          g1_kin:
+            outputs: ["command_multi_future_nonflat", "motion_anchor_ori_b_mf_nonflat"]
+
+    critic:
+      backbone:
+        module_config_dict:
+          layer_config:
+            hidden_dims: [2048, 2048, 1024, 1024, 512, 512]

@@ -202,6 +202,32 @@ class H2Converter(IsaacLabMuJoCoConverter):
     FOOT_BODY_NAMES = ["left_ankle_roll_link", "right_ankle_roll_link"]
 
 
+class X2UltraConverter(IsaacLabMuJoCoConverter):
+    """Agibot X2 Ultra robot joint/body order converter between IsaacLab and MuJoCo conventions."""
+
+    def __init__(self):
+        from gear_sonic.envs.manager_env.robots.x2_ultra import (
+            X2_ULTRA_ISAACLAB_JOINTS,
+            X2_ULTRA_ISAACLAB_TO_MUJOCO_BODY,
+            X2_ULTRA_ISAACLAB_TO_MUJOCO_DOF,
+            X2_ULTRA_MUJOCO_TO_ISAACLAB_BODY,
+            X2_ULTRA_MUJOCO_TO_ISAACLAB_DOF,
+        )
+
+        self.JOINT_NAMES = X2_ULTRA_ISAACLAB_JOINTS
+        self.DOF_MAPPINGS = {
+            ("isaaclab", "mujoco"): X2_ULTRA_ISAACLAB_TO_MUJOCO_DOF,
+            ("mujoco", "isaaclab"): X2_ULTRA_MUJOCO_TO_ISAACLAB_DOF,
+        }
+        self.BODY_MAPPINGS = {
+            ("isaaclab", "mujoco"): X2_ULTRA_ISAACLAB_TO_MUJOCO_BODY,
+            ("mujoco", "isaaclab"): X2_ULTRA_MUJOCO_TO_ISAACLAB_BODY,
+        }
+
+    VR_3POINTS_BODY_NAMES = ["torso_link", "left_wrist_pitch_link", "right_wrist_pitch_link"]
+    FOOT_BODY_NAMES = ["left_ankle_roll_link", "right_ankle_roll_link"]
+
+
 def load_qpos_from_csv(csv_path: str) -> torch.Tensor:
     """Load qpos [T, D] from CSV."""
     import pandas as pd
