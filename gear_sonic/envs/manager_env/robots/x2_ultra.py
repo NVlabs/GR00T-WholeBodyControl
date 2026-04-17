@@ -39,7 +39,9 @@ DAMPING_WRIST_YAW = 2.0 * DAMPING_RATIO * ARMATURE_WRIST_YAW * NATURAL_FREQ
 DAMPING_HEAD = 2.0 * DAMPING_RATIO * ARMATURE_HEAD * NATURAL_FREQ
 
 # Body names in IsaacLab BFS traversal order (32 bodies including root pelvis).
-# Derived by BFS traversal of the URDF kinematic tree, skipping fixed-joint-only links.
+# Verified against runtime robot.joint_names.  Isaac Lab sorts children
+# alphabetically within each BFS level, so head_yaw_link ("h") precedes
+# left/right_shoulder_pitch_link ("l"/"r") at the same depth.
 X2_ULTRA_ISAACLAB_JOINTS = [
     "pelvis",
     "left_hip_pitch_link",
@@ -53,14 +55,14 @@ X2_ULTRA_ISAACLAB_JOINTS = [
     "torso_link",
     "left_knee_link",
     "right_knee_link",
+    "head_yaw_link",
     "left_shoulder_pitch_link",
     "right_shoulder_pitch_link",
-    "head_yaw_link",
     "left_ankle_pitch_link",
     "right_ankle_pitch_link",
+    "head_pitch_link",
     "left_shoulder_roll_link",
     "right_shoulder_roll_link",
-    "head_pitch_link",
     "left_ankle_roll_link",
     "right_ankle_roll_link",
     "left_shoulder_yaw_link",
@@ -78,30 +80,33 @@ X2_ULTRA_ISAACLAB_JOINTS = [
 # DOF index mappings between IsaacLab and MuJoCo orderings (31 DOF).
 # isaaclab_to_mujoco[i] = MuJoCo index of the joint at IsaacLab index i.
 X2_ULTRA_ISAACLAB_TO_MUJOCO_DOF = [
-    0, 6, 12, 1, 7, 13, 2, 8, 14, 3, 9, 15, 22, 29, 4, 10,
-    16, 23, 30, 5, 11, 17, 24, 18, 25, 19, 26, 20, 27, 21, 28,
+    0, 6, 12, 1, 7, 13, 2, 8, 14, 3, 9, 29, 15, 22, 4, 10,
+    30, 16, 23, 5, 11, 17, 24, 18, 25, 19, 26, 20, 27, 21, 28,
 ]
 X2_ULTRA_MUJOCO_TO_ISAACLAB_DOF = [
-    0, 3, 6, 9, 14, 19, 1, 4, 7, 10, 15, 20, 2, 5, 8, 11,
-    16, 21, 23, 25, 27, 29, 12, 17, 22, 24, 26, 28, 30, 13, 18,
+    0, 3, 6, 9, 14, 19, 1, 4, 7, 10, 15, 20, 2, 5, 8, 12,
+    17, 21, 23, 25, 27, 29, 13, 18, 22, 24, 26, 28, 30, 11, 16,
 ]
 
 # Body index mappings between IsaacLab and MuJoCo orderings (32 bodies).
 X2_ULTRA_ISAACLAB_TO_MUJOCO_BODY = [
-    0, 1, 7, 13, 2, 8, 14, 3, 9, 15, 4, 10, 16, 23, 30, 5,
-    11, 17, 24, 31, 6, 12, 18, 25, 19, 26, 20, 27, 21, 28, 22, 29,
+    0, 1, 7, 13, 2, 8, 14, 3, 9, 15, 4, 10, 30, 16, 23, 5,
+    11, 31, 17, 24, 6, 12, 18, 25, 19, 26, 20, 27, 21, 28, 22, 29,
 ]
 X2_ULTRA_MUJOCO_TO_ISAACLAB_BODY = [
     0, 1, 4, 7, 10, 15, 20, 2, 5, 8, 11, 16, 21, 3, 6, 9,
-    12, 17, 22, 24, 26, 28, 30, 13, 18, 23, 25, 27, 29, 31, 14, 19,
+    13, 18, 22, 24, 26, 28, 30, 14, 19, 23, 25, 27, 29, 31, 12, 17,
 ]
 
 X2_ULTRA_ISAACLAB_TO_MUJOCO_MAPPING = {
     "isaaclab_joints": X2_ULTRA_ISAACLAB_JOINTS,
-    "isaaclab_to_mujoco_dof": X2_ULTRA_ISAACLAB_TO_MUJOCO_DOF,
-    "mujoco_to_isaaclab_dof": X2_ULTRA_MUJOCO_TO_ISAACLAB_DOF,
-    "isaaclab_to_mujoco_body": X2_ULTRA_ISAACLAB_TO_MUJOCO_BODY,
-    "mujoco_to_isaaclab_body": X2_ULTRA_MUJOCO_TO_ISAACLAB_BODY,
+    # The motion_lib code uses these as numpy/torch gather indices:
+    #   dof_il = dof_mj[mapping[i]]  →  mapping[i] must be the MJ source for IL position i
+    # G1 follows this convention; X2 arrays are swapped to match.
+    "isaaclab_to_mujoco_dof": X2_ULTRA_MUJOCO_TO_ISAACLAB_DOF,
+    "mujoco_to_isaaclab_dof": X2_ULTRA_ISAACLAB_TO_MUJOCO_DOF,
+    "isaaclab_to_mujoco_body": X2_ULTRA_MUJOCO_TO_ISAACLAB_BODY,
+    "mujoco_to_isaaclab_body": X2_ULTRA_ISAACLAB_TO_MUJOCO_BODY,
 }
 
 
