@@ -1,0 +1,10 @@
+# @package algo.config.actor.backbone
+# X2 Ultra aux losses: reconstruction + motion-teleop latent alignment (no SMPL losses).
+
+defaults:
+  - terms/g1_recon@aux_loss_func
+  - terms/g1_teleop_latent@aux_loss_func
+
+aux_loss_coef:
+  g1_recon: 0.01
+  g1_teleop_latent: 1.0

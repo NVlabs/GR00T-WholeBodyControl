@@ -100,6 +100,7 @@ Documentation
    user_guide/training
    user_guide/training_data
    user_guide/new_embodiments
+   user_guide/sim2sim_mujoco
 
 .. toctree::
    :maxdepth: 2

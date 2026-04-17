@@ -216,3 +216,7 @@ models/
 # Downloaded from HuggingFace (hf download)
 sample_data/
 sonic_release/
+
+# Agibot X2 (local reference material & notes; not tracked for now)
+agibot-x2-references/
+agibot_x2_embodiment.md
