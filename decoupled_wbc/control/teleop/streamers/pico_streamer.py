@@ -17,11 +17,77 @@ R_HEADSET_TO_WORLD = np.array(
 
 
 class PicoStreamer(BaseStreamer):
-    def __init__(self):
+    def __init__(
+        self,
+        enable_brainco: bool = False,
+        brainco_fps: float = 100.0,
+        brainco_state_timeout_s: float = 5.0,
+        brainco_warmup_frames: int = 10,
+    ):
+        """
+        Parameters
+        ----------
+        enable_brainco : bool
+            Spawn the brainco hand-retargeting subprocess and feed it
+            xrobotoolkit hand-tracking data each tick.
+        brainco_fps : float
+            Brainco controller loop rate.
+        brainco_state_timeout_s : float
+            Fail fast if rt/brainco/{left,right}/state isn't publishing
+            within this window. 0 disables the timeout (legacy behavior).
+        brainco_warmup_frames : int
+            Number of consecutive valid input frames the controller
+            requires before publishing retargeted commands. During warmup
+            the hand is held in the safe open pose.
+        """
         self.xr_client = XrClient()
         self.run_pico_service()
 
         self.reset_status()
+
+        self._brainco_left_arr = None
+        self._brainco_right_arr = None
+        self._brainco_controller = None
+        if enable_brainco:
+            self._start_brainco(
+                fps=brainco_fps,
+                state_timeout_s=brainco_state_timeout_s,
+                warmup_frames=brainco_warmup_frames,
+            )
+
+    def _start_brainco(
+        self,
+        fps: float = 100.0,
+        state_timeout_s: float = 5.0,
+        warmup_frames: int = 10,
+    ):
+        from decoupled_wbc.control.teleop.device.pico.brainco import (
+            BraincoController,
+            make_brainco_shared_arrays,
+        )
+
+        self._brainco_left_arr, self._brainco_right_arr = make_brainco_shared_arrays()
+        # Controller runs in its own subprocess and reads the (75,) shared
+        # arrays we populate inside _get_pico_data() each tick.
+        self._brainco_controller = BraincoController(
+            self._brainco_left_arr,
+            self._brainco_right_arr,
+            fps=fps,
+            state_timeout_s=state_timeout_s,
+            warmup_frames=warmup_frames,
+        )
+        print("Brainco hand pipeline started.")
+
+    def _push_brainco_keypoints(self, left_state, right_state):
+        from decoupled_wbc.control.teleop.device.pico.brainco import (
+            hand_state_to_unitree_keypoints,
+            push_keypoints_to_shared,
+        )
+
+        left_pts = hand_state_to_unitree_keypoints(left_state)
+        right_pts = hand_state_to_unitree_keypoints(right_state)
+        push_keypoints_to_shared(self._brainco_left_arr, left_pts)
+        push_keypoints_to_shared(self._brainco_right_arr, right_pts)
 
     def run_pico_service(self):
         # Run the pico service
@@ -92,6 +158,15 @@ class PicoStreamer(BaseStreamer):
         # Get the hand tracking state of the left and right controllers
         pico_data["left_hand_tracking_state"] = self.xr_client.get_hand_tracking_state("left")
         pico_data["right_hand_tracking_state"] = self.xr_client.get_hand_tracking_state("right")
+
+        # Push the hand tracking state to the brainco controller's shared
+        # arrays. The controller subprocess reads them at its own rate and
+        # publishes joint angles on the brainco DDS topics.
+        if self._brainco_controller is not None:
+            self._push_brainco_keypoints(
+                pico_data["left_hand_tracking_state"],
+                pico_data["right_hand_tracking_state"],
+            )
 
         # Get the joystick state of the left and right controllers
         pico_data["left_joystick"] = self.xr_client.get_joystick_state("left")
@@ -245,15 +320,42 @@ class PicoStreamer(BaseStreamer):
         return sign * (abs(value) - dead_zone) / (1.0 - dead_zone)
 
     def _generate_finger_data(self, pico_data, hand):
-        """Generate finger position data."""
+        """Build the (25, 4, 4) fingertip-pose array consumed by the gripper IK
+        solver. Each entry's translation column [:3, 3] is read; rotation is
+        ignored downstream.
+
+        Indices (wrist-anchored, OpenXR-without-palm convention):
+            0          : wrist
+            1..4       : thumb metacarpal -> tip   (tip @ 4)
+            5..9       : index metacarpal -> tip   (tip @ 9)
+            10..14     : middle                    (tip @ 14)
+            15..19     : ring                      (tip @ 19)
+            20..24     : pinky                     (tip @ 24)
+        """
         fingertips = np.zeros([25, 4, 4])
 
+        hand_state = pico_data[f"{hand}_hand_tracking_state"]
+        if hand_state is not None:
+            # Real hand tracking: fill translation column with the same
+            # unitree-hand-frame keypoints brainco uses, in meters. The
+            # downstream solver compares thumb-to-fingertip distances against
+            # a 5 cm threshold, so positions in meters work directly.
+            from decoupled_wbc.control.teleop.device.pico.brainco import (
+                hand_state_to_unitree_keypoints,
+            )
+
+            positions = hand_state_to_unitree_keypoints(hand_state)
+            fingertips[:, :3, 3] = positions
+            return fingertips
+
+        # Fallback: button-encoded synthetic signal when hand tracking is
+        # unavailable (low quality / occluded). Replicates the legacy
+        # behavior so trigger/grip combos still drive a pinch.
         thumb = 0
         index = 5
         middle = 10
         ring = 15
 
-        # Control thumb based on shoulder button state (index 4 is thumb tip)
         fingertips[4 + thumb, 0, 3] = 1.0  # open thumb
         if not pico_data["left_menu_button"]:
             if pico_data[f"{hand}_trigger"] > 0.5 and not pico_data[f"{hand}_grip"] > 0.5:

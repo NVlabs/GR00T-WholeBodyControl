@@ -81,7 +81,12 @@ class XrClient:
     def get_hand_tracking_state(self, hand: str) -> np.ndarray | None:
         """Returns the hand tracking state for the specified hand.
         Valid hands: "left", "right".
-        State is a 27 x 7 numpy array, where each row is [x, y, z, qx, qy, qz, qw] for each joint.
+        State is a 26 x 7 numpy array following the Khronos OpenXR
+        XR_EXT_hand_tracking enum: row 0 = PALM, row 1 = WRIST,
+        rows 2..5 thumb (metacarpal..tip), 6..10 index, 11..15 middle,
+        16..20 ring, 21..25 little. Each row is [x, y, z, qx, qy, qz, qw],
+        position in the OpenXR base reference space and orientation in the
+        OpenXR hand-joint local convention (+X distal, +Y dorsal).
         Returns None if hand tracking is inactive (low quality).
         """
         if hand.lower() == "left":

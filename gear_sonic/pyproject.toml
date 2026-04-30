@@ -37,6 +37,11 @@ teleop = [
     "msgpack",
     "pin",
     "pyvista; platform_machine != 'aarch64'",
+    # Brainco RevoLimb hand retargeting (decoupled_wbc/control/teleop/device/pico/brainco/).
+    # unitree_sdk2py and xrobotoolkit_sdk are not pip-installable; install_pico.sh
+    # builds them from the in-tree external_dependencies/ checkouts.
+    "dex-retargeting",
+    "pyyaml",
 ]
 # MuJoCo simulation (run_sim_loop.py and related scripts)
 # Usage: pip install -e "gear_sonic[sim]"
