@@ -5,6 +5,7 @@ commands, steps physics, and publishes observations back via the SDK bridge.
 BaseSimulator wraps DefaultEnv with rate-limiting and viewer/image update loops.
 """
 
+import json
 import os
 import pathlib
 from pathlib import Path
@@ -27,6 +28,33 @@ from gear_sonic.utils.mujoco_sim.unitree_sdk2py_bridge import ElasticBand, Unitr
 from gear_sonic.utils.mujoco_sim.robot import Robot
 
 GEAR_SONIC_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+ZMQ_PACKED_HEADER_SIZE = 1280
+INSPIRE_HAND_COMMAND_OPEN = np.array([1000, 1000, 1000, 1000, 800, 200], dtype=np.float64)
+INSPIRE_HAND_COMMAND_CLOSE = np.array([0, 0, 0, 0, 200, 800], dtype=np.float64)
+INSPIRE_HAND_SIDE_PREFIX = {
+    "left": "left_inspire_L_",
+    "right": "right_inspire_R_",
+}
+INSPIRE_HAND_FINGER_SUFFIXES = {
+    "little": ("pinky_proximal_joint", "pinky_intermediate_joint"),
+    "ring": ("ring_proximal_joint", "ring_intermediate_joint"),
+    "middle": ("middle_proximal_joint", "middle_intermediate_joint"),
+    "index": ("index_proximal_joint", "index_intermediate_joint"),
+}
+INSPIRE_HAND_COMMAND_INDEX = {
+    "little": 0,
+    "ring": 1,
+    "middle": 2,
+    "index": 3,
+    "thumb_bend": 4,
+    "thumb_rot": 5,
+}
+INSPIRE_HAND_THUMB_BEND_SUFFIXES = (
+    "thumb_proximal_pitch_joint",
+    "thumb_intermediate_joint",
+    "thumb_distal_joint",
+)
+INSPIRE_HAND_THUMB_ROT_SUFFIX = "thumb_proximal_yaw_joint"
 
 
 class DefaultEnv:
@@ -48,9 +76,12 @@ class DefaultEnv:
         self.num_hand_dof = self.robot.NUM_HAND_JOINTS
         self.sim_dt = self.config["SIMULATE_DT"]
         self.obs = None
-        self.torques = np.zeros(self.num_body_dof + self.num_hand_dof * 2)
-        self.torque_limit = np.array(self.robot.MOTOR_EFFORT_LIMIT_LIST)
+        self.torques = None
+        self.torque_limit = np.array(self.robot.MOTOR_EFFORT_LIMIT_LIST, dtype=np.float64)
         self.camera_configs = camera_configs
+        self.inspire_hand_socket = None
+        self.inspire_hand_targets = {"left": {}, "right": {}}
+        self.inspire_hand_actuator_index = {}
 
         if not camera_configs and offscreen and enable_image_publish:
             self.camera_configs = {
@@ -225,6 +256,9 @@ class DefaultEnv:
         self.body_joint_index = []
         self.left_hand_index = []
         self.right_hand_index = []
+        self.body_joint_names = []
+        self.left_hand_joint_names = []
+        self.right_hand_joint_names = []
         for i in range(self.mj_model.njnt):
             name = self.mj_model.joint(i).name
             if any(
@@ -234,10 +268,13 @@ class DefaultEnv:
                 ]
             ):
                 self.body_joint_index.append(i)
+                self.body_joint_names.append(name)
             elif "left_hand" in name:
                 self.left_hand_index.append(i)
+                self.left_hand_joint_names.append(name)
             elif "right_hand" in name:
                 self.right_hand_index.append(i)
+                self.right_hand_joint_names.append(name)
 
         assert len(self.body_joint_index) == self.robot.NUM_JOINTS
         assert len(self.left_hand_index) == self.robot.NUM_HAND_JOINTS
@@ -246,6 +283,180 @@ class DefaultEnv:
         self.body_joint_index = np.array(self.body_joint_index)
         self.left_hand_index = np.array(self.left_hand_index)
         self.right_hand_index = np.array(self.right_hand_index)
+        self._init_actuator_indices()
+        self._init_inspire_hand_control()
+
+    def _actuator_ids_for_joint_indices(self, joint_indices: np.ndarray, label: str) -> np.ndarray:
+        actuator_ids = []
+        for joint_id in joint_indices:
+            matches = np.where(self.mj_model.actuator_trnid[:, 0] == int(joint_id))[0]
+            if len(matches) == 0:
+                joint_name = self.mj_model.joint(int(joint_id)).name
+                raise ValueError(f"No actuator found for {label} joint '{joint_name}'")
+            actuator_ids.append(int(matches[0]))
+        return np.array(actuator_ids, dtype=np.int64)
+
+    def _init_actuator_indices(self):
+        self.body_actuator_index = self._actuator_ids_for_joint_indices(
+            self.body_joint_index, "body"
+        )
+        self.left_hand_actuator_index = self._actuator_ids_for_joint_indices(
+            self.left_hand_index, "left hand"
+        )
+        self.right_hand_actuator_index = self._actuator_ids_for_joint_indices(
+            self.right_hand_index, "right hand"
+        )
+
+        self.torques = np.zeros(self.mj_model.nu, dtype=np.float64)
+        self.ctrl_limit = np.full(self.mj_model.nu, np.inf, dtype=np.float64)
+        limit_count = min(len(self.torque_limit), self.mj_model.nu)
+        self.ctrl_limit[:limit_count] = self.torque_limit[:limit_count]
+
+    def _joint_target_from_unit(self, joint_name: str, unit_value: float) -> float:
+        joint_id = mujoco.mj_name2id(self.mj_model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
+        if joint_id < 0:
+            raise ValueError(f"Inspire hand joint '{joint_name}' is missing from the MuJoCo model")
+        lower, upper = self.mj_model.jnt_range[joint_id]
+        unit = float(np.clip(unit_value, 0.0, 1.0))
+        return float(lower + unit * (upper - lower))
+
+    def _inspire_command_to_joint_targets(self, side: str, command: np.ndarray) -> Dict[str, float]:
+        command = np.asarray(command, dtype=np.float64).reshape(6)
+        open_values = np.asarray(
+            self.config.get("INSPIRE_HAND_COMMAND_OPEN", INSPIRE_HAND_COMMAND_OPEN),
+            dtype=np.float64,
+        )
+        close_values = np.asarray(
+            self.config.get("INSPIRE_HAND_COMMAND_CLOSE", INSPIRE_HAND_COMMAND_CLOSE),
+            dtype=np.float64,
+        )
+        denom = close_values - open_values
+        units = np.zeros(6, dtype=np.float64)
+        valid = np.abs(denom) > 1e-8
+        units[valid] = (command[valid] - open_values[valid]) / denom[valid]
+        units = np.clip(units, 0.0, 1.0)
+
+        prefix = INSPIRE_HAND_SIDE_PREFIX[side]
+        targets = {}
+        for channel, suffixes in INSPIRE_HAND_FINGER_SUFFIXES.items():
+            unit = units[INSPIRE_HAND_COMMAND_INDEX[channel]]
+            for suffix in suffixes:
+                joint_name = prefix + suffix
+                targets[joint_name] = self._joint_target_from_unit(joint_name, unit)
+
+        thumb_bend = units[INSPIRE_HAND_COMMAND_INDEX["thumb_bend"]]
+        for suffix in INSPIRE_HAND_THUMB_BEND_SUFFIXES:
+            joint_name = prefix + suffix
+            targets[joint_name] = self._joint_target_from_unit(joint_name, thumb_bend)
+
+        thumb_rot = units[INSPIRE_HAND_COMMAND_INDEX["thumb_rot"]]
+        joint_name = prefix + INSPIRE_HAND_THUMB_ROT_SUFFIX
+        targets[joint_name] = self._joint_target_from_unit(joint_name, thumb_rot)
+        return targets
+
+    def _init_inspire_hand_control(self):
+        self.inspire_hand_actuator_index = {}
+        for prefix in INSPIRE_HAND_SIDE_PREFIX.values():
+            suffixes = [INSPIRE_HAND_THUMB_ROT_SUFFIX, *INSPIRE_HAND_THUMB_BEND_SUFFIXES]
+            for finger_suffixes in INSPIRE_HAND_FINGER_SUFFIXES.values():
+                suffixes.extend(finger_suffixes)
+            for suffix in suffixes:
+                joint_name = prefix + suffix
+                actuator_id = mujoco.mj_name2id(
+                    self.mj_model, mujoco.mjtObj.mjOBJ_ACTUATOR, joint_name
+                )
+                if actuator_id >= 0:
+                    self.inspire_hand_actuator_index[joint_name] = actuator_id
+
+        if self.inspire_hand_actuator_index:
+            self.inspire_hand_targets = {
+                "left": self._inspire_command_to_joint_targets("left", INSPIRE_HAND_COMMAND_OPEN),
+                "right": self._inspire_command_to_joint_targets("right", INSPIRE_HAND_COMMAND_OPEN),
+            }
+
+        if not self.config.get("ENABLE_INSPIRE_HAND_ZMQ", False):
+            return
+
+        if not self.inspire_hand_actuator_index:
+            print("Warning: ENABLE_INSPIRE_HAND_ZMQ is set, but no Inspire hand actuators exist.")
+            return
+
+        try:
+            import zmq
+        except ImportError:
+            print("Warning: pyzmq is not installed; Inspire hand ZMQ control is disabled.")
+            return
+
+        host = self.config.get("INSPIRE_HAND_ZMQ_HOST", "localhost")
+        port = int(self.config.get("INSPIRE_HAND_ZMQ_PORT", 5556))
+        self.inspire_hand_topic = self.config.get("INSPIRE_HAND_ZMQ_TOPIC", "inspire_hand")
+        self.inspire_hand_header_size = int(
+            self.config.get("INSPIRE_HAND_ZMQ_HEADER_SIZE", ZMQ_PACKED_HEADER_SIZE)
+        )
+        self._inspire_zmq = zmq
+        self.inspire_hand_context = zmq.Context.instance()
+        self.inspire_hand_socket = self.inspire_hand_context.socket(zmq.SUB)
+        self.inspire_hand_socket.setsockopt_string(zmq.SUBSCRIBE, self.inspire_hand_topic)
+        self.inspire_hand_socket.setsockopt(zmq.CONFLATE, 1)
+        self.inspire_hand_socket.connect(f"tcp://{host}:{port}")
+        print(
+            f"[InspireHandSim] Listening on tcp://{host}:{port} topic='{self.inspire_hand_topic}'"
+        )
+
+    def _decode_zmq_fields(self, payload: bytes, fields: list[dict]) -> Dict[str, np.ndarray]:
+        dtypes = {
+            "f32": np.float32,
+            "f64": np.float64,
+            "i32": np.int32,
+            "u8": np.uint8,
+        }
+        decoded = {}
+        offset = 0
+        for field in fields:
+            dtype = dtypes[field["dtype"]]
+            shape = tuple(field.get("shape", [1]))
+            count = int(np.prod(shape))
+            nbytes = np.dtype(dtype).itemsize * count
+            decoded[field["name"]] = (
+                np.frombuffer(payload, dtype=dtype, count=count, offset=offset)
+                .astype(np.float64)
+                .reshape(shape)
+            )
+            offset += nbytes
+        return decoded
+
+    def _poll_inspire_hand_zmq(self):
+        if self.inspire_hand_socket is None:
+            return
+
+        topic = self.inspire_hand_topic.encode("utf-8")
+        for _ in range(8):
+            try:
+                message = self.inspire_hand_socket.recv(flags=self._inspire_zmq.NOBLOCK)
+            except self._inspire_zmq.Again:
+                return
+
+            if not message.startswith(topic):
+                continue
+            header_start = len(topic)
+            header_end = header_start + self.inspire_hand_header_size
+            header_raw = message[header_start:header_end].split(b"\0", 1)[0]
+            if not header_raw:
+                continue
+            header = json.loads(header_raw.decode("utf-8"))
+            values = self._decode_zmq_fields(message[header_end:], header.get("fields", []))
+            for side in ("left", "right"):
+                if side in values:
+                    self.inspire_hand_targets[side] = self._inspire_command_to_joint_targets(
+                        side, values[side]
+                    )
+
+    def _write_inspire_hand_targets(self, ctrl: np.ndarray):
+        for targets in self.inspire_hand_targets.values():
+            for joint_name, target in targets.items():
+                actuator_id = self.inspire_hand_actuator_index.get(joint_name)
+                if actuator_id is not None:
+                    ctrl[actuator_id] = target
 
     def init_renderers(self):
         self.renderers = {}
@@ -373,16 +584,18 @@ class DefaultEnv:
         obs["body_q"] = self.mj_data.qpos[self.body_joint_index + 7 - 1]
         obs["body_dq"] = self.mj_data.qvel[self.body_joint_index + 6 - 1]
         obs["body_ddq"] = self.mj_data.qacc[self.body_joint_index + 6 - 1]
-        obs["body_tau_est"] = self.mj_data.actuator_force[self.body_joint_index - 1]
+        obs["body_tau_est"] = self.mj_data.actuator_force[self.body_actuator_index]
         if self.num_hand_dof > 0:
             obs["left_hand_q"] = self.mj_data.qpos[self.left_hand_index + self.qpos_offset - 1]
             obs["left_hand_dq"] = self.mj_data.qvel[self.left_hand_index + self.qvel_offset - 1]
             obs["left_hand_ddq"] = self.mj_data.qacc[self.left_hand_index + self.qvel_offset - 1]
-            obs["left_hand_tau_est"] = self.mj_data.actuator_force[self.left_hand_index - 1]
+            obs["left_hand_tau_est"] = self.mj_data.actuator_force[self.left_hand_actuator_index]
             obs["right_hand_q"] = self.mj_data.qpos[self.right_hand_index + self.qpos_offset - 1]
             obs["right_hand_dq"] = self.mj_data.qvel[self.right_hand_index + self.qvel_offset - 1]
             obs["right_hand_ddq"] = self.mj_data.qacc[self.right_hand_index + self.qvel_offset - 1]
-            obs["right_hand_tau_est"] = self.mj_data.actuator_force[self.right_hand_index - 1]
+            obs["right_hand_tau_est"] = self.mj_data.actuator_force[
+                self.right_hand_actuator_index
+            ]
         obs["time"] = self.mj_data.time
         return obs
 
@@ -414,19 +627,17 @@ class DefaultEnv:
                 self.mj_data.xfrc_applied[self.band_attached_link] = np.zeros(6)
         body_torques = self.compute_body_torques()
         hand_torques = self.compute_hand_torques()
-        # -1: actuator array is 0-based while joint indices from the model are 1-based
-        self.torques[self.body_joint_index - 1] = body_torques
+        ctrl = np.zeros(self.mj_model.nu, dtype=np.float64)
+        ctrl[self.body_actuator_index] = body_torques
         if self.num_hand_dof > 0:
-            self.torques[self.left_hand_index - 1] = hand_torques[: self.num_hand_dof]
-            self.torques[self.right_hand_index - 1] = hand_torques[self.num_hand_dof :]
+            ctrl[self.left_hand_actuator_index] = hand_torques[: self.num_hand_dof]
+            ctrl[self.right_hand_actuator_index] = hand_torques[self.num_hand_dof :]
 
-        self.torques = np.clip(self.torques, -self.torque_limit, self.torque_limit)
+        self._poll_inspire_hand_zmq()
+        self._write_inspire_hand_targets(ctrl)
+        ctrl = np.clip(ctrl, -self.ctrl_limit, self.ctrl_limit)
 
-        if self.config["FREE_BASE"]:
-            # Prepend 6 zeros for the floating-base root DOF actuators
-            self.mj_data.ctrl = np.concatenate((np.zeros(6), self.torques))
-        else:
-            self.mj_data.ctrl = self.torques
+        self.mj_data.ctrl[:] = ctrl
         mujoco.mj_step(self.mj_model, self.mj_data)
 
         self.check_fall()
@@ -645,6 +856,9 @@ class BaseSimulator:
     def close(self):
         self._running = False
         try:
+            if getattr(self.sim_env, "inspire_hand_socket", None) is not None:
+                self.sim_env.inspire_hand_socket.close(0)
+                self.sim_env.inspire_hand_socket = None
             if self.sim_env.image_publish_process is not None:
                 self.sim_env.image_publish_process.stop()
             if self.sim_env.viewer is not None:
