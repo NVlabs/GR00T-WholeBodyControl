@@ -2126,13 +2126,12 @@ class MotionLibBase:
                 if self.has_action:
                     curr_motion.action = to_torch(curr_file["action"]).clone()[start:end]
 
-                # Extract hand DOFs if motion file has more than 29 DOFs
                 hand_dof_count = self.m_cfg.get("hand_dof_count", 0)
                 if hand_dof_count > 0 and "dof" in curr_file:
                     raw_dof = to_torch(curr_file["dof"]).clone()[start:end]
-                    if raw_dof.shape[-1] > 29:
-                        # Extract hand DOFs (indices 29 onwards) and interpolate to target FPS
-                        hand_dof = raw_dof[:, 29 : 29 + hand_dof_count]
+                    base_dof = self.humanoid.num_dof
+                    if raw_dof.shape[-1] > base_dof:
+                        hand_dof = raw_dof[:, base_dof : base_dof + hand_dof_count]
                         if curr_file["fps"] != self.target_fps:
                             # Simple linear interpolation for hand DOFs
                             num_target_frames = curr_motion["dof_pos"].shape[0]

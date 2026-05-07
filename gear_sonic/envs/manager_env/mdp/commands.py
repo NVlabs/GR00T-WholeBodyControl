@@ -612,8 +612,9 @@ class TrackingCommand(CommandTerm):
 
         # Inject body/DOF mapping into motion_lib_cfg so motion_lib handles
         # body reordering and xyzw→wxyz quaternion conversion at load time.
-
-        isaaclab_to_mujoco_mapping = order_converter.G1Converter().get_isaaclab_to_mujoco_mapping()
+        asset_file = motion_lib_cfg.get("asset", {}).get("assetFileName", "g1_29dof_rev_1_0.xml")
+        converter = order_converter.get_converter_for_mjcf(asset_file)
+        isaaclab_to_mujoco_mapping = converter.get_isaaclab_to_mujoco_mapping()
         motion_lib_cfg.update(
             {
                 "mujoco_to_isaaclab_body": isaaclab_to_mujoco_mapping["mujoco_to_isaaclab_body"],
