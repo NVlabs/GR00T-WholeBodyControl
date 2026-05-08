@@ -3,6 +3,11 @@
 # Environment setup script to replace shell.nix functionality
 # Source this file: source scripts/setup_env.sh
 
+# Keep basic system tools reachable even when this script is sourced from zsh
+# after a previous environment script has damaged PATH.
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin:${PATH:-}"
+hash -r 2>/dev/null || rehash 2>/dev/null || true
+
 echo "🔧 Setting up G1 Deploy environment..."
 
 # Run jetson_clocks on Jetson systems (bare-metal only)
@@ -30,10 +35,10 @@ ONNX_RUNTIME_PATHS=(
 )
 
 ONNX_FOUND=false
-for path in "${ONNX_RUNTIME_PATHS[@]}"; do
-    if [ -d "$path" ]; then
-        export onnxruntime_DIR="$path/lib/cmake/onnxruntime"
-        echo "✅ ONNX Runtime found at: $path"
+for candidate_path in "${ONNX_RUNTIME_PATHS[@]}"; do
+    if [ -d "$candidate_path" ]; then
+        export onnxruntime_DIR="$candidate_path/lib/cmake/onnxruntime"
+        echo "✅ ONNX Runtime found at: $candidate_path"
         ONNX_FOUND=true
         break
     fi
@@ -344,4 +349,3 @@ echo ""
 if [ -n "$BASH_VERSION" ]; then
     export PS1="(g1_deploy) $PS1"
 fi
-
