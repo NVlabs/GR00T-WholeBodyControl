@@ -32,6 +32,45 @@ def quat_to_rot6d(q):
     return rot_6d.astype(q.dtype)
 
 
+def rot6d_to_quat(r):
+    """Convert 6D rotation representation to scalar-first quaternion(s) (wxyz).
+
+    Accepted input shapes:
+        * ``(6,)``   -- single rot6d  -> returns ``(4,)``
+        * ``(N, 6)`` -- batch         -> returns ``(N, 4)``
+        * ``(N*6,)`` -- flat concat   -> returns ``(N*4,)``
+          (length must be divisible by 6)
+
+    Args:
+        r: 6D rotation array (first two columns of rotation matrix, row-major).
+
+    Returns:
+        Quaternion array in wxyz order.
+    """
+    r = np.asarray(r, dtype=np.float64)
+    if r.ndim == 1 and r.shape[0] > 6:
+        assert r.shape[0] % 6 == 0, f"Flat rot6d length {r.shape[0]} is not divisible by 6"
+        r = r.reshape(-1, 6)
+        quats = rot6d_to_quat(r)
+        return quats.ravel()
+
+    single = r.ndim == 1
+    r = np.atleast_2d(r)  # (N, 6)
+    col0 = r[:, :3]
+    col1 = r[:, 3:]
+    col0 = col0 / (np.linalg.norm(col0, axis=1, keepdims=True) + 1e-8)
+    dot = np.sum(col0 * col1, axis=1, keepdims=True)
+    col1 = col1 - dot * col0
+    col1 = col1 / (np.linalg.norm(col1, axis=1, keepdims=True) + 1e-8)
+    col2 = np.cross(col0, col1)
+    rot_mat = np.stack([col0, col1, col2], axis=-1)  # (N, 3, 3)
+    q_xyzw = R.from_matrix(rot_mat).as_quat()  # (N, 4) xyzw
+    q_wxyz = q_xyzw[:, [3, 0, 1, 2]]
+    if single:
+        return q_wxyz[0].astype(np.float32)
+    return q_wxyz.astype(np.float32)
+
+
 def compute_projected_gravity(base_quat: np.ndarray) -> np.ndarray:
     """Compute projected gravity vector in robot's body frame from base quaternion.
 

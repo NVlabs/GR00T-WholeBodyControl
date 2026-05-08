@@ -77,6 +77,18 @@ camera = [
     "depthai",
     "requests",
 ]
+# Inference: VLA inference client for running Isaac-GR00T policies
+# Usage: pip install -e "gear_sonic[inference]"
+inference = [
+    "pyzmq",
+    "msgpack",
+    "msgpack-numpy",
+    "pin",
+    "tyro",
+    "opencv-python",
+    "scipy",
+    "Isaac-GR00T @ git+https://github.com/NVIDIA/Isaac-GR00T.git",
+]
 # Training: full RL training stack (Isaac Lab must be installed separately)
 # Usage: pip install -e "gear_sonic[training]"
 training = [

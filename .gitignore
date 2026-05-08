@@ -199,14 +199,16 @@ uv.lock
 .venv_teleop/
 .venv_data_collection/
 .venv_camera/
+.venv_inference/
 
 # XRoboToolkit-PC-Service-Pybind
 xrobotoolkit_sdk.cpython-*-*-*.so
 teleop_vids/
 *.code-workspace
-# Motion data (large local datasets, not tracked in git)
-data/motion_lib_bones_seed
-
+# Motion/training data (large local datasets, not tracked in git)
+data/
+bones_seed_smpl/
+sonic_release/
 # Training output logs
 logs_rl/
 logs_eval/

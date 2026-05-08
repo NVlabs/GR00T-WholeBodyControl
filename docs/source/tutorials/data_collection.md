@@ -530,15 +530,6 @@ the dropout.  To skip this cleaning and merge only, add `--no-remove-stale-smpl`
 
 ---
 
-## Using Datasets with Isaac-GR00T
+## Next Steps: Fine-tune and Deploy
 
-The output dataset is directly compatible with the [Isaac-GR00T](https://github.com/NVIDIA/Isaac-GR00T) post-training pipeline. Point the Isaac-GR00T training config to the dataset directory:
-
-```bash
-# In the Isaac-GR00T repository
-python scripts/gr00t_finetune.py \
-    --dataset-path /path/to/outputs/2026-04-03-14-30-00-G1-robot01 \
-    ...
-```
-
-See the [Isaac-GR00T documentation](https://github.com/NVIDIA/Isaac-GR00T) for full post-training instructions.
+The output dataset is directly compatible with the [Isaac-GR00T](https://github.com/NVIDIA/Isaac-GR00T) post-training pipeline. To fine-tune a VLA model on your collected data and deploy it for autonomous inference, see the [VLA Workflow tutorial](vla_workflow.md).

@@ -134,6 +134,10 @@ class ImageMessageSchema:
                 images[key] = mat[..., ::-1]  # BGR -> RGB
             elif isinstance(value, str):
                 images[key] = ImageUtils.decode_image(value)
+            elif isinstance(value, np.ndarray):
+                images[key] = value
+            elif isinstance(value, dict) and b"nd" in value:
+                images[key] = m.decode(value)
             else:
                 images[key] = value
         return ImageMessageSchema(timestamps=timestamps, images=images)
