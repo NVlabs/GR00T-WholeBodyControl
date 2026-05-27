@@ -100,6 +100,12 @@ class ComposedCameraConfig:
     mjpeg_quality: int = 80
     """MJPEG quality 1-100 (only when use_mjpeg=True)."""
 
+    realsense_fps: int = 15
+    """RealSense stream FPS. Lower values reduce USB bandwidth and improve stability."""
+
+    realsense_enable_depth: bool = False
+    """Publish RealSense depth images in addition to color."""
+
     def __post_init__(self):
         self.run_as_server = self.server
 
@@ -373,10 +379,17 @@ class ComposedCameraSensor(Sensor, SensorServer):
             return OAKSensor(config=oak_config, mount_position=mount_position, device_id=device_id)
 
         elif camera_type == "realsense":
-            from gear_sonic.camera.drivers.realsense import RealSenseSensor
+            from gear_sonic.camera.drivers.realsense import RealSenseConfig, RealSenseSensor
 
             print(f"Initializing RealSense sensor for camera type: {camera_type}")
-            return RealSenseSensor(mount_position=mount_position)
+            realsense_config = RealSenseConfig()
+            realsense_config.fps = self.config.realsense_fps
+            realsense_config.enable_depth = self.config.realsense_enable_depth
+            return RealSenseSensor(
+                config=realsense_config,
+                mount_position=mount_position,
+                device_id=device_id,
+            )
 
         elif camera_type.endswith(".mp4"):
             from gear_sonic.camera.drivers.dummy import ReplayDummySensor
