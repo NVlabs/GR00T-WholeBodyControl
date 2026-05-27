@@ -33,7 +33,10 @@ class UnitreeSdk2Bridge:
         # It is unsafe and would be unflexible if we use a hand-plugged robot model
 
         robot_type = config["ROBOT_TYPE"]
-        if "g1" in robot_type or "h1-2" in robot_type:
+        # NOTE: For MuJoCo sim2sim we only need a DDS message layout that can
+        # carry NUM_MOTORS joint commands. Many Unitree humanoids share the
+        # unitree_hg low-level message types.
+        if "g1" in robot_type or "h1-2" in robot_type or "h2" in robot_type:
             from unitree_sdk2py.idl.default import (
                 unitree_hg_msg_dds__IMUState_ as IMUState_default,
                 unitree_hg_msg_dds__LowCmd_,
@@ -53,11 +56,32 @@ class UnitreeSdk2Bridge:
 
             self.low_cmd = unitree_go_msg_dds__LowCmd_()
         else:
-            raise ValueError(f"Invalid robot type '{robot_type}'. Expected 'g1', 'h1', or 'go2'.")
+            raise ValueError(
+                f"Invalid robot type '{robot_type}'. Expected one of: 'g1', 'h1-2', 'h2', 'h1', 'go2'."
+            )
 
-        self.num_body_motor = config["NUM_MOTORS"]
+        self.num_body_motor = int(config["NUM_MOTORS"])
         self.num_hand_motor = config.get("NUM_HAND_MOTORS", 0)
         self.use_sensor = config["USE_SENSOR"]
+
+        # Defensive check: ensure the underlying DDS message supports the
+        # requested number of motors, otherwise writes/reads will corrupt memory.
+        try:
+            max_motors = len(self.low_cmd.motor_cmd)
+        except Exception:
+            max_motors = None
+        if max_motors is not None and self.num_body_motor > max_motors:
+            raise ValueError(
+                f"NUM_MOTORS={self.num_body_motor} exceeds DDS LowCmd capacity ({max_motors}) for robot_type='{robot_type}'. "
+                "You likely need an H2-specific Unitree SDK2 Python binding/message definition."
+            )
+
+        # Optional sim-only gain override: some deploy stacks compute conservative
+        # gains for real hardware. In MuJoCo, higher PD gains are often required
+        # to reliably hold a standing pose.
+        self._override_motor_gains = bool(config.get("SIM_OVERRIDE_MOTOR_GAINS", False))
+        self._motor_kp_override = config.get("MOTOR_KP", None)
+        self._motor_kd_override = config.get("MOTOR_KD", None)
 
         self.have_imu_ = False
         self.have_frame_sensor_ = False
@@ -68,7 +92,7 @@ class UnitreeSdk2Bridge:
         self.low_state_puber.Init()
 
         # Only create odo_state for supported robot types
-        if "g1" in robot_type or "h1-2" in robot_type:
+        if "g1" in robot_type or "h1-2" in robot_type or "h2" in robot_type:
             self.odo_state = OdoState_default()
             self.odo_state_puber = ChannelPublisher("rt/odostate", OdoState_)
             self.odo_state_puber.Init()
@@ -142,9 +166,27 @@ class UnitreeSdk2Bridge:
 
     def LowCmdHandler(self, msg):
         with self.low_cmd_lock:
+            # Apply sim-only motor gain overrides if requested.
+            if self._override_motor_gains and self._motor_kp_override and self._motor_kd_override:
+                try:
+                    for i in range(self.num_body_motor):
+                        msg.motor_cmd[i].kp = float(self._motor_kp_override[i])
+                        msg.motor_cmd[i].kd = float(self._motor_kd_override[i])
+                except Exception:
+                    # If the override list shape doesn't match, fall back to raw gains.
+                    pass
             self.low_cmd = msg
             self.low_cmd_received = True
             self.new_low_cmd = True
+
+        if getattr(self, "_debug_lowcmd", False):
+            # Print a lightweight summary occasionally.
+            try:
+                q0 = [float(msg.motor_cmd[i].q) for i in range(min(3, self.num_body_motor))]
+                kp0 = [float(msg.motor_cmd[i].kp) for i in range(min(3, self.num_body_motor))]
+                print(f"[sim] LowCmd rx: q[0:3]={q0} kp[0:3]={kp0}")
+            except Exception:
+                pass
 
     def LeftHandCmdHandler(self, msg):
         with self.left_hand_cmd_lock:
@@ -182,10 +224,11 @@ class UnitreeSdk2Bridge:
             raise NotImplementedError("Frame sensor data is not implemented yet.")
         else:
             # Get data from ground truth
-            self.odo_state.position[:] = obs["floating_base_pose"][:3]
-            self.odo_state.linear_velocity[:] = obs["floating_base_vel"][:3]
-            self.odo_state.orientation[:] = obs["floating_base_pose"][3:7]
-            self.odo_state.angular_velocity[:] = obs["floating_base_vel"][3:6]
+            if self.odo_state is not None:
+                self.odo_state.position[:] = obs["floating_base_pose"][:3]
+                self.odo_state.linear_velocity[:] = obs["floating_base_vel"][:3]
+                self.odo_state.orientation[:] = obs["floating_base_pose"][3:7]
+                self.odo_state.angular_velocity[:] = obs["floating_base_vel"][3:6]
             # quaternion: w, x, y, z
             self.low_state.imu_state.quaternion[:] = obs["floating_base_pose"][3:7]
             # angular velocity
@@ -202,8 +245,9 @@ class UnitreeSdk2Bridge:
         self.low_state.tick = int(obs["time"] * 1e3)
         self.low_state_puber.Write(self.low_state)
 
-        self.odo_state.tick = int(obs["time"] * 1e3)
-        self.odo_state_puber.Write(self.odo_state)
+        if self.odo_state is not None and self.odo_state_puber is not None:
+            self.odo_state.tick = int(obs["time"] * 1e3)
+            self.odo_state_puber.Write(self.odo_state)
 
         self.torso_imu_puber.Write(self.torso_imu_state)
 
@@ -402,6 +446,7 @@ class ElasticBand:
         if key == glfw.KEY_8:
             self.length += 0.1
         if key == glfw.KEY_9:
+            print("KEY 9 pressed: crane toggle")
             self.enable = not self.enable
 
     def handle_keyboard_button(self, key):

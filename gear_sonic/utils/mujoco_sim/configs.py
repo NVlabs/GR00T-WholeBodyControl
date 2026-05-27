@@ -89,6 +89,12 @@ def override_wbc_config(
         "waist_pitch_limit": config.waist_pitch_limit,
         "hand_torque_limit": config.hand_torque_limit,
         "enable_natural_walk": config.enable_natural_walk,
+
+        # Sim-only diagnostics / experiments
+        # When enabled, MuJoCo sim loop will ignore DDS/policy LowCmd inputs and
+        # instead hold DEFAULT_DOF_ANGLES with PD (tau_ff=0, dq_des=0).
+        "STAND_TEST_ENABLE": config.stand_test,
+        "STAND_TEST_PRINT_EVERY": config.stand_test_print_every,
     }
 
     if missed_keys_only:
@@ -111,10 +117,17 @@ def override_wbc_config(
 class BaseConfig(ArgsConfigTemplate):
     """Base config inherited by all G1 control loops"""
 
+    robot_type: Literal["auto", "g1", "h2"] = "auto"
+    """Embodiment selector for entry points that support it.
+
+    NOTE: MuJoCo sim2sim primarily uses the YAML's ROBOT_SCENE/NUM_MOTORS/etc.
+    This flag is mainly to keep CLIs consistent across scripts.
+    """
+
     dataset_version: str = "sonic_model12"
 
     # WBC Configuration
-    wbc_version: Literal[tuple(WBC_VERSIONS)] = "sonic_model12"
+    wbc_version: Literal["sonic_model12", "h2_31dof_sonic_model12"] = "sonic_model12"
     """Version of the whole body controller."""
 
     wbc_model_path: str = "policy/stand.onnx,policy/walk.onnx"
@@ -315,10 +328,12 @@ class BaseConfig(ArgsConfigTemplate):
 
         if self.wbc_version == "sonic_model12":
             config_path = str(configs_dir / "g1_29dof_sonic_model12.yaml")
+        elif self.wbc_version == "h2_31dof_sonic_model12":
+            config_path = str(configs_dir / "h2_31dof_sonic_model12.yaml")
         else:
             raise ValueError(
                 f"Invalid wbc_version: {self.wbc_version}, please use one of: "
-                f"sonic_model12"
+                f"sonic_model12, h2_31dof_sonic_model12"
             )
 
         with open(config_path) as file:
@@ -332,6 +347,13 @@ class BaseConfig(ArgsConfigTemplate):
 @dataclass
 class SimLoopConfig(BaseConfig):
     """Config for running the simulation loop."""
+
+    # --- Sim-only experiments ---
+    stand_test: bool = False
+    """Enable stand test: ignore DDS/policy and hold DEFAULT_DOF_ANGLES with PD."""
+
+    stand_test_print_every: int = 200
+    """When stand_test is enabled, print debug logs every N sim steps."""
 
     mp_start_method: str = "spawn"
     """Multiprocessing start method"""

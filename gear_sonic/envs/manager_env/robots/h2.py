@@ -1,6 +1,7 @@
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
 import isaaclab.sim as sim_utils
+import re
 
 ASSET_DIR = "gear_sonic/data/assets"
 
@@ -372,8 +373,24 @@ H2_CFG = ArticulationCfg(
     },
 )
 
-# H2 Action Scale
-H2_ACTION_SCALE = {}
+# H2 Action Scale (explicit per-joint keys)
+# Resolves actuator group regex patterns against the full joint list so the
+# resulting dict has concrete joint names (e.g. "left_hip_pitch_joint") instead
+# of opaque patterns (e.g. ".*_hip_pitch_joint").
+#
+# Formula: scale = 0.25 * effort_limit / stiffness
+
+# Full list of H2 joint names in IsaacLab DOF order (skip pelvis at index 0).
+_H2_JOINT_NAMES: list[str] = []
+for _nm in H2_ISAACLAB_JOINTS[1:]:
+    if _nm == "torso_link":
+        _H2_JOINT_NAMES.append("waist_pitch_joint")
+    elif _nm.endswith("_link"):
+        _H2_JOINT_NAMES.append(_nm[:-5] + "_joint")
+    else:
+        _H2_JOINT_NAMES.append(_nm)
+
+H2_ACTION_SCALE: dict[str, float] = {}
 for a in H2_CFG.actuators.values():
     e = a.effort_limit_sim
     s = a.stiffness
@@ -382,6 +399,15 @@ for a in H2_CFG.actuators.values():
         e = dict.fromkeys(names, e)
     if not isinstance(s, dict):
         s = dict.fromkeys(names, s)
-    for n in names:
-        if n in e and n in s and s[n]:
-            H2_ACTION_SCALE[n] = 0.25 * e[n] / s[n]
+    for pattern in names:
+        if pattern in e and pattern in s and s[pattern]:
+            scale_val = 0.25 * e[pattern] / s[pattern]
+            _pat = re.compile(f"^{pattern}$")
+            for jn in _H2_JOINT_NAMES:
+                if _pat.fullmatch(jn):
+                    H2_ACTION_SCALE[jn] = scale_val
+
+assert len(H2_ACTION_SCALE) == 31, (
+    f"Expected 31 H2 joints, got {len(H2_ACTION_SCALE)}. "
+    f"Missing: {set(_H2_JOINT_NAMES) - set(H2_ACTION_SCALE)}"
+)

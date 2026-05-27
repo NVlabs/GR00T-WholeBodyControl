@@ -1,25 +1,23 @@
-"""Entry point for running a MuJoCo simulation loop with the G1 robot model.
+"""Entry point for running a MuJoCo simulation loop.
 
-Parses a YAML-based WBC config via tyro CLI, instantiates the G1 robot model,
-and launches the simulator (optionally with offscreen image publishing).
+Parses a YAML-based WBC config via tyro CLI and launches the simulator
+(optionally with offscreen image publishing).
 """
 
-from typing import Dict
+from typing import Dict, Literal
 
 import tyro
 
 from gear_sonic.utils.mujoco_sim.simulator_factory import SimulatorFactory, init_channel
 from gear_sonic.utils.mujoco_sim.configs import SimLoopConfig
-from gear_sonic.data.robot_model.instantiation.g1 import (
-    instantiate_g1_robot_model,
-)
+from gear_sonic.data.robot_model.instantiation.g1 import instantiate_g1_robot_model
 from gear_sonic.data.robot_model.robot_model import RobotModel
 
 ArgsConfig = SimLoopConfig
 
 
 class SimWrapper:
-    def __init__(self, robot_model: RobotModel, env_name: str, config: Dict[str, any], **kwargs):
+    def __init__(self, robot_model: RobotModel | None, env_name: str, config: Dict[str, any], **kwargs):
         self.robot_model = robot_model
         self.config = config
 
@@ -43,7 +41,14 @@ def main(config: ArgsConfig):
             config.enable_offscreen
         ), "enable_offscreen must be True when enable_image_publish is True"
 
-    robot_model = instantiate_g1_robot_model()
+    # NOTE: RobotModel is not currently consumed by the MuJoCo sim2sim pipeline
+    # (SimulatorFactory/BaseSimulator only use the YAML config). Keep it optional
+    # to avoid hard failures when an embodiment URDF isn't present.
+    robot_model = None
+    if getattr(config, "robot_type", "auto") in ("auto", "g1") and not str(config.wbc_version).startswith(
+        "h2_"
+    ):
+        robot_model = instantiate_g1_robot_model()
 
     sim_wrapper = SimWrapper(
         robot_model=robot_model,

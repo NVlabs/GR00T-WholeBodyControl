@@ -1,0 +1,188 @@
+# H2 MuJoCo sim2sim config (modeled after g1_29dof_sonic_model12.yaml)
+#
+# This config is used by gear_sonic/scripts/run_sim_loop.py (MuJoCo sim2sim) to
+# emulate the Unitree DDS interface expected by gear_sonic_deploy.
+#
+# NOTE:
+# - This file enables MuJoCo sim2sim for an H2 MJCF scene.
+# - It does NOT, by itself, make the C++ deployment stack H2-capable; the deploy
+#   binary is still G1-specific unless you port gear_sonic_deploy.
+
+ROBOT_TYPE: 'h2'
+ROBOT_SCENE: "gear_sonic/data/robot_model/model_data/h2/scene_31dof.xml"
+
+DOMAIN_ID: 0
+INTERFACE: "lo"
+SIMULATOR: "mujoco"
+
+USE_JOYSTICK: 0
+JOYSTICK_TYPE: "xbox"
+JOYSTICK_DEVICE: 0
+
+FREE_BASE: False
+PRINT_SCENE_INFORMATION: True
+ENABLE_ELASTIC_BAND: True
+
+# Explicit body joint order (hardware/motor order) to avoid relying on MJCF joint
+# iteration order. This must match the deploy-side MotorCommand indexing.
+# Order here:
+#   legs (L then R), waist (yaw/roll/pitch), head (pitch/yaw), arms (L then R)
+BODY_JOINT_NAME_ORDER: [
+  left_hip_pitch_joint,
+  left_hip_roll_joint,
+  left_hip_yaw_joint,
+  left_knee_joint,
+  left_ankle_pitch_joint,
+  left_ankle_roll_joint,
+
+  right_hip_pitch_joint,
+  right_hip_roll_joint,
+  right_hip_yaw_joint,
+  right_knee_joint,
+  right_ankle_pitch_joint,
+  right_ankle_roll_joint,
+
+  waist_yaw_joint,
+  waist_roll_joint,
+  waist_pitch_joint,
+
+  head_pitch_joint,
+  head_yaw_joint,
+
+  left_shoulder_pitch_joint,
+  left_shoulder_roll_joint,
+  left_shoulder_yaw_joint,
+  left_elbow_joint,
+  left_wrist_roll_joint,
+  left_wrist_pitch_joint,
+  left_wrist_yaw_joint,
+
+  right_shoulder_pitch_joint,
+  right_shoulder_roll_joint,
+  right_shoulder_yaw_joint,
+  right_elbow_joint,
+  right_wrist_roll_joint,
+  right_wrist_pitch_joint,
+  right_wrist_yaw_joint
+]
+
+# Debug toggles
+# - DEBUG_LOW_CMD: print a small summary when LowCmd is received.
+# - DEBUG_TORQUE: print torque/ctrl stats at ~1Hz.
+DEBUG_LOW_CMD: True
+DEBUG_TORQUE: True
+DEBUG_OSCILLATION_PRINT_EVERY: 20
+DEBUG_OSCILLATION_JOINTS: [
+  left_hip_pitch_joint,
+  left_hip_roll_joint,
+  right_hip_pitch_joint,
+  left_ankle_pitch_joint,
+  left_ankle_roll_joint,
+  head_yaw_joint,
+  left_wrist_roll_joint,
+  left_wrist_pitch_joint
+]
+
+# H2 XML resets to zero joints with the pelvis at z=1.04, which can leave the
+# feet airborne. Start/reset MuJoCo from the same home pose used by stand-test.
+RESET_TO_DEFAULT_DOF_ANGLES: True
+RESET_ROOT_Z: 1.03
+
+# MuJoCo sim2sim only: override PD gains carried in LowCmd.
+# For sim2sim we want gains consistent with the sim-side config (and close to
+# IsaacLab actuator stiffness/damping).
+SIM_OVERRIDE_MOTOR_GAINS: False
+
+SIMULATE_DT: 0.005
+VIEWER_DT: 0.02
+REWARD_DT: 0.02
+USE_SENSOR: False
+USE_HISTORY: True
+USE_HISTORY_LOCO: True
+USE_HISTORY_MIMIC: True
+
+GAIT_PERIOD: 0.9
+
+# Identity motor↔joint mapping for sim2sim. Update if your MJCF uses a different motor ordering.
+MOTOR2JOINT: [0, 1, 2, 3, 4, 5,
+              6, 7, 8, 9, 10, 11,
+              12, 13, 14,
+              15, 16,
+              17, 18, 19, 20, 21, 22,
+              23, 24,
+              25, 26, 27, 28, 29, 30]
+JOINT2MOTOR: [0, 1, 2, 3, 4, 5,
+              6, 7, 8, 9, 10, 11,
+              12, 13, 14,
+              15, 16,
+              17, 18, 19, 20, 21, 22,
+              23, 24,
+              25, 26, 27, 28, 29, 30]
+
+UNITREE_LEGGED_CONST:
+  HIGHLEVEL: 0xEE
+  LOWLEVEL: 0xFF
+  TRIGERLEVEL: 0xF0
+  PosStopF: 2146000000.0
+  VelStopF: 16000.0
+  MODE_MACHINE: 5
+  MODE_PR:  0
+
+# --- PD gains ---
+# Runtime gains matched to the mjlab Unitree H2 actuator config.
+MOTOR_KP: [
+    200.0, 200.0, 200.0, 200.0, 40.0, 40.0,
+    200.0, 200.0, 200.0, 200.0, 40.0, 40.0,
+    150.0, 150.0, 150.0,
+    40.0, 40.0,
+    40.0, 40.0, 40.0, 40.0, 40.0, 20.0, 20.0,
+    40.0, 40.0, 40.0, 40.0, 40.0, 20.0, 20.0
+]
+
+MOTOR_KD: [
+    4.0, 4.0, 4.0, 4.0, 2.0, 2.0,
+    4.0, 4.0, 4.0, 4.0, 2.0, 2.0,
+    3.0, 3.0, 3.0,
+    2.0, 2.0,
+    2.0, 2.0, 2.0, 2.0, 2.0, 1.0, 1.0,
+    2.0, 2.0, 2.0, 2.0, 2.0, 1.0, 1.0
+]
+
+WeakMotorJointIndex:
+  left_hip_yaw_joint: 0
+
+NUM_MOTORS: 31
+NUM_JOINTS: 31
+
+# Default pose (motor slot order = BODY_JOINT_NAME_ORDER).
+# Keep this synchronized with deploy DefaultAngles() and H2_CFG.init_state.
+DEFAULT_DOF_ANGLES: [
+    -0.312, 0.0, 0.0, 0.669, -0.363, 0.0,
+    -0.312, 0.0, 0.0, 0.669, -0.363, 0.0,
+    0.0, 0.0, 0.0,
+    0.0, 0.0,
+    0.2, 0.2, 0.0, 0.6, 0.0, 0.0, 0.0,
+    0.2, -0.2, 0.0, 0.6, 0.0, 0.0, 0.0
+]
+
+# Motor angles used by the DDS bridge; keep equal to DOF angles in sim.
+# NOTE: YAML loader here does not expand ${...} expressions, so we duplicate.
+DEFAULT_MOTOR_ANGLES: [
+    -0.312, 0.0, 0.0, 0.669, -0.363, 0.0,
+    -0.312, 0.0, 0.0, 0.669, -0.363, 0.0,
+    0.0, 0.0, 0.0,
+    0.0, 0.0,
+    0.2, 0.2, 0.0, 0.6, 0.0, 0.0, 0.0,
+    0.2, -0.2, 0.0, 0.6, 0.0, 0.0, 0.0
+]
+
+# Per-joint effort limits used for torque clipping in sim.
+# Matched to the mjlab Unitree H2 actuator config.
+motor_effort_limit_list: [
+    360.0, 360.0, 360.0, 360.0, 66.0, 19.0,  # Left Leg
+    360.0, 360.0, 360.0, 360.0, 66.0, 19.0,  # Right Leg
+    120.0, 120.0, 120.0,                     # Waist
+    120.0, 120.0,                            # Head (not specified by mjlab; keep waist-class limit)
+    54.0, 54.0, 54.0, 54.0, 54.0, 25.0, 25.0,  # Left Arm
+    54.0, 54.0, 54.0, 54.0, 54.0, 25.0, 25.0   # Right Arm
+]

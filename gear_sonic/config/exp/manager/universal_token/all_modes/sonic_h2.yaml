@@ -37,6 +37,16 @@ manager_env:
   rewards:
     feet_acc:
       weight: -2.5e-6
+
+    tracking_anchor_ori:
+      weight: 1.0
+
+    tracking_relative_body_ori:
+      weight: 0.5
+      
+    anti_shake_ang_vel:
+      params:
+        body_names: ["left_wrist_yaw_link", "right_wrist_yaw_link", "head_yaw_link"]
   config:
     robot:
       type: h2
@@ -58,6 +68,7 @@ manager_env:
       motion_lib_cfg:
         adaptive_sampling:
           adp_samp_failure_rate_max_over_mean: 200
+        robot_type: h2
         motion_file: null
         smpl_motion_file: dummy
         smpl_y_up: true

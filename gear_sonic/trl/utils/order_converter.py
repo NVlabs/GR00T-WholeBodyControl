@@ -9,7 +9,6 @@ qpos format: [root_trans(3), root_quat(4), dof_angles(N)]
 
 from abc import ABC
 
-import numpy as np
 import torch
 
 
@@ -93,6 +92,48 @@ class IsaacLabMuJoCoConverter(ABC):
         """Number of actuated DOFs (excluding root)."""
         return len(self.DOF_MAPPINGS[(self.VALID_DOF_ORDERS[0], self.VALID_DOF_ORDERS[1])])
 
+    @property
+    def isaaclab_to_mujoco_dof(self):
+        """DOF reorder indices: IsaacLab -> MuJoCo."""
+        return self.DOF_MAPPINGS[("isaaclab", "mujoco")]
+
+    @property
+    def mujoco_to_isaaclab_dof(self):
+        """DOF reorder indices: MuJoCo -> IsaacLab."""
+        return self.DOF_MAPPINGS[("mujoco", "isaaclab")]
+
+    @property
+    def isaaclab_to_mujoco_body(self):
+        """Body reorder indices: IsaacLab -> MuJoCo."""
+        return self.BODY_MAPPINGS[("isaaclab", "mujoco")]
+
+    @property
+    def mujoco_to_isaaclab_body(self):
+        """Body reorder indices: MuJoCo -> IsaacLab."""
+        return self.BODY_MAPPINGS[("mujoco", "isaaclab")]
+
+    @property
+    def vr_3points_mujoco_indices(self):
+        """VR 3-point body indices in full MuJoCo body order."""
+        mj_names = [self.JOINT_NAMES[i] for i in self.isaaclab_to_mujoco_body]
+        return [mj_names.index(n) for n in self.VR_3POINTS_BODY_NAMES]
+
+    @property
+    def foot_mujoco_indices(self):
+        """Foot body indices in full MuJoCo body order."""
+        mj_names = [self.JOINT_NAMES[i] for i in self.isaaclab_to_mujoco_body]
+        return [mj_names.index(n) for n in self.FOOT_BODY_NAMES]
+
+    def get_isaaclab_to_mujoco_mapping(self):
+        """Return the full mapping dict for body/DOF reordering."""
+        return {
+            "isaaclab_joints": self.JOINT_NAMES,
+            "isaaclab_to_mujoco_dof": self.isaaclab_to_mujoco_dof,
+            "mujoco_to_isaaclab_dof": self.mujoco_to_isaaclab_dof,
+            "isaaclab_to_mujoco_body": self.isaaclab_to_mujoco_body,
+            "mujoco_to_isaaclab_body": self.mujoco_to_isaaclab_body,
+        }
+
 
 class G1Converter(IsaacLabMuJoCoConverter):
     """G1 ordering converter.
@@ -125,57 +166,6 @@ class G1Converter(IsaacLabMuJoCoConverter):
     VR_3POINTS_BODY_NAMES = ["torso_link", "left_wrist_yaw_link", "right_wrist_yaw_link"]
     FOOT_BODY_NAMES = ["left_ankle_roll_link", "right_ankle_roll_link"]
 
-    @property
-    def vr_3points_mujoco_indices(self):
-        """VR 3-point body indices in full (30-body) MuJoCo body order.
-
-        These index into the full body array after isaaclab_to_mujoco_body
-        reordering, NOT the 14-body motion.yaml body_names subset.
-        """
-        mj_names = [self.JOINT_NAMES[i] for i in self.isaaclab_to_mujoco_body]
-        return [mj_names.index(n) for n in self.VR_3POINTS_BODY_NAMES]
-
-    @property
-    def foot_mujoco_indices(self):
-        """Foot body indices in full (30-body) MuJoCo body order.
-
-        These index into the full body array after isaaclab_to_mujoco_body
-        reordering, NOT the 14-body motion.yaml body_names subset.
-        """
-        mj_names = [self.JOINT_NAMES[i] for i in self.isaaclab_to_mujoco_body]
-        return [mj_names.index(n) for n in self.FOOT_BODY_NAMES]
-
-    @property
-    def isaaclab_to_mujoco_dof(self):
-        """DOF reorder indices: IsaacLab -> MuJoCo."""
-        return self.DOF_MAPPINGS[("isaaclab", "mujoco")]
-
-    @property
-    def mujoco_to_isaaclab_dof(self):
-        """DOF reorder indices: MuJoCo -> IsaacLab."""
-        return self.DOF_MAPPINGS[("mujoco", "isaaclab")]
-
-    @property
-    def isaaclab_to_mujoco_body(self):
-        """Body reorder indices: IsaacLab -> MuJoCo."""
-        return self.BODY_MAPPINGS[("isaaclab", "mujoco")]
-
-    @property
-    def mujoco_to_isaaclab_body(self):
-        """Body reorder indices: MuJoCo -> IsaacLab."""
-        return self.BODY_MAPPINGS[("mujoco", "isaaclab")]
-
-    def get_isaaclab_to_mujoco_mapping(self):
-        """Return the full mapping dict for body/DOF reordering."""
-        return {
-            "isaaclab_joints": self.JOINT_NAMES,
-            "isaaclab_to_mujoco_dof": self.isaaclab_to_mujoco_dof,
-            "mujoco_to_isaaclab_dof": self.mujoco_to_isaaclab_dof,
-            "isaaclab_to_mujoco_body": self.isaaclab_to_mujoco_body,
-            "mujoco_to_isaaclab_body": self.mujoco_to_isaaclab_body,
-        }
-
-
 class H2Converter(IsaacLabMuJoCoConverter):
     """H2 robot joint/body order converter between IsaacLab and MuJoCo conventions."""
 
@@ -200,6 +190,44 @@ class H2Converter(IsaacLabMuJoCoConverter):
 
     VR_3POINTS_BODY_NAMES = ["torso_link", "left_wrist_pitch_link", "right_wrist_pitch_link"]
     FOOT_BODY_NAMES = ["left_ankle_roll_link", "right_ankle_roll_link"]
+
+
+class T1Converter(IsaacLabMuJoCoConverter):
+    """Booster T1 robot joint/body order converter."""
+
+    VR_3POINTS_BODY_NAMES = ["Trunk", "left_hand_link", "right_hand_link"]
+    FOOT_BODY_NAMES = ["left_foot_link", "right_foot_link"]
+
+    def __init__(self):
+        from gear_sonic.envs.manager_env.robots.t1 import (
+            T1_ISAACLAB_JOINTS,
+            T1_ISAACLAB_TO_MUJOCO_BODY,
+            T1_ISAACLAB_TO_MUJOCO_DOF,
+            T1_MUJOCO_TO_ISAACLAB_BODY,
+            T1_MUJOCO_TO_ISAACLAB_DOF,
+        )
+
+        self.JOINT_NAMES = T1_ISAACLAB_JOINTS
+        self.DOF_MAPPINGS = {
+            ("isaaclab", "mujoco"): T1_ISAACLAB_TO_MUJOCO_DOF,
+            ("mujoco", "isaaclab"): T1_MUJOCO_TO_ISAACLAB_DOF,
+        }
+        self.BODY_MAPPINGS = {
+            ("isaaclab", "mujoco"): T1_ISAACLAB_TO_MUJOCO_BODY,
+            ("mujoco", "isaaclab"): T1_MUJOCO_TO_ISAACLAB_BODY,
+        }
+
+
+def get_converter(robot_type: str) -> IsaacLabMuJoCoConverter:
+    """Return the DOF/body order converter for a robot type."""
+    normalized = robot_type.lower()
+    if normalized in ("g1", "g1_model_12_dex"):
+        return G1Converter()
+    if normalized == "h2":
+        return H2Converter()
+    if normalized in ("t1", "booster_t1", "booster-t1"):
+        return T1Converter()
+    raise ValueError(f"Unsupported robot type for converter lookup: {robot_type}")
 
 
 def load_qpos_from_csv(csv_path: str) -> torch.Tensor:

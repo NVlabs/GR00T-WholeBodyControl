@@ -231,13 +231,17 @@ class TrackingCommand(CommandTerm):
         self.motion_lib = motion_lib_robot.MotionLibRobot(
             motion_lib_cfg, self.num_envs, self.device
         )
-        if max_num_load_motions is None:
-            if self.cfg.use_paired_motions:
-                self.max_num_load_motions = self.motion_lib._num_unique_motions  # noqa: SLF001
-            else:
-                self.max_num_load_motions = min(self.num_envs, 1024)
+        cfg_max_num_load_motions = motion_lib_cfg.get("max_num_load_motions", None)
+
+        if max_num_load_motions is not None:
+            self.max_num_load_motions = int(max_num_load_motions)
+        elif cfg_max_num_load_motions is not None:
+            self.max_num_load_motions = int(cfg_max_num_load_motions)
+        elif self.cfg.use_paired_motions:
+            self.max_num_load_motions = self.motion_lib._num_unique_motions
         else:
-            self.max_num_load_motions = max_num_load_motions
+            self.max_num_load_motions = min(self.num_envs, 1024)
+            
         self.motion_lib.load_motions_for_training(max_num_seqs=self.max_num_load_motions)
         self.use_adaptive_sampling = self.motion_lib.use_adaptive_sampling
 
