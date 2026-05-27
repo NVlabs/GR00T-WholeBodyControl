@@ -88,7 +88,8 @@ class ZMQManager : public InputInterface {
       const std::string& command_topic = "command",
       const std::string& planner_topic = "planner",
       bool zmq_conflate = false,
-      bool zmq_verbose = false
+      bool zmq_verbose = false,
+      Vr3PtSafetyFilter::Config vr3pt_filter_config = Vr3PtSafetyFilter::Config{}
     ) : InputInterface(), 
         zmq_host_(zmq_host), 
         zmq_port_(zmq_port), 
@@ -96,7 +97,8 @@ class ZMQManager : public InputInterface {
         command_topic_(command_topic),
         planner_topic_(planner_topic),
         zmq_conflate_(zmq_conflate), 
-        zmq_verbose_(zmq_verbose) {
+        zmq_verbose_(zmq_verbose),
+        vr3pt_filter_(vr3pt_filter_config) {
       
       type_ = InputType::NETWORK;
       active_mode_ = ManagedMode::PLANNER;  // Default to planner mode
@@ -150,6 +152,15 @@ class ZMQManager : public InputInterface {
       std::cout << "    Format: { start: bool, stop: bool, planner: bool }" << std::endl;
       std::cout << "  - Planner topic: '" << planner_topic_ << "' (movement)" << std::endl;
       std::cout << "  - Pose topic: '" << pose_topic_ << "' (streamed motion)" << std::endl;
+      if (vr3pt_filter_config.enabled) {
+        std::cout << "  - VR_3PT safety filter: max position step "
+                  << vr3pt_filter_config.max_position_step_m << " m, max orientation step "
+                  << (vr3pt_filter_config.max_orientation_step_rad * 180.0 / M_PI)
+                  << " deg, stop after " << vr3pt_filter_config.violation_streak_estop
+                  << " rejects" << std::endl;
+      } else {
+        std::cout << "  - VR_3PT safety filter: DISABLED" << std::endl;
+      }
     }
     
     ~ZMQManager() {

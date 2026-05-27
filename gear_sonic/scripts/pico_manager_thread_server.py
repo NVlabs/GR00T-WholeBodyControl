@@ -2802,6 +2802,7 @@ def run_pico_manager(
     vr3pt_entry_wrist_orn_max_deg: float = 45.0,
     controller_3pt_log_dir: str = "",
     controller_3pt_log_interval: float = 1.0,
+    disable_xr_staleness_watchdog: bool = False,
 ):
     """
     Manager: creates shared PUB socket and runs pose/planner streamers based on current mode.
@@ -2955,6 +2956,8 @@ def run_pico_manager(
     prev_toggle_dc = False
     prev_toggle_da = False
     xr_watchdog = XRStalenessWatchdog()
+    if disable_xr_staleness_watchdog:
+        print("WARNING: XR staleness watchdog disabled.")
     try:
         prev_ax_pressed = False
         prev_by_pressed = False
@@ -2978,19 +2981,20 @@ def run_pico_manager(
             # Rising edge: A+B+X+Y pressed together -> toggle policy start/stop (planner=True)
             start_combo = bool(a_pressed) and bool(b_pressed) and bool(x_pressed) and bool(y_pressed)
 
-            xr_state = xr_watchdog.poll(
-                reader.get_last_sample_monotonic_ns()
-                if controller_3pt and hasattr(reader, "get_last_sample_monotonic_ns")
-                else None,
-                time.monotonic_ns(),
-                active=controller_3pt and current_mode == StreamMode.PLANNER_VR_3PT,
-            )
-            if xr_state == "warn":
-                planner_streamer.freeze_vr3pt_target_once = True
-            elif xr_state == "estop":
-                print("[Manager] XR staleness E-STOP: stopping policy and exiting")
-                socket.send(build_command_message(start=False, stop=True, planner=True))
-                exit()
+            if not disable_xr_staleness_watchdog:
+                xr_state = xr_watchdog.poll(
+                    reader.get_last_sample_monotonic_ns()
+                    if controller_3pt and hasattr(reader, "get_last_sample_monotonic_ns")
+                    else None,
+                    time.monotonic_ns(),
+                    active=controller_3pt and current_mode == StreamMode.PLANNER_VR_3PT,
+                )
+                if xr_state == "warn":
+                    planner_streamer.freeze_vr3pt_target_once = True
+                elif xr_state == "estop":
+                    print("[Manager] XR staleness E-STOP: stopping policy and exiting")
+                    socket.send(build_command_message(start=False, stop=True, planner=True))
+                    exit()
 
             if (
                 controller_3pt
@@ -3401,6 +3405,11 @@ if __name__ == "__main__":
         default=1.0,
         help="Seconds between saved controller/G1 frame logs while in VR_3PT.",
     )
+    parser.add_argument(
+        "--disable_xr_staleness_watchdog",
+        action="store_true",
+        help="Disable manager-side XR stale-frame stop/freeze checks. Use only for harnessed diagnostics.",
+    )
     args = parser.parse_args()
 
     # Standalone VR3Pt test modes (exit after finishing)
@@ -3458,6 +3467,7 @@ if __name__ == "__main__":
             vr3pt_entry_wrist_orn_max_deg=args.vr3pt_entry_wrist_orn_max_deg,
             controller_3pt_log_dir=args.controller_3pt_log_dir,
             controller_3pt_log_interval=args.controller_3pt_log_interval,
+            disable_xr_staleness_watchdog=args.disable_xr_staleness_watchdog,
         )
     else:
         # Run legacy single-thread pose streaming

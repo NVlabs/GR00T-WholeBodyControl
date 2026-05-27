@@ -2164,7 +2164,8 @@ class G1Deploy {
       bool enable_motion_recording = false,
       std::array<double, 3> initial_compliance = {0.05, 0.05, 0.0},
       double initial_max_close_ratio = 1.0,
-      bool enable_dex3_hands = true)
+      bool enable_dex3_hands = true,
+      Vr3PtSafetyFilter::Config vr3pt_filter_config = Vr3PtSafetyFilter::Config{})
       : time_(0.0),
         publish_dt_(0.002),
         control_dt_(0.02),
@@ -2498,7 +2499,8 @@ class G1Deploy {
       }
       else if (input_type == "zmq_manager") {
         input_interface_ = std::make_unique<ZMQManager>(
-          zmq_host, zmq_port, zmq_topic, "command", "planner", zmq_conflate, zmq_verbose
+          zmq_host, zmq_port, zmq_topic, "command", "planner", zmq_conflate,
+          zmq_verbose, vr3pt_filter_config
         );
         std::cout << "Initialized ZMQ manager" << std::endl;
         std::cout << "  Host: " << zmq_host << ":" << zmq_port << std::endl;
@@ -4209,6 +4211,10 @@ int main(int argc, char const* argv[]) {
     std::cout << "                             0.2 = limited (80% open), 1.0 = full closure allowed" << std::endl;
     std::cout << "                             Keyboard controls: x/c = +/- 0.1 (always available)" << std::endl;
     std::cout << "  --disable-dex3-hands: skip Dex3 hand DDS publishers/subscribers" << std::endl;
+    std::cout << "  --disable-vr3pt-safety-filter: pass VR_3PT targets through without deploy-side jump checks" << std::endl;
+    std::cout << "  --vr3pt-filter-max-position-step <meters>: max accepted VR_3PT per-frame point jump (default: 0.03)" << std::endl;
+    std::cout << "  --vr3pt-filter-max-orientation-step-deg <deg>: max accepted VR_3PT per-frame quat jump (default: 5)" << std::endl;
+    std::cout << "  --vr3pt-filter-estop-streak <count>: consecutive rejected VR_3PT frames before stop (default: 10)" << std::endl;
     std::cout << "\nExamples:" << std::endl;
     std::cout << "  " << argv[0] << " enp5s0 policy/single_frame/model.onnx reference/bones_072925_test/ --planner-file policy/planner.onnx --obs-config policy/single_frame/observation_config.yaml --disable-crc-check" << std::endl;
     std::cout << "  " << argv[0] << " enp5s0 policy/token/model.onnx reference/bones_072925_test/ --obs-config policy/token/observation_config.yaml --encoder-file policy/token/encoder.onnx" << std::endl;
@@ -4253,6 +4259,7 @@ int main(int argc, char const* argv[]) {
   std::array<double, 3> initial_compliance = {0.5, 0.5, 0.0}; // initial compliance is 0.5 for both hands (keyboard controllable)
   double initial_max_close_ratio = 1.0; // default allows full closure, use --max-close-ratio to limit
   bool enable_dex3_hands = true;
+  Vr3PtSafetyFilter::Config vr3pt_filter_config;
   for (int i = 4; i < argc; i++) {
     if (std::string(argv[i]) == "--disable-crc-check") {
       disableCrcCheck = true;
@@ -4433,6 +4440,40 @@ int main(int argc, char const* argv[]) {
     } else if (std::string(argv[i]) == "--disable-dex3-hands") {
       enable_dex3_hands = false;
       std::cout << "[INFO] Dex3 hands disabled" << std::endl;
+    } else if (std::string(argv[i]) == "--disable-vr3pt-safety-filter") {
+      vr3pt_filter_config.enabled = false;
+      std::cout << "[INFO] VR_3PT safety filter disabled" << std::endl;
+    } else if (std::string(argv[i]) == "--vr3pt-filter-max-position-step") {
+      if (i + 1 < argc) {
+        vr3pt_filter_config.max_position_step_m = std::stod(argv[i + 1]);
+        std::cout << "[INFO] VR_3PT filter max position step: "
+                  << vr3pt_filter_config.max_position_step_m << " m" << std::endl;
+        i++;
+      } else {
+        std::cerr << "Error: --vr3pt-filter-max-position-step requires a value argument" << std::endl;
+        exit(1);
+      }
+    } else if (std::string(argv[i]) == "--vr3pt-filter-max-orientation-step-deg") {
+      if (i + 1 < argc) {
+        const double deg = std::stod(argv[i + 1]);
+        vr3pt_filter_config.max_orientation_step_rad = deg * M_PI / 180.0;
+        std::cout << "[INFO] VR_3PT filter max orientation step: "
+                  << deg << " deg" << std::endl;
+        i++;
+      } else {
+        std::cerr << "Error: --vr3pt-filter-max-orientation-step-deg requires a value argument" << std::endl;
+        exit(1);
+      }
+    } else if (std::string(argv[i]) == "--vr3pt-filter-estop-streak") {
+      if (i + 1 < argc) {
+        vr3pt_filter_config.violation_streak_estop = std::stoi(argv[i + 1]);
+        std::cout << "[INFO] VR_3PT filter E-stop streak: "
+                  << vr3pt_filter_config.violation_streak_estop << std::endl;
+        i++;
+      } else {
+        std::cerr << "Error: --vr3pt-filter-estop-streak requires a value argument" << std::endl;
+        exit(1);
+      }
     } else if (std::string(argv[i]) == "--set-compliance") {
       if (i + 1 < argc) {
         // Parse compliance values (can be 1 or 3 values)
@@ -4518,7 +4559,8 @@ int main(int argc, char const* argv[]) {
     enableMotionRecording,
     initial_compliance,
     initial_max_close_ratio,
-    enable_dex3_hands
+    enable_dex3_hands,
+    vr3pt_filter_config
   );
   std::cout << "[DEBUG] G1Deploy object created successfully!" << std::endl;
   

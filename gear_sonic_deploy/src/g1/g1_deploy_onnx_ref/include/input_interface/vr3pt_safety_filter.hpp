@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <iomanip>
 #include <iostream>
 
 #ifndef M_PI
@@ -19,6 +20,7 @@
 class Vr3PtSafetyFilter {
  public:
   struct Config {
+    bool enabled = true;
     double max_position_step_m = 0.03;
     double max_orientation_step_rad = M_PI / 36.0;
     int violation_streak_estop = 10;
@@ -44,6 +46,16 @@ class Vr3PtSafetyFilter {
       return EmitLastGood(result, "NaN/Inf/invalid-quat");
     }
 
+    if (!cfg_.enabled) {
+      initialized_ = true;
+      violation_streak_ = 0;
+      last_pos_ = new_pos;
+      last_orn_ = NormalizedOrientation(new_orn);
+      result.position = new_pos;
+      result.orientation = last_orn_;
+      return result;
+    }
+
     if (!initialized_) {
       initialized_ = true;
       violation_streak_ = 0;
@@ -55,11 +67,17 @@ class Vr3PtSafetyFilter {
     }
 
     const auto normalized_orn = NormalizedOrientation(new_orn);
-    if (MaxPositionStep(last_pos_, new_pos) > cfg_.max_position_step_m) {
-      return EmitLastGood(result, "position-step");
+    const double max_position_step = MaxPositionStep(last_pos_, new_pos);
+    const double max_orientation_step = MaxQuatAngle(last_orn_, normalized_orn);
+    if (max_position_step > cfg_.max_position_step_m) {
+      return EmitLastGood(
+          result, "position-step", max_position_step, cfg_.max_position_step_m,
+          "m");
     }
-    if (MaxQuatAngle(last_orn_, normalized_orn) > cfg_.max_orientation_step_rad) {
-      return EmitLastGood(result, "orientation-step");
+    if (max_orientation_step > cfg_.max_orientation_step_rad) {
+      return EmitLastGood(
+          result, "orientation-step", max_orientation_step,
+          cfg_.max_orientation_step_rad, "rad");
     }
 
     violation_streak_ = 0;
@@ -82,10 +100,17 @@ class Vr3PtSafetyFilter {
   }
 
  private:
-  Result EmitLastGood(Result result, const char* reason) {
+  Result EmitLastGood(Result result,
+                      const char* reason,
+                      double observed = 0.0,
+                      double limit = 0.0,
+                      const char* unit = "") {
     ++violation_streak_;
     if (violation_streak_ % 5 == 1) {
       std::cerr << "[Vr3PtSafetyFilter] reject: " << reason
+                << " observed=" << std::fixed << std::setprecision(4)
+                << observed << unit
+                << " limit=" << limit << unit
                 << " streak=" << violation_streak_ << std::endl;
     }
     result.used_last_good = true;
