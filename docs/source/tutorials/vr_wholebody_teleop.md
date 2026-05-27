@@ -137,9 +137,11 @@ There are 4 modes and 2 control chains. Each chain forms a triangle: **A+X** (or
     PLANNER_FROZEN_UPPER ── L-Stick (+CALIB) ──► VR_3PT
          ▲     │ ◄──────── L-Stick ──────────     │
          │     │                                  │
-         │B+Y  │B+Y                          B+Y  │
-         │     ▼                                  ▼
-         └── POSE ◄───────────────────────────────┘
+         │B+Y  │B+Y                               │B+Y
+         │     ▼                                  │
+         └── POSE                                 │
+         ▲                                        │
+         └──────────────────── A+X ───────────────┘
 ```
 
 ```{admonition} DANGER — Mode-Switching Safety
@@ -211,7 +213,7 @@ Below is the **recovery procedure** — if you accidentally enter a badly calibr
 |---|---|---|
 | **Start / Stop policy** | **A+B+X+Y** | First press: engage + CALIB_FULL. Again: emergency stop → OFF. |
 | **Toggle POSE** | **A+X** | Switches between PLANNER ↔ POSE. OR from VR_3PT (entered via PLANNER) → POSE. |
-| **Toggle PLANNER_FROZEN_UPPER** | **B+Y** | Switches between POSE ↔ PLANNER_FROZEN_UPPER. OR from VR_3PT (entered via PLANNER_FROZEN_UPPER) → POSE. |
+| **Toggle PLANNER_FROZEN_UPPER** | **B+Y** | Switches between POSE ↔ PLANNER_FROZEN_UPPER. From VR_3PT, freezes the current upper-body state and enters PLANNER_FROZEN_UPPER. |
 | **Toggle VR_3PT** | **Left Stick Click** | From any Planner mode → VR_3PT (triggers CALIB). Click again to return. |
 | **Hand grasp** | **Trigger** (per hand) | Controls the corresponding hand's grasp. |
 

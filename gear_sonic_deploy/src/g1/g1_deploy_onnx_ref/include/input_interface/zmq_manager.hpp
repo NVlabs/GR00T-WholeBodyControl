@@ -54,6 +54,7 @@
 
 #include "input_interface.hpp"
 #include "input_command.hpp"
+#include "vr3pt_safety_filter.hpp"
 #include "zmq_endpoint_interface.hpp"
 #include "zmq_packed_message_subscriber.hpp"
 #include "../localmotion_kplanner.hpp"  // For LocomotionMode enum
@@ -306,10 +307,27 @@ class ZMQManager : public InputInterface {
                       PlannerState& planner_state,
                       DataBuffer<MovementState>& movement_state_buffer,
                       std::mutex& current_motion_mutex,
-                      bool& report_temperature) override {
+      bool& report_temperature) override {
       if (!has_planner) {
         std::cerr << "[ZMQCommandManager ERROR] Planner not available in planner mode" << std::endl;
         operator_state.stop = true;
+        return;
+      }
+      if (vr3pt_estop_requested_) {
+        std::cerr << "[ZMQManager] VR_3PT safety filter escalated -> STOP" << std::endl;
+        operator_state.stop = true;
+        if (planner_state.enabled) {
+          planner_state.enabled = false;
+          planner_state.initialized = false;
+        }
+        {
+          std::lock_guard<std::mutex> lock(planner_mutex_);
+          latest_planner_message_.valid = false;
+          latest_planner_message_.timestamp = {};
+        }
+        has_vr_3point_control_ = false;
+        has_upper_body_control_ = false;
+        has_hand_joints_ = false;
         return;
       }
       // Emergency stop
@@ -1151,6 +1169,14 @@ class ZMQManager : public InputInterface {
       // Handle VR 3-point tracking: vr_position is required, orientation and compliance are optional
       // If vr_position is present, set has_vr_3point_control_ = true and update all buffers
       if (has_vr_position) {
+        const auto filter_result = vr3pt_filter_.Filter(
+            vr_position_values, vr_orientation_values);
+        if (filter_result.estop_triggered) {
+          vr3pt_estop_requested_ = true;
+        }
+        vr_position_values = filter_result.position;
+        vr_orientation_values = filter_result.orientation;
+
         // Always update all three buffers when VR position is present
         // (orientation and compliance will use defaults if not provided)
         vr_3point_position_.SetData(vr_position_values);
@@ -1192,6 +1218,7 @@ class ZMQManager : public InputInterface {
       else {
         // No VR position provided - disable VR 3-point control
         has_vr_3point_control_ = false;
+        vr3pt_filter_.Reset();
       }
 
       // Update buffer directly (no queue) and set timestamp
@@ -1252,6 +1279,8 @@ class ZMQManager : public InputInterface {
     /// Tracks the previous frame's VR-3-point state to detect enable/disable transitions
     /// and automatically toggle encoder mode accordingly.
     bool last_has_vr_3point_control_ = false;
+    Vr3PtSafetyFilter vr3pt_filter_;
+    bool vr3pt_estop_requested_ = false;
 };
 
 #endif // ZMQ_MANAGER_HPP

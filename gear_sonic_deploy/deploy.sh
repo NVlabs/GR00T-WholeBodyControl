@@ -540,6 +540,8 @@ echo ""
 # Ask for confirmation
 if [[ "$ENV_TYPE" == "real" ]]; then
     echo -e "${YELLOW}⚠️  WARNING: This will start the REAL robot control system!${NC}"
+    chmod +x scripts/preflight.sh
+    scripts/preflight.sh
 else
     echo -e "${YELLOW}📋 This will start the simulation control system.${NC}"
 fi
