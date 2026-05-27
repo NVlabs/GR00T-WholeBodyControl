@@ -32,6 +32,8 @@ import zmq
 
 from gear_sonic.data.exporter import Gr00tDataExporter
 from gear_sonic.data.features_sonic_vla import (
+    EGO_VIEW_HEIGHT,
+    EGO_VIEW_WIDTH,
     get_features_sonic_vla,
     get_g1_robot_model,
     get_modality_config_sonic_vla,
@@ -99,6 +101,9 @@ class SonicDataExporterConfig:
 
     record_wrist_cameras: bool = False
     """Record wrist camera streams (left_wrist, right_wrist). Requires cameras to be available."""
+
+    use_dummy_camera: bool = False
+    """Use a black ego-view image instead of connecting to a camera server."""
 
     text_to_speech: bool = True
     """Use text-to-speech voice feedback."""
@@ -227,6 +232,7 @@ class GrootDataCollector:
         sonic_data_zmq_port: int = 5556,
         state_zmq_host: str = "localhost",
         state_zmq_port: int = 5557,
+        use_dummy_camera: bool = False,
     ):
         self.text_to_speech = text_to_speech
         self.frequency = frequency
@@ -237,7 +243,15 @@ class GrootDataCollector:
         self._episode_state = EpisodeState()
         self._keyboard_listener = ZMQKeyboardSubscriber()
 
-        self._image_subscriber = ComposedCameraClientSensor(server_ip=camera_host, port=camera_port)
+        self.use_dummy_camera = use_dummy_camera
+        self._dummy_image = np.zeros((EGO_VIEW_HEIGHT, EGO_VIEW_WIDTH, 3), dtype=np.uint8)
+        if self.use_dummy_camera:
+            self._image_subscriber = None
+            print("[Camera] Dummy camera enabled — writing black ego_view frames")
+        else:
+            self._image_subscriber = ComposedCameraClientSensor(
+                server_ip=camera_host, port=camera_port
+            )
 
         self.obs_act_buffer = deque(maxlen=100)
         self.latest_image_msg = None
@@ -304,6 +318,14 @@ class GrootDataCollector:
             msg["ros_timestamp"] = time.time()
 
         self.latest_proprio_msg = msg
+
+    def _read_image_msg(self):
+        if self.use_dummy_camera:
+            return {
+                "images": {"ego_view": self._dummy_image.copy()},
+                "timestamps": {"ego_view": time.time()},
+            }
+        return self._image_subscriber.read()
 
     def _check_recording_commands(self):
         """Check keyboard + ZMQ toggle flags for recording commands."""
@@ -871,7 +893,7 @@ class GrootDataCollector:
                         self._poll_sonic_zmq_messages()
 
                     with self.telemetry.timer("poll_image"):
-                        img_msg = self._image_subscriber.read()
+                        img_msg = self._read_image_msg()
                         if img_msg is not None:
                             self.latest_image_msg = img_msg
 
@@ -936,7 +958,11 @@ def main(config: SonicDataExporterConfig):
         features=dataset_features,
         modality_config=modality_config,
         task=config.task_prompt,
-        script_config={**robot_config, "record_wrist_cameras": config.record_wrist_cameras},
+        script_config={
+            **robot_config,
+            "record_wrist_cameras": config.record_wrist_cameras,
+            "use_dummy_camera": config.use_dummy_camera,
+        },
     )
 
     data_collector = GrootDataCollector(
@@ -950,6 +976,7 @@ def main(config: SonicDataExporterConfig):
         sonic_data_zmq_port=config.sonic_zmq_port,
         state_zmq_host=config.state_zmq_host,
         state_zmq_port=config.state_zmq_port,
+        use_dummy_camera=config.use_dummy_camera,
     )
     data_collector.run()
 
