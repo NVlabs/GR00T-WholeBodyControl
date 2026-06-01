@@ -5,6 +5,8 @@ The header describes field names, dtypes, and shapes so the receiver can
 deserialize without out-of-band schema knowledge.
 """
 
+from __future__ import annotations
+
 import json
 import struct
 from typing import Sequence
