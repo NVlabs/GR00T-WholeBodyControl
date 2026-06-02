@@ -17,6 +17,7 @@ from gear_sonic.utils.teleop.xr_upperbody_bridge import (
     run_local_zmq_smoke,
     split_xr_dex3_dual_hand_joints,
     synthesize_missing_velocities,
+    unpack_bridge_message,
     xr_g1_29_arm_to_sonic_upper_body,
 )
 
@@ -159,6 +160,8 @@ def test_live_payload_control_flags_are_source_lifecycle_metadata() -> None:
             "toggle_data_collection": True,
             "toggle_data_abort": True,
             "stop": True,
+            "ramp_phase": "in",
+            "ramp_alpha": 0.25,
         }
     )
 
@@ -167,6 +170,8 @@ def test_live_payload_control_flags_are_source_lifecycle_metadata() -> None:
     assert frame.toggle_data_collection is True
     assert frame.toggle_data_abort is True
     assert frame.stop is True
+    assert frame.ramp_phase == "in"
+    assert frame.ramp_alpha == 0.25
 
     planner_message = build_frame_planner_message(frame, BridgeConfig())
     planner_header = _decode_header(planner_message)
@@ -292,6 +297,55 @@ def test_filter_clips_and_limits_position_steps() -> None:
 
     assert np.allclose(first, np.full(17, 0.9))
     assert np.allclose(second, np.full(17, 1.0))
+
+
+def test_filter_can_seed_from_measured_position() -> None:
+    config = BridgeConfig(max_abs_joint=1.0, max_joint_step=0.25)
+    filt = UpperBodyFilter(config)
+    filt.seed(np.zeros(17, dtype=np.float32))
+    first = filt.apply(np.full(17, 0.9, dtype=np.float32))
+
+    assert np.allclose(first, np.full(17, 0.25))
+
+
+def test_start_ramp_blends_from_feedback_seed_to_target() -> None:
+    config = BridgeConfig(max_abs_joint=2.0, max_joint_step=2.0)
+    filt = UpperBodyFilter(config)
+    filt.seed(np.zeros(17, dtype=np.float32))
+    frame = load_frames(
+        [
+            {
+                "upper_body_position": [1.0] * 17,
+                "ramp_phase": "in",
+                "ramp_alpha": 0.5,
+            }
+        ]
+    )[0]
+
+    message = build_frame_planner_message(frame, config, filt)
+    upper = unpack_bridge_message(message, topic="planner")["upper_body_position"]
+
+    assert np.allclose(upper, np.full(17, 0.5))
+
+
+def test_exit_ramp_keeps_bridge_rate_limiter_active() -> None:
+    config = BridgeConfig(max_abs_joint=2.0, max_joint_step=0.2)
+    filt = UpperBodyFilter(config)
+    filt.seed(np.ones(17, dtype=np.float32))
+    frame = load_frames(
+        [
+            {
+                "upper_body_position": [0.25] * 17,
+                "ramp_phase": "out",
+                "ramp_alpha": 0.75,
+            }
+        ]
+    )[0]
+
+    message = build_frame_planner_message(frame, config, filt)
+    upper = unpack_bridge_message(message, topic="planner")["upper_body_position"]
+
+    assert np.allclose(upper, np.full(17, 0.8))
 
 
 def test_build_planner_message_fields() -> None:

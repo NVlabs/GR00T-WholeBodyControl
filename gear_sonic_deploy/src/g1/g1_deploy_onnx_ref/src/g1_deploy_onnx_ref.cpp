@@ -301,6 +301,7 @@ class G1Deploy {
 
     static constexpr double kTeleopOutputRampDuration = 1.0;
     bool last_has_vr_3point_data_ = false;
+    bool last_has_upper_body_data_ = false;
     bool teleop_output_ramp_active_ = false;
     double teleop_output_ramp_elapsed_ = 0.0;
     std::array<double, G1_NUM_MOTOR> teleop_output_ramp_start_q_{};
@@ -3041,6 +3042,13 @@ class G1Deploy {
             has_vr_3point_data_ ? "enter VR_3PT" : "exit VR_3PT");
       }
       last_has_vr_3point_data_ = has_vr_3point_data_;
+
+      if (has_upper_body_data_ != last_has_upper_body_data_) {
+        StartTeleopOutputRamp(
+            has_upper_body_data_ ? "enter upper-body joint teleop"
+                                 : "exit upper-body joint teleop");
+      }
+      last_has_upper_body_data_ = has_upper_body_data_;
 
       auto last_update_time = input_interface_->GetLastUpdateTime();
       if (last_update_time.has_value()) {

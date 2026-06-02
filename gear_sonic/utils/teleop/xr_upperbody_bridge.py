@@ -29,6 +29,7 @@ UPPER_BODY_DOF = 17
 XR_G1_29_ARM_DOF = 14
 HAND_DOF = 7
 DUAL_HAND_DOF = 14
+G1_UPPER_BODY_JOINT_INDICES = [12, 13, 14, 15, 22, 16, 23, 17, 24, 18, 25, 19, 26, 20, 27, 21, 28]
 
 
 @dataclass(frozen=True)
@@ -49,6 +50,8 @@ class UpperBodyFrame:
     toggle_data_collection: bool = False
     toggle_data_abort: bool = False
     stop: bool = False
+    ramp_phase: str = "track"
+    ramp_alpha: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -56,7 +59,7 @@ class BridgeConfig:
     """Runtime safety defaults for the upper-body bridge."""
 
     max_abs_joint: float = 3.14
-    max_joint_step: float = 0.35
+    max_joint_step: float = 0.03
 
 
 class UpperBodyFilter:
@@ -68,6 +71,15 @@ class UpperBodyFilter:
 
     def reset(self) -> None:
         self._last_position = None
+
+    def seed(self, position: Sequence[float]) -> None:
+        """Initialize rate limiting from the robot's current measured position."""
+
+        self._last_position = np.clip(
+            np.asarray(position, dtype=np.float32).reshape(UPPER_BODY_DOF),
+            -self._config.max_abs_joint,
+            self._config.max_abs_joint,
+        )
 
     def apply(self, position: np.ndarray) -> np.ndarray:
         clipped = np.clip(
@@ -88,6 +100,71 @@ class UpperBodyFilter:
         limited = np.clip(limited, -self._config.max_abs_joint, self._config.max_abs_joint)
         self._last_position = limited
         return limited.copy()
+
+    def apply_ramped(self, position: np.ndarray, *, ramp_phase: str, ramp_alpha: float) -> np.ndarray:
+        clipped = np.clip(
+            np.asarray(position, dtype=np.float32),
+            -self._config.max_abs_joint,
+            self._config.max_abs_joint,
+        )
+        if ramp_phase in {"start", "in", "resume"} and self._last_position is not None:
+            alpha = float(np.clip(ramp_alpha, 0.0, 1.0))
+            ramped = (1.0 - alpha) * self._last_position + alpha * clipped
+            self._last_position = np.asarray(ramped, dtype=np.float32)
+            return self._last_position.copy()
+        return self.apply(clipped)
+
+
+def _upper_body_from_feedback_payload(payload: dict[str, Any]) -> np.ndarray | None:
+    body_q = payload.get("body_q_measured", payload.get("body_q"))
+    if body_q is None:
+        return None
+    body_q_array = np.asarray(body_q, dtype=np.float32).reshape(-1)
+    if body_q_array.shape[0] < max(G1_UPPER_BODY_JOINT_INDICES) + 1:
+        return None
+    return body_q_array[G1_UPPER_BODY_JOINT_INDICES].astype(np.float32)
+
+
+def _read_feedback_upper_body(
+    *,
+    context: Any,
+    host: str,
+    port: int,
+    topic: str,
+    timeout_s: float,
+) -> np.ndarray | None:
+    if timeout_s <= 0.0:
+        return None
+    try:
+        import msgpack
+        import zmq
+    except ImportError:
+        return None
+
+    sub = context.socket(zmq.SUB)
+    sub.setsockopt_string(zmq.SUBSCRIBE, topic)
+    sub.setsockopt(zmq.RCVTIMEO, min(100, max(1, int(timeout_s * 1000))))
+    sub.connect(f"tcp://{host}:{port}")
+    deadline = time.monotonic() + timeout_s
+    latest_upper: np.ndarray | None = None
+    try:
+        while time.monotonic() < deadline:
+            try:
+                raw = sub.recv()
+            except zmq.Again:
+                continue
+            payload_bytes = raw[len(topic) :] if raw.startswith(topic.encode()) else raw
+            try:
+                payload = msgpack.unpackb(payload_bytes, raw=False)
+            except Exception:
+                continue
+            if isinstance(payload, dict):
+                upper = _upper_body_from_feedback_payload(payload)
+                if upper is not None:
+                    latest_upper = upper
+    finally:
+        sub.close(linger=0)
+    return latest_upper
 
 
 def _as_vector(value: Any, *, name: str, size: int, default: float | None = None) -> np.ndarray:
@@ -258,6 +335,8 @@ def frame_from_mapping(data: dict[str, Any]) -> UpperBodyFrame:
         toggle_data_collection=bool(data.get("toggle_data_collection", False)),
         toggle_data_abort=bool(data.get("toggle_data_abort", False)),
         stop=bool(data.get("stop", False)),
+        ramp_phase=str(data.get("ramp_phase", "track")),
+        ramp_alpha=float(data.get("ramp_alpha", 1.0)),
     )
 
 
@@ -465,8 +544,14 @@ def build_frame_planner_message(
 ) -> bytes:
     """Convert one frame to the existing GEAR-SONIC planner ZMQ message."""
 
-    filtered_position = filt.apply(frame.upper_body_position) if filt is not None else np.clip(
-        frame.upper_body_position, -config.max_abs_joint, config.max_abs_joint
+    filtered_position = (
+        filt.apply_ramped(
+            frame.upper_body_position,
+            ramp_phase=frame.ramp_phase,
+            ramp_alpha=frame.ramp_alpha,
+        )
+        if filt is not None
+        else np.clip(frame.upper_body_position, -config.max_abs_joint, config.max_abs_joint)
     )
     return build_planner_message(
         frame.mode,
@@ -568,7 +653,37 @@ def _send_zmq_json_loop(args: argparse.Namespace) -> int:
     pub = context.socket(zmq.PUB)
     pub.bind(f"tcp://{args.bind_host}:{args.port}")
     time.sleep(args.pub_warmup_s)
-    pub.send(build_command_message(start=args.start_control, stop=False, planner=True))
+
+    start_command_deadline = 0.0
+    last_start_command_time = 0.0
+    if args.start_control:
+        start_command_deadline = time.monotonic() + max(args.start_command_repeat_s, 0.0)
+        pub.send(build_command_message(start=True, stop=False, planner=True))
+        last_start_command_time = time.monotonic()
+        print(
+            "[xr_upperbody_bridge] sent start=true command; "
+            f"repeating for {max(args.start_command_repeat_s, 0.0):.1f}s"
+        )
+
+    if not args.no_feedback_prime:
+        feedback_upper = _read_feedback_upper_body(
+            context=context,
+            host=args.feedback_host,
+            port=args.feedback_port,
+            topic=args.feedback_topic,
+            timeout_s=args.feedback_prime_timeout_s,
+        )
+        if feedback_upper is not None:
+            filt.seed(feedback_upper)
+            print(
+                "[xr_upperbody_bridge] seeded upper-body ramp from feedback "
+                f"({_debug_range(feedback_upper)})"
+            )
+        else:
+            print(
+                "[xr_upperbody_bridge] feedback seed unavailable; first upper-body "
+                "target cannot be rate-limited from measured robot pose"
+            )
 
     previous_frame: UpperBodyFrame | None = None
     published = 0
@@ -576,6 +691,11 @@ def _send_zmq_json_loop(args: argparse.Namespace) -> int:
     last_debug_time = 0.0
     try:
         while True:
+            if args.start_control and time.monotonic() < start_command_deadline:
+                now = time.monotonic()
+                if now - last_start_command_time >= args.start_command_interval_s:
+                    pub.send(build_command_message(start=True, stop=False, planner=True))
+                    last_start_command_time = now
             try:
                 raw = sub.recv()
             except zmq.Again:
@@ -620,6 +740,7 @@ def _send_zmq_json_loop(args: argparse.Namespace) -> int:
                         f"mode={frame.mode} movement={frame.movement} facing={frame.facing} "
                         f"speed={frame.speed:+.3f} height={frame.height:+.3f} "
                         f"toggle_data_collection={frame.toggle_data_collection} stop={frame.stop} "
+                        f"ramp_phase={frame.ramp_phase} ramp_alpha={frame.ramp_alpha:+.3f} "
                         f"target_left={_debug_pose(debug_payload, 'target_left_wrist_pose')} "
                         f"target_right={_debug_pose(debug_payload, 'target_right_wrist_pose')}",
                         flush=True,
@@ -746,6 +867,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Compute missing upper-body velocities from adjacent frames",
     )
     parser.add_argument("--start-control", action="store_true", help="Send start=true on command topic")
+    parser.add_argument(
+        "--start-command-repeat-s",
+        type=float,
+        default=5.0,
+        help="Seconds to repeat start=true after launch to avoid ZMQ PUB/SUB slow-joiner loss.",
+    )
+    parser.add_argument(
+        "--start-command-interval-s",
+        type=float,
+        default=0.2,
+        help="Interval between repeated start=true command messages.",
+    )
     parser.add_argument("--send-stop-on-exit", action="store_true", help="Send stop=true before exit")
     parser.add_argument(
         "--stream-mode",
@@ -755,8 +888,35 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--pub-warmup-s", type=float, default=0.2, help="PUB socket warm-up delay")
     parser.add_argument("--max-abs-joint", type=float, default=3.14)
-    parser.add_argument("--max-joint-step", type=float, default=0.35)
-    parser.add_argument("--debug-live", action="store_true", help="Print live XR payload and mapped upper-body summaries.")
+    parser.add_argument(
+        "--max-joint-step",
+        type=float,
+        default=0.03,
+        help="Maximum upper-body joint target step per bridge frame in radians.",
+    )
+    parser.add_argument(
+        "--feedback-host",
+        default="localhost",
+        help="GEAR-SONIC feedback ZMQ host for measured-pose ramp seeding.",
+    )
+    parser.add_argument("--feedback-port", type=int, default=5557, help="GEAR-SONIC feedback ZMQ port.")
+    parser.add_argument("--feedback-topic", default="g1_debug", help="GEAR-SONIC feedback ZMQ topic.")
+    parser.add_argument(
+        "--feedback-prime-timeout-s",
+        type=float,
+        default=1.0,
+        help="Seconds to wait for measured upper-body feedback before live streaming.",
+    )
+    parser.add_argument(
+        "--no-feedback-prime",
+        action="store_true",
+        help="Do not seed the upper-body rate limiter from measured robot feedback.",
+    )
+    parser.add_argument(
+        "--debug-live",
+        action="store_true",
+        help="Print live XR payload and mapped upper-body summaries.",
+    )
     parser.add_argument("--debug-interval", type=float, default=0.5, help="Seconds between --debug-live prints")
     return parser
 
