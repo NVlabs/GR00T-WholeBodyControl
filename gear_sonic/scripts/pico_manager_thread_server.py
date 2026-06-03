@@ -1162,6 +1162,31 @@ class ThreePointPose:
         print(f"[{self.log_prefix}] Wrist recalibration pending (neck preserved, measured q)")
 
 
+def _normalize_quat_xyzw_or_identity(q, name="quat"):
+    """Normalize xyzw quaternions and replace invalid rows with identity."""
+    q = np.asarray(q, dtype=np.float64)
+
+    if q.ndim == 1:
+        q = q.reshape(1, 4)
+
+    if q.shape[-1] != 4:
+        raise ValueError(f"{name} expected shape (..., 4), got {q.shape}")
+
+    norms = np.linalg.norm(q, axis=1)
+    bad = (~np.isfinite(q).all(axis=1)) | (~np.isfinite(norms)) | (norms < 1e-8)
+
+    if np.any(bad):
+        print(
+            f"[PoseLoop][WARN] invalid {name} rows "
+            f"{np.where(bad)[0].tolist()} -> identity quaternion"
+        )
+        q = q.copy()
+        q[bad] = np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float64)
+        norms = np.linalg.norm(q, axis=1)
+
+    return (q / norms[:, None]).astype(np.float32)
+
+
 class PoseStreamer:
     """Encapsulates the pose streaming loop state and logic."""
 
@@ -1376,10 +1401,19 @@ class PoseStreamer:
         )
 
         # Move elbow roll/yaw into wrist while preserving wrist pitch from SMPL
-        l_elbow_swing_euler = R.from_quat(g1_l_elbow_q_swing[:, [1, 2, 3, 0]]).as_euler(
+        l_elbow_swing_quat = _normalize_quat_xyzw_or_identity(
+            g1_l_elbow_q_swing[:, [1, 2, 3, 0]],
+            "left_elbow_swing",
+        )
+        r_elbow_swing_quat = _normalize_quat_xyzw_or_identity(
+            g1_r_elbow_q_swing[:, [1, 2, 3, 0]],
+            "right_elbow_swing",
+        )
+
+        l_elbow_swing_euler = R.from_quat(l_elbow_swing_quat).as_euler(
             "XYZ", degrees=False
         )
-        r_elbow_swing_euler = R.from_quat(g1_r_elbow_q_swing[:, [1, 2, 3, 0]]).as_euler(
+        r_elbow_swing_euler = R.from_quat(r_elbow_swing_quat).as_euler(
             "XYZ", degrees=False
         )
 
