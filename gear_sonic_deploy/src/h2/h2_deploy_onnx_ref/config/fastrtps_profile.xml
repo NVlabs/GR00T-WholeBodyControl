@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<profiles xmlns="http://www.eprosima.com/profiles">
+    <!-- Minimal working FastRTPS profile for G1 Robot -->
+    <participant profile_name="default_participant" is_default_profile="true">
+        <rtps>
+            <name>G1RobotParticipant</name>
+        </rtps>
+    </participant>
+</profiles>
+

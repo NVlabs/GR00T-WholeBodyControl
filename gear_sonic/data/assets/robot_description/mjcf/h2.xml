@@ -1,5 +1,5 @@
 <mujoco model="H1031">
-  <compiler angle="radian" meshdir="meshes/"/>
+  <compiler angle="radian" meshdir="../urdf/h2/meshes/"/>
 
   <asset>
     <mesh name="pelvis" content_type="model/stl" file="pelvis.stl"/>
@@ -39,6 +39,7 @@
   </asset>
 
   <worldbody>
+    <geom name="floor" type="plane" pos="0 0 0" size="0 0 0.05" contype="1" conaffinity="1" friction="1.0 0.1 0.1" rgba="0.2 0.3 0.2 1"/>
     <body name="pelvis" pos="0 0 1.04">
       <site name="imu" size="0.01" pos="0.0 0.0 0.0"/>
       <inertial pos="0.00046244 -0.00004214 -0.01473435" quat="1 0 0 0" mass="7.60468095" diaginertia="0.03548205 0.02290677 0.02753519"/>
@@ -75,6 +76,7 @@
                   <joint name="left_ankle_pitch_joint" pos="0 0 0" axis="0 1 0" range="-1.13446 0.610865" actuatorfrcrange="-66.88 66.88"/>
                   <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.4 0.4 0.4 1" mesh="left_ankle_pitch_link"/>
                   <geom type="mesh" rgba="0.4 0.4 0.4 1" mesh="left_ankle_pitch_link"/>
+                  <geom name="left_foot_collision" type="box" pos="0.01 0.0 -0.045" size="0.11 0.05 0.02" contype="1" conaffinity="1" rgba="0.2 0.6 0.2 0.35"/>
                 </body>
               </body>
             </body>
@@ -110,6 +112,7 @@
                   <joint name="right_ankle_pitch_joint" pos="0 0 0" axis="0 1 0" range="-1.13446 0.610865" actuatorfrcrange="-66.88 66.88"/>
                   <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.4 0.4 0.4 1" mesh="right_ankle_pitch_link"/>
                   <geom type="mesh" rgba="0.4 0.4 0.4 1" mesh="right_ankle_pitch_link"/>
+                  <geom name="right_foot_collision" type="box" pos="0.01 0.0 -0.045" size="0.11 0.05 0.02" contype="1" conaffinity="1" rgba="0.2 0.6 0.2 0.35"/>
                 </body>
               </body>
             </body>
