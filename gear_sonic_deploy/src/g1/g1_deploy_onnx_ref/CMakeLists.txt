@@ -1,27 +1,18 @@
 set(EXECUTABLE_NAME g1_deploy_onnx_ref)
 
-# ROS2 discovery can be controlled via env var HAS_ROS2:
-# - 1: try ROS2 (find_package QUIET)
-# - 0 or unset: disable ROS2 entirely (skip find_package)
-set(ROS2_ENV_REQUEST "off")
-if(DEFINED ENV{HAS_ROS2})
-  if("$ENV{HAS_ROS2}" STREQUAL "1")
-    set(ROS2_ENV_REQUEST "on")
-  elseif("$ENV{HAS_ROS2}" STREQUAL "0")
-    set(ROS2_ENV_REQUEST "off")
-  else()
-    message(WARNING "HAS_ROS2 should be 0 or 1; got '$ENV{HAS_ROS2}'. Falling back to auto-detect.")
-  endif()
-endif()
+# ROS2 is optional. Keep it opt-in for robot deployment builds because the
+# ZMQ manager path does not need ROS2 and onboard ROS2 headers can conflict
+# with the bare-metal deploy toolchain.
+option(BUILD_ROS2 "Build optional ROS2 input/output support" OFF)
+option(BUILD_DEPLOY_TESTS "Build deploy-side test executables" OFF)
 
-if(ROS2_ENV_REQUEST STREQUAL "off")
-  set(rclcpp_FOUND FALSE)
-  set(std_msgs_FOUND FALSE)
-  message(STATUS "ROS2 disabled (HAS_ROS2 unset or 0)")
-else()
-  # Try to locate ROS2 only when explicitly enabled
+if(BUILD_ROS2)
   find_package(rclcpp QUIET)
   find_package(std_msgs QUIET)
+else()
+  set(rclcpp_FOUND FALSE)
+  set(std_msgs_FOUND FALSE)
+  message(STATUS "ROS2 disabled (BUILD_ROS2=OFF)")
 endif()
 
 # Find msgpack for message serialization (used by ROS2 and ZMQ handlers)
@@ -140,7 +131,7 @@ endif()
 message(STATUS "✅ ZMQ support enabled for main executable")
 
 # Build ZMQ tests
-if(ZMQ_INCLUDE_DIR AND ZMQ_LIBRARY)
+if(BUILD_DEPLOY_TESTS AND ZMQ_INCLUDE_DIR AND ZMQ_LIBRARY)
   add_executable(zmq_pose_subscriber_test
     ${CMAKE_CURRENT_SOURCE_DIR}/tests/zmq_pose_subscriber_test.cpp)
   target_include_directories(zmq_pose_subscriber_test PRIVATE
@@ -167,7 +158,7 @@ if(ZMQ_INCLUDE_DIR AND ZMQ_LIBRARY)
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF)
   message(STATUS "✅ Added zmq_python_sender_test (ZMQ found)")
-else()
+elseif(BUILD_DEPLOY_TESTS)
   message(WARNING "⚠️  libzmq not found - skipping zmq_pose_subscriber_test")
 endif()
 
@@ -232,30 +223,34 @@ else()
   message(STATUS "ROS2 not found - building without ROS2InputHandler support")
 endif()
 
-# test executable:
-include(FetchContent)
+if(BUILD_DEPLOY_TESTS)
+  # test executable:
+  include(FetchContent)
 
-# Download and make GoogleTest available
-FetchContent_Declare(
-  googletest
-  URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
-)
-FetchContent_MakeAvailable(googletest)
+  # Download and make GoogleTest available
+  FetchContent_Declare(
+    googletest
+    URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
+  )
+  FetchContent_MakeAvailable(googletest)
 
-find_package(GTest REQUIRED)
+  find_package(GTest REQUIRED)
 
-file(GLOB_RECURSE TEST_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/unit_tests/*.cpp)
+  file(GLOB_RECURSE TEST_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/unit_tests/*.cpp)
 
-add_executable(run_tests ${TEST_SRCS})
-target_link_directories(run_tests PRIVATE ${CUDA_LINK_DIRS})
-target_link_libraries(run_tests GTest::GTest GTest::Main ${EXE_LIBS})
-target_include_directories(run_tests PUBLIC ${EXE_INCLUDES})
+  add_executable(run_tests ${TEST_SRCS})
+  target_link_directories(run_tests PRIVATE ${CUDA_LINK_DIRS})
+  target_link_libraries(run_tests GTest::GTest GTest::Main ${EXE_LIBS})
+  target_include_directories(run_tests PUBLIC ${EXE_INCLUDES})
 
-# Setting our output directory and C++ standard
-set_target_properties(
-  run_tests
-  PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/target/release/"
-             OUTPUT_NAME run_tests
-             CXX_STANDARD 20
-             CXX_STANDARD_REQUIRED ON
-             CXX_EXTENSIONS OFF)
+  # Setting our output directory and C++ standard
+  set_target_properties(
+    run_tests
+    PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/target/release/"
+               OUTPUT_NAME run_tests
+               CXX_STANDARD 20
+               CXX_STANDARD_REQUIRED ON
+               CXX_EXTENSIONS OFF)
+else()
+  message(STATUS "Deploy tests disabled (BUILD_DEPLOY_TESTS=OFF)")
+endif()

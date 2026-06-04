@@ -32,7 +32,8 @@ class RealSenseConfig:
 
     depth_image_dim: tuple[int, int] = (640, 480)
     color_image_dim: tuple[int, int] = (640, 480)
-    fps: int = 30
+    fps: int = 15
+    enable_depth: bool = False
     mount_position: str = CameraMountPosition.EGO_VIEW.value
 
 
@@ -45,6 +46,7 @@ class RealSenseSensor(Sensor, SensorServer):
         port: int = 5555,
         config: RealSenseConfig = RealSenseConfig(),
         id: int = 0,
+        device_id: str | None = None,
         mount_position: str = CameraMountPosition.EGO_VIEW.value,
     ):
         devices = rs.context().query_devices()
@@ -59,7 +61,19 @@ class RealSenseSensor(Sensor, SensorServer):
         self.pipeline = rs.pipeline()
         self.config = rs.config()
         devices = sorted(devices, key=lambda x: x.get_info(rs.camera_info.serial_number))
-        self.config.enable_device(devices[id].get_info(rs.camera_info.serial_number))
+        selected_device = None
+        if device_id is not None:
+            for device in devices:
+                if device.get_info(rs.camera_info.serial_number) == str(device_id):
+                    selected_device = device
+                    break
+            if selected_device is None:
+                raise RuntimeError(f"RealSense device with serial {device_id} not found")
+        else:
+            selected_device = devices[id]
+
+        selected_serial = selected_device.get_info(rs.camera_info.serial_number)
+        self.config.enable_device(selected_serial)
 
         try:
             self.config.enable_stream(
@@ -69,13 +83,14 @@ class RealSenseSensor(Sensor, SensorServer):
                 rs.format.rgb8,
                 config.fps,
             )
-            self.config.enable_stream(
-                rs.stream.depth,
-                config.depth_image_dim[0],
-                config.depth_image_dim[1],
-                rs.format.z16,
-                config.fps,
-            )
+            if config.enable_depth:
+                self.config.enable_stream(
+                    rs.stream.depth,
+                    config.depth_image_dim[0],
+                    config.depth_image_dim[1],
+                    rs.format.z16,
+                    config.fps,
+                )
             self.pipeline.start(self.config)
         except Exception as e:
             raise RuntimeError(f"Failed to start RealSense pipeline: {e}")
@@ -87,7 +102,7 @@ class RealSenseSensor(Sensor, SensorServer):
             self.start_server(port)
         print(
             f"Done initializing RealSense sensor: "
-            f"{devices[id].get_info(rs.camera_info.serial_number)}"
+            f"{selected_serial} (fps={config.fps}, depth={config.enable_depth})"
         )
 
     def read(self) -> dict[str, Any] | None:
@@ -98,32 +113,43 @@ class RealSenseSensor(Sensor, SensorServer):
             return None
 
         color_frame = frames.get_color_frame()
-        depth_frame = frames.get_depth_frame()
+        depth_frame = frames.get_depth_frame() if self._realsense_config.enable_depth else None
 
-        if not color_frame or not depth_frame:
-            print("WARNING! No color or depth frame")
+        if not color_frame:
+            print("WARNING! No color frame")
+            return None
+        if self._realsense_config.enable_depth and not depth_frame:
+            print("WARNING! No depth frame")
             return None
 
         try:
             color_image = np.asanyarray(color_frame.get_data())
-            depth_image = np.asanyarray(depth_frame.get_data())
+            depth_image = (
+                np.asanyarray(depth_frame.get_data())
+                if self._realsense_config.enable_depth
+                else None
+            )
         except Exception as e:
             print(f"ERROR! Failed to convert frames to numpy arrays: {e}")
             return None
 
-        if color_image.size == 0 or depth_image.size == 0:
-            print("WARNING! Empty color or depth image")
+        if color_image.size == 0:
+            print("WARNING! Empty color image")
+            return None
+        if self._realsense_config.enable_depth and (depth_image is None or depth_image.size == 0):
+            print("WARNING! Empty depth image")
             return None
 
         current_time = time.time()
         timestamps = {
             self.mount_position: current_time,
-            f"{self.mount_position}_depth": current_time,
         }
         images = {
             self.mount_position: color_image,
-            f"{self.mount_position}_depth": depth_image,
         }
+        if self._realsense_config.enable_depth:
+            timestamps[f"{self.mount_position}_depth"] = current_time
+            images[f"{self.mount_position}_depth"] = depth_image
         return {"timestamps": timestamps, "images": images}
 
     def serialize(self, data: dict[str, Any]) -> dict[str, Any]:

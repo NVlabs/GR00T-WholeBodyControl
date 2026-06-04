@@ -24,6 +24,7 @@
 
 from collections import defaultdict, deque
 from enum import Enum, IntEnum
+import json
 import os
 import subprocess
 import threading
@@ -129,6 +130,45 @@ class StreamMode(Enum):
     PLANNER_FROZEN_UPPER_BODY = 3
     POSE_PAUSE = 4
     PLANNER_VR_3PT = 5
+
+
+class XRStalenessWatchdog:
+    """Track XR sample freshness after the stream has been armed."""
+
+    def __init__(self, warn_ms: float = 50.0, estop_ms: float = 200.0):
+        self.warn_ns = int(warn_ms * 1_000_000)
+        self.estop_ns = int(estop_ms * 1_000_000)
+        self._armed = False
+        self._last_state = "idle"
+
+    def reset(self) -> None:
+        self._armed = False
+        self._last_state = "idle"
+
+    def poll(
+        self,
+        last_sample_ns: int | None,
+        now_ns: int,
+        active: bool = True,
+    ) -> str:
+        if not active:
+            self.reset()
+            return "idle"
+        if last_sample_ns is None:
+            state = "ok" if not self._armed else "estop"
+        else:
+            self._armed = True
+            gap = now_ns - last_sample_ns
+            if gap < self.warn_ns:
+                state = "ok"
+            elif gap < self.estop_ns:
+                state = "warn"
+            else:
+                state = "estop"
+        if state != self._last_state:
+            print(f"[XRStalenessWatchdog] {self._last_state} -> {state}")
+            self._last_state = state
+        return state
 
 
 ### Parse 3 point pose from SMPL
@@ -314,6 +354,223 @@ def _process_3pt_pose(smpl_pose_np):
     # kp_poses[1:] = indices 1, 2, 3 = L-Wrist, R-Wrist, Neck
     # Each row: [x, y, z, qw, qx, qy, qz] relative to root, scalar-first quaternion
     return kp_poses[1:]
+
+
+def _slerp_quat_wxyz(q0: np.ndarray, q1: np.ndarray, alpha: float) -> np.ndarray:
+    """Spherical interpolation for scalar-first quaternions."""
+    q0 = np.asarray(q0, dtype=np.float64)
+    q1 = np.asarray(q1, dtype=np.float64)
+    q0 = q0 / max(np.linalg.norm(q0), 1e-12)
+    q1 = q1 / max(np.linalg.norm(q1), 1e-12)
+
+    dot = float(np.dot(q0, q1))
+    if dot < 0.0:
+        q1 = -q1
+        dot = -dot
+
+    if dot > 0.9995:
+        result = q0 + alpha * (q1 - q0)
+        return (result / max(np.linalg.norm(result), 1e-12)).astype(np.float32)
+
+    theta_0 = np.arccos(np.clip(dot, -1.0, 1.0))
+    sin_theta_0 = np.sin(theta_0)
+    theta = theta_0 * alpha
+    s0 = np.cos(theta) - dot * np.sin(theta) / sin_theta_0
+    s1 = np.sin(theta) / sin_theta_0
+    return (s0 * q0 + s1 * q1).astype(np.float32)
+
+
+def _blend_vr_3pt_pose(
+    start_pose: np.ndarray,
+    target_pose: np.ndarray,
+    alpha: float,
+) -> np.ndarray:
+    """Blend VR_3PT rows [xyz, qw, qx, qy, qz] from start to target."""
+    alpha = float(np.clip(alpha, 0.0, 1.0))
+    pose = np.asarray(target_pose, dtype=np.float32).copy()
+    start_pose = np.asarray(start_pose, dtype=np.float32)
+    pose[:, :3] = (1.0 - alpha) * start_pose[:, :3] + alpha * pose[:, :3]
+    for row in range(pose.shape[0]):
+        pose[row, 3:] = _slerp_quat_wxyz(start_pose[row, 3:], pose[row, 3:], alpha)
+    return pose
+
+
+CONTROLLER_POSE_CONVENTIONS = ("xrobotoolkit_unity", "openxr_unitree")
+
+
+def _basis_matrix_for_controller_convention(convention: str) -> np.ndarray:
+    """Return matrix that maps XR pose basis into robot basis."""
+    if convention == "xrobotoolkit_unity":
+        # Previous local implementation: XRoboToolkit Unity-like basis.
+        # Unity: X-right, Y-up, Z-forward. Robot: X-forward, Y-left, Z-up.
+        return np.array([[-1, 0, 0], [0, 0, 1], [0, 1, 0.0]], dtype=np.float64)
+    if convention == "openxr_unitree":
+        # Unitree/televuer convention for OpenXR:
+        # OpenXR: X-right, Y-up, Z-back. Robot: X-forward, Y-left, Z-up.
+        return np.array([[0, 0, -1], [-1, 0, 0], [0, 1, 0.0]], dtype=np.float64)
+    raise ValueError(
+        f"Unknown controller pose convention {convention!r}; "
+        f"expected one of {CONTROLLER_POSE_CONVENTIONS}"
+    )
+
+
+def _pose_xr_to_robot(
+    pose: np.ndarray,
+    scalar_first: bool = False,
+    convention: str = "xrobotoolkit_unity",
+) -> tuple[np.ndarray, sRot]:
+    """Convert an XR controller/headset pose to the robot frame.
+
+    XRoboToolkit poses are usually [x, y, z, qx, qy, qz, qw]. The returned
+    quaternion rotation is a scipy Rotation in robot coordinates.
+    """
+    pose = np.asarray(pose, dtype=np.float64).copy()
+    if pose.shape[0] < 7:
+        raise ValueError(f"Expected pose with 7 values, got shape {pose.shape}")
+
+    q_xr_to_robot = _basis_matrix_for_controller_convention(convention)
+    pos = q_xr_to_robot @ pose[:3]
+    rot = sRot.from_quat(pose[3:7], scalar_first=scalar_first)
+    rot_robot = sRot.from_matrix(q_xr_to_robot @ rot.as_matrix() @ q_xr_to_robot.T)
+    return pos, rot_robot
+
+
+def _pose_unity_to_robot(pose: np.ndarray, scalar_first: bool = False) -> tuple[np.ndarray, sRot]:
+    """Backward-compatible wrapper for the previous XRoboToolkit Unity transform."""
+    return _pose_xr_to_robot(pose, scalar_first=scalar_first, convention="xrobotoolkit_unity")
+
+
+def _valid_xrt_pose(pose: np.ndarray) -> bool:
+    """Return True if an XRoboToolkit pose contains a usable quaternion."""
+    pose = np.asarray(pose)
+    if pose.shape[0] < 7:
+        return False
+    if not np.all(np.isfinite(pose[:7])):
+        return False
+    return float(np.linalg.norm(pose[3:7])) > 1e-6
+
+
+def _process_controller_3pt_pose(
+    left_controller_pose: np.ndarray,
+    right_controller_pose: np.ndarray,
+    headset_pose: np.ndarray,
+    left_controller_offset_rpy: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    right_controller_offset_rpy: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    controller_pose_convention: str = "xrobotoolkit_unity",
+    headset_pose_convention: str = "xrobotoolkit_unity",
+    headset_orientation_convention: str | None = None,
+) -> np.ndarray:
+    """Build a raw VR 3-point pose from headset + two controller poses.
+
+    Output rows match the existing VR_3PT contract:
+      [left wrist, right wrist, head], each [x, y, z, qw, qx, qy, qz].
+
+    Wrist positions are expressed relative to the headset position so the
+    lower-body planner remains responsible for robot root motion. The controller
+    and headset positions must be converted with the same basis before
+    subtraction; otherwise mixed conventions create artificial wrist drift.
+    """
+    left_pos, left_rot = _pose_xr_to_robot(
+        left_controller_pose, scalar_first=False, convention=controller_pose_convention
+    )
+    right_pos, right_rot = _pose_xr_to_robot(
+        right_controller_pose, scalar_first=False, convention=controller_pose_convention
+    )
+    head_pos_for_wrist_relative, _ = _pose_xr_to_robot(
+        headset_pose, scalar_first=False, convention=controller_pose_convention
+    )
+    head_pos, _ = _pose_xr_to_robot(
+        headset_pose, scalar_first=False, convention=headset_pose_convention
+    )
+    _, head_rot = _pose_xr_to_robot(
+        headset_pose,
+        scalar_first=False,
+        convention=headset_orientation_convention or headset_pose_convention,
+    )
+    left_rot = left_rot * sRot.from_euler("xyz", left_controller_offset_rpy, degrees=True)
+    right_rot = right_rot * sRot.from_euler("xyz", right_controller_offset_rpy, degrees=True)
+
+    vr_3pt_pose = np.zeros((3, 7), dtype=np.float32)
+    vr_3pt_pose[0, :3] = left_pos - head_pos_for_wrist_relative
+    vr_3pt_pose[1, :3] = right_pos - head_pos_for_wrist_relative
+    vr_3pt_pose[2, :3] = head_pos
+    vr_3pt_pose[0, 3:] = left_rot.as_quat(scalar_first=True)
+    vr_3pt_pose[1, 3:] = right_rot.as_quat(scalar_first=True)
+    vr_3pt_pose[2, 3:] = head_rot.as_quat(scalar_first=True)
+    return vr_3pt_pose
+
+
+def _as_list(value) -> list:
+    return np.asarray(value, dtype=np.float64).tolist()
+
+
+def _rotation_frame_debug(rot: sRot) -> dict:
+    matrix = rot.as_matrix()
+    return {
+        "quat_wxyz": _as_list(rot.as_quat(scalar_first=True)),
+        "rpy_xyz_deg": _as_list(rot.as_euler("xyz", degrees=True)),
+        "axis_x": _as_list(matrix[:, 0]),
+        "axis_y": _as_list(matrix[:, 1]),
+        "axis_z": _as_list(matrix[:, 2]),
+        "matrix_col_axes": _as_list(matrix),
+    }
+
+
+def _pose_frame_debug(position, rot: sRot) -> dict:
+    return {
+        "position": _as_list(position),
+        "orientation": _rotation_frame_debug(rot),
+    }
+
+
+def _vr_3pt_row_debug(row: np.ndarray) -> dict:
+    return _pose_frame_debug(row[:3], sRot.from_quat(row[3:], scalar_first=True))
+
+
+def _controller_convention_debug(
+    left_pose: np.ndarray,
+    right_pose: np.ndarray,
+    head_pose: np.ndarray,
+    left_controller_offset_rpy: tuple[float, float, float],
+    right_controller_offset_rpy: tuple[float, float, float],
+) -> dict:
+    """Build side-by-side controller/head frames for each supported basis convention."""
+    debug = {}
+    for convention in CONTROLLER_POSE_CONVENTIONS:
+        left_pos, left_rot = _pose_xr_to_robot(
+            left_pose, scalar_first=False, convention=convention
+        )
+        right_pos, right_rot = _pose_xr_to_robot(
+            right_pose, scalar_first=False, convention=convention
+        )
+        head_pos, head_rot = _pose_xr_to_robot(
+            head_pose, scalar_first=False, convention=convention
+        )
+        left_ee_rot = left_rot * sRot.from_euler("xyz", left_controller_offset_rpy, degrees=True)
+        right_ee_rot = right_rot * sRot.from_euler(
+            "xyz", right_controller_offset_rpy, degrees=True
+        )
+        debug[convention] = {
+            "left_controller_robot_position": left_pos.astype(np.float32),
+            "right_controller_robot_position": right_pos.astype(np.float32),
+            "headset_robot_position": head_pos.astype(np.float32),
+            "left_controller_robot_orientation_wxyz": left_rot.as_quat(
+                scalar_first=True
+            ).astype(np.float32),
+            "right_controller_robot_orientation_wxyz": right_rot.as_quat(
+                scalar_first=True
+            ).astype(np.float32),
+            "headset_robot_orientation_wxyz": head_rot.as_quat(scalar_first=True).astype(
+                np.float32
+            ),
+            "left_controller_ee_orientation_wxyz": left_ee_rot.as_quat(
+                scalar_first=True
+            ).astype(np.float32),
+            "right_controller_ee_orientation_wxyz": right_ee_rot.as_quat(
+                scalar_first=True
+            ).astype(np.float32),
+        }
+    return debug
 
 
 # =============================================================================
@@ -806,6 +1063,196 @@ class PicoReader:
                 print(f"[PicoReader] read error: {e}")
 
 
+class ControllerPoseReader:
+    """Background reader for headset + controller-only VR 3-point tracking."""
+
+    def __init__(
+        self,
+        max_queue_size: int = 15,
+        left_controller_offset_rpy: tuple[float, float, float] = (0.0, 0.0, 0.0),
+        right_controller_offset_rpy: tuple[float, float, float] = (0.0, 0.0, 0.0),
+        controller_pose_convention: str = "xrobotoolkit_unity",
+        headset_pose_convention: str = "xrobotoolkit_unity",
+        headset_orientation_convention: str | None = None,
+    ):
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._last_t = None
+        self._fps_ema = 0.0
+        self._latest = None
+        self._lock = threading.Lock()
+        self.left_controller_offset_rpy = left_controller_offset_rpy
+        self.right_controller_offset_rpy = right_controller_offset_rpy
+        self.controller_pose_convention = controller_pose_convention
+        self.headset_pose_convention = headset_pose_convention
+        self.headset_orientation_convention = (
+            headset_orientation_convention or headset_pose_convention
+        )
+
+    def start(self):
+        self._thread.start()
+
+    def stop(self):
+        self._stop.set()
+        self._thread.join(timeout=1.0)
+
+    def get_latest(self):
+        with self._lock:
+            return self._latest
+
+    def get_last_sample_monotonic_ns(self) -> int | None:
+        with self._lock:
+            if self._latest is None:
+                return None
+            return self._latest.get("sample_monotonic_ns")
+
+    def _run(self):
+        last_report = time.time()
+        last_signature = None
+        last_wait_report = 0.0
+        while not self._stop.is_set():
+            try:
+                left_pose = np.array(xrt.get_left_controller_pose(), dtype=np.float32)
+                right_pose = np.array(xrt.get_right_controller_pose(), dtype=np.float32)
+                head_pose = np.array(xrt.get_headset_pose(), dtype=np.float32)
+                if not (
+                    _valid_xrt_pose(left_pose)
+                    and _valid_xrt_pose(right_pose)
+                    and _valid_xrt_pose(head_pose)
+                ):
+                    now = time.time()
+                    if now - last_wait_report >= 2.0:
+                        print(
+                            "[ControllerPoseReader] waiting for valid headset/controller poses "
+                            "(zero quaternion received)"
+                        )
+                        last_wait_report = now
+                    time.sleep(0.02)
+                    continue
+
+                vr_3pt_pose = _process_controller_3pt_pose(
+                    left_pose,
+                    right_pose,
+                    head_pose,
+                    left_controller_offset_rpy=self.left_controller_offset_rpy,
+                    right_controller_offset_rpy=self.right_controller_offset_rpy,
+                    controller_pose_convention=self.controller_pose_convention,
+                    headset_pose_convention=self.headset_pose_convention,
+                    headset_orientation_convention=self.headset_orientation_convention,
+                )
+                convention_debug = _controller_convention_debug(
+                    left_pose,
+                    right_pose,
+                    head_pose,
+                    self.left_controller_offset_rpy,
+                    self.right_controller_offset_rpy,
+                )
+                active_debug = convention_debug[self.controller_pose_convention]
+                active_head_debug = convention_debug[self.headset_pose_convention]
+                active_head_orientation_debug = convention_debug[
+                    self.headset_orientation_convention
+                ]
+                left_pos_robot = active_debug["left_controller_robot_position"]
+                right_pos_robot = active_debug["right_controller_robot_position"]
+                head_pos_for_wrist_relative = active_debug["headset_robot_position"]
+                head_pos_robot = active_head_debug["headset_robot_position"]
+                left_rot_robot = sRot.from_quat(
+                    active_debug["left_controller_robot_orientation_wxyz"], scalar_first=True
+                )
+                right_rot_robot = sRot.from_quat(
+                    active_debug["right_controller_robot_orientation_wxyz"], scalar_first=True
+                )
+                head_rot_robot = sRot.from_quat(
+                    active_head_orientation_debug["headset_robot_orientation_wxyz"],
+                    scalar_first=True,
+                )
+                left_rot_ee = left_rot_robot * sRot.from_euler(
+                    "xyz", self.left_controller_offset_rpy, degrees=True
+                )
+                right_rot_ee = right_rot_robot * sRot.from_euler(
+                    "xyz", self.right_controller_offset_rpy, degrees=True
+                )
+
+                now = time.time()
+                now_monotonic_ns = time.monotonic_ns()
+                if self._last_t is None:
+                    device_dt = 0.0
+                else:
+                    device_dt = now - self._last_t
+                    if device_dt > 0.0:
+                        inst = 1.0 / device_dt
+                        self._fps_ema = (
+                            inst if self._fps_ema == 0.0 else 0.9 * self._fps_ema + 0.1 * inst
+                        )
+                self._last_t = now
+
+                signature = (
+                    tuple(np.round(left_pose, 4)),
+                    tuple(np.round(right_pose, 4)),
+                    tuple(np.round(head_pose, 4)),
+                )
+                if signature == last_signature:
+                    time.sleep(0.001)
+                    continue
+                last_signature = signature
+
+                sample = {
+                    "vr_3pt_pose_np": vr_3pt_pose,
+                    "controller_pose_convention": self.controller_pose_convention,
+                    "headset_pose_convention": self.headset_pose_convention,
+                    "headset_orientation_convention": self.headset_orientation_convention,
+                    "controller_pose_conventions": convention_debug,
+                    "left_controller_pose_xrt": left_pose.copy(),
+                    "right_controller_pose_xrt": right_pose.copy(),
+                    "headset_pose_xrt": head_pose.copy(),
+                    "left_controller_robot_position": left_pos_robot.astype(np.float32),
+                    "right_controller_robot_position": right_pos_robot.astype(np.float32),
+                    "headset_robot_position": head_pos_robot.astype(np.float32),
+                    "headset_robot_position_for_wrist_relative": (
+                        head_pos_for_wrist_relative.astype(np.float32)
+                    ),
+                    "left_controller_robot_orientation_wxyz": left_rot_robot.as_quat(
+                        scalar_first=True
+                    ).astype(np.float32),
+                    "right_controller_robot_orientation_wxyz": right_rot_robot.as_quat(
+                        scalar_first=True
+                    ).astype(np.float32),
+                    "headset_robot_orientation_wxyz": head_rot_robot.as_quat(
+                        scalar_first=True
+                    ).astype(np.float32),
+                    "left_controller_ee_orientation_wxyz": left_rot_ee.as_quat(
+                        scalar_first=True
+                    ).astype(np.float32),
+                    "right_controller_ee_orientation_wxyz": right_rot_ee.as_quat(
+                        scalar_first=True
+                    ).astype(np.float32),
+                    "left_controller_offset_rpy": np.array(
+                        self.left_controller_offset_rpy, dtype=np.float32
+                    ),
+                    "right_controller_offset_rpy": np.array(
+                        self.right_controller_offset_rpy, dtype=np.float32
+                    ),
+                    "timestamp_realtime": now,
+                    "timestamp_monotonic": time.monotonic(),
+                    "sample_monotonic_ns": now_monotonic_ns,
+                    "timestamp_ns": int(now * 1e9),
+                    "dt": device_dt,
+                    "fps": self._fps_ema,
+                }
+                with self._lock:
+                    self._latest = sample
+
+                if now - last_report >= 5.0:
+                    print(
+                        f"[ControllerPoseReader] dt: {device_dt*1000.0:.2f} ms, "
+                        f"fps: {self._fps_ema:.2f}"
+                    )
+                    last_report = now
+            except Exception as e:
+                print(f"[ControllerPoseReader] read error: {e}")
+                time.sleep(0.05)
+
+
 def _pose_stream_common(
     socket,
     buffer_size: int,
@@ -945,10 +1392,12 @@ class ThreePointPose:
         # Calibration state — triggered explicitly by calibrate_now() or reset_with_measured_q()
         self._calibration_pending = False
         self._calibration_neck_quat_inv: np.ndarray | None = None  # inv(initial neck quat)
+        self._calibration_neck_pos_offset: np.ndarray | None = None
         self._calibration_lwrist_offset: np.ndarray | None = None  # position offset
         self._calibration_rwrist_offset: np.ndarray | None = None
         self._calibration_lwrist_rot_offset: sRot | None = None  # orientation offset
         self._calibration_rwrist_rot_offset: sRot | None = None
+        self._calibration_wrist_orientation_uses_neck = True
         # Override robot q for FK during recalibration (e.g. measured joints for VR 3PT)
         self._override_robot_q: np.ndarray | None = None
 
@@ -998,6 +1447,17 @@ class ThreePointPose:
 
         return vr_3pt_pose
 
+    def process_vr_3pt_pose(self, vr_3pt_pose_raw: np.ndarray) -> np.ndarray:
+        """Process a raw headset/controller-derived VR 3-point pose."""
+        if self._calibration_pending:
+            self._capture_calibration(vr_3pt_pose_raw)
+
+        vr_3pt_pose = self._apply_calibration(vr_3pt_pose_raw)
+        if self.vr3pt_visualizer is not None:
+            self.vr3pt_visualizer.update_from_vr_pose(vr_3pt_pose, waist_scale=1.0)
+            self.vr3pt_visualizer.render()
+        return vr_3pt_pose
+
     def close(self) -> None:
         """Close and cleanup visualizer resources."""
         if self.vr3pt_visualizer is not None:
@@ -1022,6 +1482,42 @@ class ThreePointPose:
             traceback.print_exc()
             return False
 
+    def calibrate_vr_3pt_now(self, vr_3pt_pose_raw: np.ndarray) -> bool:
+        """Calibrate using current headset/controller 3-point frame."""
+        try:
+            self._override_robot_q = np.zeros(29, dtype=np.float64)
+            self._calibration_wrist_orientation_uses_neck = False
+            self._capture_calibration(vr_3pt_pose_raw)
+            print(f"[{self.log_prefix}] Controller 3PT calibration completed")
+            return True
+        except Exception as e:
+            print(f"[{self.log_prefix}] Controller 3PT calibration failed: {e}")
+            import traceback
+
+            traceback.print_exc()
+            return False
+
+    def get_g1_ee_debug(self, body_q_measured: np.ndarray | None = None) -> dict:
+        """Return current/reference G1 wrist FK frames for calibration debugging."""
+        if self._robot_model is None or get_g1_key_frame_poses is None:
+            return {}
+        if body_q_measured is not None:
+            robot_q = self._robot_model.get_configuration_from_actuated_joints(
+                body_actuated_joint_values=body_q_measured[:29]
+            )
+            source = "measured_q"
+        else:
+            robot_q = None
+            source = "default_zero_q"
+        g1_poses = get_g1_key_frame_poses(self._robot_model, q=robot_q)
+        left_rot = sRot.from_quat(g1_poses["left_wrist"]["orientation_wxyz"], scalar_first=True)
+        right_rot = sRot.from_quat(g1_poses["right_wrist"]["orientation_wxyz"], scalar_first=True)
+        return {
+            "source": source,
+            "left_wrist": _pose_frame_debug(g1_poses["left_wrist"]["position"], left_rot),
+            "right_wrist": _pose_frame_debug(g1_poses["right_wrist"]["position"], right_rot),
+        }
+
     def _capture_calibration(self, vr_3pt_pose: np.ndarray) -> None:
         """Capture calibration offsets from vr_3pt_pose against G1 FK reference.
         If neck calibration already exists (e.g. from calibrate_now), it is preserved
@@ -1037,8 +1533,15 @@ class ThreePointPose:
         # Step 2: Rotate VR wrist positions/orientations by neck inverse
         lwrist_pos_corrected = calib_inv_rot.apply(vr_3pt_pose[0, :3].copy())
         rwrist_pos_corrected = calib_inv_rot.apply(vr_3pt_pose[1, :3].copy())
-        lwrist_rot_corrected = calib_inv_rot * sRot.from_quat(vr_3pt_pose[0, 3:], scalar_first=True)
-        rwrist_rot_corrected = calib_inv_rot * sRot.from_quat(vr_3pt_pose[1, 3:], scalar_first=True)
+        neck_pos_corrected = calib_inv_rot.apply(vr_3pt_pose[2, :3].copy())
+        lwrist_rot_raw = sRot.from_quat(vr_3pt_pose[0, 3:], scalar_first=True)
+        rwrist_rot_raw = sRot.from_quat(vr_3pt_pose[1, 3:], scalar_first=True)
+        if self._calibration_wrist_orientation_uses_neck:
+            lwrist_rot_corrected = calib_inv_rot * lwrist_rot_raw
+            rwrist_rot_corrected = calib_inv_rot * rwrist_rot_raw
+        else:
+            lwrist_rot_corrected = lwrist_rot_raw
+            rwrist_rot_corrected = rwrist_rot_raw
 
         # Step 3: Get G1 FK reference poses
         if self._robot_model is None:
@@ -1063,6 +1566,7 @@ class ThreePointPose:
 
         g1_lwrist_pos = g1_poses["left_wrist"]["position"]
         g1_rwrist_pos = g1_poses["right_wrist"]["position"]
+        g1_neck_pos = g1_poses["torso"]["position"]
         g1_lwrist_rot = sRot.from_quat(
             g1_poses["left_wrist"]["orientation_wxyz"], scalar_first=True
         )
@@ -1073,6 +1577,7 @@ class ThreePointPose:
         # Compute position offsets: calibrated = neck_corrected - offset
         self._calibration_lwrist_offset = lwrist_pos_corrected - g1_lwrist_pos
         self._calibration_rwrist_offset = rwrist_pos_corrected - g1_rwrist_pos
+        self._calibration_neck_pos_offset = neck_pos_corrected - g1_neck_pos
 
         # Compute orientation offsets: calibrated = rot_offset * neck_corrected
         self._calibration_lwrist_rot_offset = g1_lwrist_rot * lwrist_rot_corrected.inv()
@@ -1088,7 +1593,9 @@ class ThreePointPose:
             f"  L-Wrist pos offset: [{self._calibration_lwrist_offset[0]:.4f}, "
             f"{self._calibration_lwrist_offset[1]:.4f}, {self._calibration_lwrist_offset[2]:.4f}]\n"
             f"  R-Wrist pos offset: [{self._calibration_rwrist_offset[0]:.4f}, "
-            f"{self._calibration_rwrist_offset[1]:.4f}, {self._calibration_rwrist_offset[2]:.4f}]"
+            f"{self._calibration_rwrist_offset[1]:.4f}, {self._calibration_rwrist_offset[2]:.4f}]\n"
+            f"  Neck pos offset: [{self._calibration_neck_pos_offset[0]:.4f}, "
+            f"{self._calibration_neck_pos_offset[1]:.4f}, {self._calibration_neck_pos_offset[2]:.4f}]"
         )
 
     def _apply_calibration(self, vr_3pt_pose: np.ndarray) -> np.ndarray:
@@ -1115,31 +1622,41 @@ class ThreePointPose:
 
         # Wrist orientations: rot_offset * (neck_inv * current)
         if self._calibration_lwrist_rot_offset is not None:
-            lw_corrected = calib_inv_rot * sRot.from_quat(vr_3pt_pose[0, 3:], scalar_first=True)
+            lw_raw = sRot.from_quat(vr_3pt_pose[0, 3:], scalar_first=True)
+            lw_corrected = (
+                calib_inv_rot * lw_raw if self._calibration_wrist_orientation_uses_neck else lw_raw
+            )
             calibrated[0, 3:] = (self._calibration_lwrist_rot_offset * lw_corrected).as_quat(
                 scalar_first=True
             )
         if self._calibration_rwrist_rot_offset is not None:
-            rw_corrected = calib_inv_rot * sRot.from_quat(vr_3pt_pose[1, 3:], scalar_first=True)
+            rw_raw = sRot.from_quat(vr_3pt_pose[1, 3:], scalar_first=True)
+            rw_corrected = (
+                calib_inv_rot * rw_raw if self._calibration_wrist_orientation_uses_neck else rw_raw
+            )
             calibrated[1, 3:] = (self._calibration_rwrist_rot_offset * rw_corrected).as_quat(
                 scalar_first=True
             )
 
-        # Neck position via kinematic chain: root → torso_link (+Z) → neck (along calibrated Z)
-        neck_z = sRot.from_quat(calibrated[2, 3:], scalar_first=True).apply([0, 0, 1])
-        calibrated[2, :3] = (
-            np.array([0, 0, self.TORSO_LINK_OFFSET_Z]) + self.NECK_LINK_LENGTH * neck_z
-        ).astype(np.float32)
+        # Neck/torso target position: track the calibrated headset translation.
+        # The official VR_3PT target is a 3D torso/head proxy, so do not discard
+        # headset position and synthesize this point from orientation alone.
+        if self._calibration_neck_pos_offset is not None:
+            calibrated[2, :3] = (
+                calib_inv_rot.apply(vr_3pt_pose[2, :3]) - self._calibration_neck_pos_offset
+            ).astype(np.float32)
 
         return calibrated
 
     def _clear_calibration(self):
         """Clear all calibration state."""
         self._calibration_neck_quat_inv = None
+        self._calibration_neck_pos_offset = None
         self._calibration_lwrist_offset = None
         self._calibration_rwrist_offset = None
         self._calibration_lwrist_rot_offset = None
         self._calibration_rwrist_rot_offset = None
+        self._calibration_wrist_orientation_uses_neck = True
         self._override_robot_q = None
 
     def reset(self) -> None:
@@ -1157,6 +1674,7 @@ class ThreePointPose:
         self._calibration_rwrist_offset = None
         self._calibration_lwrist_rot_offset = None
         self._calibration_rwrist_rot_offset = None
+        self._calibration_wrist_orientation_uses_neck = False
         self._override_robot_q = body_q_measured.copy()
         self._calibration_pending = True
         print(f"[{self.log_prefix}] Wrist recalibration pending (neck preserved, measured q)")
@@ -1614,6 +2132,295 @@ class FeedbackReader:
         return body_q, left_hand_q, right_hand_q, full_body_q
 
 
+class Controller3PtCalibrationLogger:
+    """JSONL logger for comparing PICO controller frames against G1 EE FK frames."""
+
+    def __init__(
+        self,
+        log_dir: str,
+        interval_s: float = 1.0,
+        posture_marker: "Controller3PtPostureMarker | None" = None,
+    ):
+        self.log_dir = log_dir
+        self.interval_s = interval_s
+        self.posture_marker = posture_marker
+        self.last_log_time = 0.0
+        self.path = ""
+        if log_dir:
+            os.makedirs(log_dir, exist_ok=True)
+            stamp = time.strftime("%Y%m%d_%H%M%S")
+            self.path = os.path.join(log_dir, f"controller_3pt_calibration_{stamp}.jsonl")
+            print(f"[Controller3PtLogger] Writing calibration frames to {self.path}")
+
+    def maybe_log(
+        self,
+        event: str,
+        sample: dict,
+        raw_vr_3pt_pose: np.ndarray,
+        calibrated_vr_3pt_pose: np.ndarray,
+        three_point: ThreePointPose,
+        body_q_measured: np.ndarray | None = None,
+    ) -> None:
+        now = time.time()
+        if now - self.last_log_time < self.interval_s:
+            return
+        self.last_log_time = now
+        self.log(event, sample, raw_vr_3pt_pose, calibrated_vr_3pt_pose, three_point, body_q_measured)
+
+    def log(
+        self,
+        event: str,
+        sample: dict,
+        raw_vr_3pt_pose: np.ndarray,
+        calibrated_vr_3pt_pose: np.ndarray,
+        three_point: ThreePointPose,
+        body_q_measured: np.ndarray | None = None,
+    ) -> None:
+        g1_ee = three_point.get_g1_ee_debug(body_q_measured)
+        posture = (
+            self.posture_marker.snapshot()
+            if self.posture_marker is not None
+            else {"index": -1, "label": "unlabeled"}
+        )
+        record = {
+            "event": event,
+            "posture_marker": posture,
+            "timestamp_realtime": float(sample.get("timestamp_realtime", time.time())),
+            "timestamp_monotonic": float(sample.get("timestamp_monotonic", time.monotonic())),
+            "timestamp_ns": int(sample.get("timestamp_ns", 0)),
+            "pico": {
+                "active_controller_pose_convention": sample.get(
+                    "controller_pose_convention", "xrobotoolkit_unity"
+                ),
+                "active_headset_pose_convention": sample.get(
+                    "headset_pose_convention", "xrobotoolkit_unity"
+                ),
+                "active_headset_orientation_convention": sample.get(
+                    "headset_orientation_convention",
+                    sample.get("headset_pose_convention", "xrobotoolkit_unity"),
+                ),
+                "left_controller_pose_xrt": _as_list(sample["left_controller_pose_xrt"]),
+                "right_controller_pose_xrt": _as_list(sample["right_controller_pose_xrt"]),
+                "headset_pose_xrt": _as_list(sample["headset_pose_xrt"]),
+                "left_controller_robot_frame": _pose_frame_debug(
+                    sample["left_controller_robot_position"],
+                    sRot.from_quat(
+                        sample["left_controller_robot_orientation_wxyz"], scalar_first=True
+                    ),
+                ),
+                "right_controller_robot_frame": _pose_frame_debug(
+                    sample["right_controller_robot_position"],
+                    sRot.from_quat(
+                        sample["right_controller_robot_orientation_wxyz"], scalar_first=True
+                    ),
+                ),
+                "headset_robot_frame": _pose_frame_debug(
+                    sample["headset_robot_position"],
+                    sRot.from_quat(sample["headset_robot_orientation_wxyz"], scalar_first=True),
+                ),
+                "headset_robot_frame_for_wrist_relative": _pose_frame_debug(
+                    sample.get(
+                        "headset_robot_position_for_wrist_relative",
+                        sample["headset_robot_position"],
+                    ),
+                    sRot.from_quat(sample["headset_robot_orientation_wxyz"], scalar_first=True),
+                ),
+                "left_controller_ee_frame": _pose_frame_debug(
+                    sample["left_controller_robot_position"],
+                    sRot.from_quat(
+                        sample["left_controller_ee_orientation_wxyz"], scalar_first=True
+                    ),
+                ),
+                "right_controller_ee_frame": _pose_frame_debug(
+                    sample["right_controller_robot_position"],
+                    sRot.from_quat(
+                        sample["right_controller_ee_orientation_wxyz"], scalar_first=True
+                    ),
+                ),
+                "left_controller_offset_rpy": _as_list(sample["left_controller_offset_rpy"]),
+                "right_controller_offset_rpy": _as_list(sample["right_controller_offset_rpy"]),
+            },
+            "controller_pose_convention_debug": self._pose_convention_debug(sample),
+            "vr_3pt_raw_relative_to_head": {
+                "left_wrist": _vr_3pt_row_debug(raw_vr_3pt_pose[0]),
+                "right_wrist": _vr_3pt_row_debug(raw_vr_3pt_pose[1]),
+                "head": _vr_3pt_row_debug(raw_vr_3pt_pose[2]),
+            },
+            "vr_3pt_calibrated_target": {
+                "left_wrist": _vr_3pt_row_debug(calibrated_vr_3pt_pose[0]),
+                "right_wrist": _vr_3pt_row_debug(calibrated_vr_3pt_pose[1]),
+                "head": _vr_3pt_row_debug(calibrated_vr_3pt_pose[2]),
+            },
+            "g1_ee_fk": g1_ee,
+        }
+        if g1_ee:
+            self._add_target_vs_g1_errors(record)
+
+        left_rpy = record["pico"]["left_controller_ee_frame"]["orientation"]["rpy_xyz_deg"]
+        right_rpy = record["pico"]["right_controller_ee_frame"]["orientation"]["rpy_xyz_deg"]
+        print(
+            f"[Controller3PtLogger] {event}: "
+            f"posture={posture['label']} "
+            f"L controller EE rpy={np.round(left_rpy, 1).tolist()} "
+            f"R controller EE rpy={np.round(right_rpy, 1).tolist()}"
+        )
+
+        if self.path:
+            with open(self.path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(record, separators=(",", ":")) + "\n")
+
+    def _pose_convention_debug(self, sample: dict) -> dict:
+        debug = {}
+        for convention, data in sample.get("controller_pose_conventions", {}).items():
+            debug[convention] = {
+                "left_controller_robot_frame": _pose_frame_debug(
+                    data["left_controller_robot_position"],
+                    sRot.from_quat(
+                        data["left_controller_robot_orientation_wxyz"], scalar_first=True
+                    ),
+                ),
+                "right_controller_robot_frame": _pose_frame_debug(
+                    data["right_controller_robot_position"],
+                    sRot.from_quat(
+                        data["right_controller_robot_orientation_wxyz"], scalar_first=True
+                    ),
+                ),
+                "headset_robot_frame": _pose_frame_debug(
+                    data["headset_robot_position"],
+                    sRot.from_quat(data["headset_robot_orientation_wxyz"], scalar_first=True),
+                ),
+                "left_controller_ee_frame": _pose_frame_debug(
+                    data["left_controller_robot_position"],
+                    sRot.from_quat(
+                        data["left_controller_ee_orientation_wxyz"], scalar_first=True
+                    ),
+                ),
+                "right_controller_ee_frame": _pose_frame_debug(
+                    data["right_controller_robot_position"],
+                    sRot.from_quat(
+                        data["right_controller_ee_orientation_wxyz"], scalar_first=True
+                    ),
+                ),
+            }
+        return debug
+
+    def _add_target_vs_g1_errors(self, record: dict) -> None:
+        errors = {}
+        for side in ("left", "right"):
+            key = f"{side}_wrist"
+            target = record["vr_3pt_calibrated_target"][key]
+            g1 = record["g1_ee_fk"][key]
+            target_pos = np.array(target["position"], dtype=np.float64)
+            g1_pos = np.array(g1["position"], dtype=np.float64)
+            target_rot = sRot.from_quat(target["orientation"]["quat_wxyz"], scalar_first=True)
+            g1_rot = sRot.from_quat(g1["orientation"]["quat_wxyz"], scalar_first=True)
+            rot_error = g1_rot.inv() * target_rot
+            errors[key] = {
+                "position_delta_target_minus_g1": _as_list(target_pos - g1_pos),
+                "orientation_error_g1_inv_target_rpy_xyz_deg": _as_list(
+                    rot_error.as_euler("xyz", degrees=True)
+                ),
+            }
+            record["target_vs_g1_error"] = errors
+
+
+class Controller3PtPostureMarker:
+    """Controller-driven labels for calibration log rows."""
+
+    LABELS = (
+        "unlabeled",
+        "neutral",
+        "tilt_left",
+        "tilt_right",
+        "tilt_forward",
+        "tilt_backward",
+    )
+
+    def __init__(self):
+        self.index = 0
+        self.label = self.LABELS[self.index]
+        self.updated_realtime = time.time()
+        self.updated_monotonic = time.monotonic()
+        self.lock = threading.Lock()
+
+    def advance(self) -> dict:
+        with self.lock:
+            self.index = (self.index + 1) % len(self.LABELS)
+            self.label = self.LABELS[self.index]
+            self.updated_realtime = time.time()
+            self.updated_monotonic = time.monotonic()
+            marker = self._snapshot_unlocked()
+        print(
+            "[Controller3PtMarker] "
+            f"posture -> {marker['index']}: {marker['label']}"
+        )
+        return marker
+
+    def snapshot(self) -> dict:
+        with self.lock:
+            return self._snapshot_unlocked()
+
+    def _snapshot_unlocked(self) -> dict:
+        return {
+            "index": int(self.index),
+            "label": self.label,
+            "updated_realtime": float(self.updated_realtime),
+            "updated_monotonic": float(self.updated_monotonic),
+        }
+
+
+def _quat_angle_deg_wxyz(q0: np.ndarray, q1: np.ndarray) -> float:
+    q0 = np.asarray(q0, dtype=np.float64)
+    q1 = np.asarray(q1, dtype=np.float64)
+    q0 = q0 / max(np.linalg.norm(q0), 1e-12)
+    q1 = q1 / max(np.linalg.norm(q1), 1e-12)
+    dot = abs(float(np.dot(q0, q1)))
+    return float(np.degrees(2.0 * np.arccos(np.clip(dot, -1.0, 1.0))))
+
+
+def evaluate_vr3pt_entry_gate(
+    candidate_pose: np.ndarray,
+    g1_poses: dict,
+    wrist_pos_max_m: float = 0.25,
+    torso_pos_max_m: float = 0.20,
+    wrist_orn_max_deg: float = 45.0,
+) -> tuple[bool, str]:
+    """Compare calibrated VR_3PT target against current G1 FK."""
+    reference_positions = np.vstack(
+        [
+            g1_poses["left_wrist"]["position"],
+            g1_poses["right_wrist"]["position"],
+            g1_poses["torso"]["position"],
+        ]
+    )
+    position_errors = np.linalg.norm(candidate_pose[:, :3] - reference_positions, axis=1)
+    left_orn_error = _quat_angle_deg_wxyz(
+        candidate_pose[0, 3:], g1_poses["left_wrist"]["orientation_wxyz"]
+    )
+    right_orn_error = _quat_angle_deg_wxyz(
+        candidate_pose[1, 3:], g1_poses["right_wrist"]["orientation_wxyz"]
+    )
+
+    passed = True
+    if wrist_pos_max_m > 0.0:
+        passed = passed and bool(position_errors[0] <= wrist_pos_max_m)
+        passed = passed and bool(position_errors[1] <= wrist_pos_max_m)
+    if torso_pos_max_m > 0.0:
+        passed = passed and bool(position_errors[2] <= torso_pos_max_m)
+    if wrist_orn_max_deg > 0.0:
+        passed = passed and left_orn_error <= wrist_orn_max_deg
+        passed = passed and right_orn_error <= wrist_orn_max_deg
+
+    details = (
+        f"left_wrist_pos={position_errors[0]:.3f}m/{wrist_pos_max_m:.3f}m, "
+        f"right_wrist_pos={position_errors[1]:.3f}m/{wrist_pos_max_m:.3f}m, "
+        f"torso_pos={position_errors[2]:.3f}m/{torso_pos_max_m:.3f}m, "
+        f"left_wrist_orn={left_orn_error:.1f}deg/{wrist_orn_max_deg:.1f}deg, "
+        f"right_wrist_orn={right_orn_error:.1f}deg/{wrist_orn_max_deg:.1f}deg"
+    )
+    return passed, details
+
+
 class PlannerStreamer:
     """Encapsulates the planner control loop state and logic."""
 
@@ -1625,10 +2432,22 @@ class PlannerStreamer:
         poll_hz: int = 20,
         zmq_feedback_host: str = "localhost",
         zmq_feedback_port: int = 5557,
+        controller_3pt: bool = False,
+        controller_3pt_logger: Controller3PtCalibrationLogger | None = None,
+        teleop_ramp_duration: float = 1.0,
+        vr3pt_entry_wrist_pos_max_m: float = 0.25,
+        vr3pt_entry_torso_pos_max_m: float = 0.20,
+        vr3pt_entry_wrist_orn_max_deg: float = 45.0,
     ):
         self.socket = socket
         self.reader = reader
         self.three_point = three_point
+        self.controller_3pt = controller_3pt
+        self.controller_3pt_logger = controller_3pt_logger
+        self.teleop_ramp_duration = max(0.0, float(teleop_ramp_duration))
+        self.vr3pt_entry_wrist_pos_max_m = float(vr3pt_entry_wrist_pos_max_m)
+        self.vr3pt_entry_torso_pos_max_m = float(vr3pt_entry_torso_pos_max_m)
+        self.vr3pt_entry_wrist_orn_max_deg = float(vr3pt_entry_wrist_orn_max_deg)
         self.feedback_reader = FeedbackReader(
             zmq_feedback_host=zmq_feedback_host, zmq_feedback_port=zmq_feedback_port
         )
@@ -1645,10 +2464,66 @@ class PlannerStreamer:
 
         # Hand IK solvers for trigger-controlled hand open/close in VR 3PT mode
         self.left_hand_ik_solver, self.right_hand_ik_solver = init_hand_ik_solvers()
+        self._vr3pt_ramp_start_pose: np.ndarray | None = None
+        self._vr3pt_ramp_start_time: float | None = None
+        self._vr3pt_ramp_active = False
+        self._last_vr3pt_pose: np.ndarray | None = None
+        self.freeze_vr3pt_target_once = False
+        self._vr3pt_entry_gate_passed = False
+        self._vr3pt_recalibrated_since_gate = False
 
     def reset_yaw(self):
         """Called when entering planner mode. Resets state for fresh start."""
         self.yaw_accumulator.reset()
+
+    def start_vr3pt_ramp(self, require_recalibration: bool = True):
+        """Start a short blend from the first calibrated VR_3PT target to live targets."""
+        gate_enabled = (
+            self.vr3pt_entry_wrist_pos_max_m > 0.0
+            or self.vr3pt_entry_torso_pos_max_m > 0.0
+            or self.vr3pt_entry_wrist_orn_max_deg > 0.0
+        )
+        if gate_enabled and not self._vr3pt_entry_gate_passed:
+            raise RuntimeError("VR_3PT ramp requested before entry gate passed")
+        if require_recalibration and not self._vr3pt_recalibrated_since_gate:
+            raise RuntimeError("VR_3PT ramp requested before post-gate recalibration")
+        if self.teleop_ramp_duration <= 0.0:
+            self._vr3pt_ramp_active = False
+            self._vr3pt_ramp_start_pose = None
+            self._vr3pt_ramp_start_time = None
+            self._vr3pt_entry_gate_passed = False
+            self._vr3pt_recalibrated_since_gate = False
+            return
+        self._vr3pt_ramp_active = True
+        self._vr3pt_ramp_start_pose = None
+        self._vr3pt_ramp_start_time = None
+        self._vr3pt_entry_gate_passed = False
+        self._vr3pt_recalibrated_since_gate = False
+        print(f"[PlannerLoop] VR_3PT ramp started ({self.teleop_ramp_duration:.2f}s)")
+
+    def cancel_vr3pt_ramp(self):
+        self._vr3pt_ramp_active = False
+        self._vr3pt_ramp_start_pose = None
+        self._vr3pt_ramp_start_time = None
+
+    def _apply_vr3pt_ramp(self, vr_3pt_pose: np.ndarray) -> np.ndarray:
+        if not self._vr3pt_ramp_active:
+            return vr_3pt_pose
+
+        now = time.monotonic()
+        if self._vr3pt_ramp_start_pose is None:
+            self._vr3pt_ramp_start_pose = np.asarray(vr_3pt_pose, dtype=np.float32).copy()
+            self._vr3pt_ramp_start_time = now
+            return self._vr3pt_ramp_start_pose.copy()
+
+        elapsed = now - (self._vr3pt_ramp_start_time or now)
+        alpha = np.clip(elapsed / self.teleop_ramp_duration, 0.0, 1.0)
+        alpha = alpha * alpha * (3.0 - 2.0 * alpha)
+        if alpha >= 1.0:
+            self.cancel_vr3pt_ramp()
+            print("[PlannerLoop] VR_3PT ramp complete")
+            return vr_3pt_pose
+        return _blend_vr_3pt_pose(self._vr3pt_ramp_start_pose, vr_3pt_pose, alpha)
 
     def save_upper_body_position_target(self):
         """Poll feedback and save upper body position target."""
@@ -1665,6 +2540,7 @@ class PlannerStreamer:
         self.feedback_reader.poll_feedback()
         if self.feedback_reader.full_body_q_measured is not None:
             self.three_point.reset_with_measured_q(self.feedback_reader.full_body_q_measured)
+            self._vr3pt_recalibrated_since_gate = True
             print("[PlannerLoop] VR 3PT recalibration scheduled with measured robot pose")
         else:
             # Fallback: use zeros if no feedback available
@@ -1673,20 +2549,95 @@ class PlannerStreamer:
                 "using zero body_q as fallback"
             )
             self.three_point.reset_with_measured_q(np.zeros(29, dtype=np.float64))
+            self._vr3pt_recalibrated_since_gate = True
+
+    def check_vr3pt_entry_mismatch(self) -> bool:
+        """Refuse VR_3PT if calibrated operator target is far from current robot FK."""
+        gate_enabled = (
+            self.vr3pt_entry_wrist_pos_max_m > 0.0
+            or self.vr3pt_entry_torso_pos_max_m > 0.0
+            or self.vr3pt_entry_wrist_orn_max_deg > 0.0
+        )
+        if not gate_enabled:
+            print("[Manager] WARNING: VR_3PT entry gate disabled by thresholds <= 0")
+            self._vr3pt_entry_gate_passed = True
+            self._vr3pt_recalibrated_since_gate = False
+            return True
+        if self.three_point._robot_model is None or get_g1_key_frame_poses is None:
+            print("[Manager] Refusing VR_3PT: robot model unavailable for entry gate")
+            return False
+        if not self.three_point.is_calibrated:
+            print("[Manager] Refusing VR_3PT: 3-point calibration is not initialized")
+            return False
+
+        sample = self.reader.get_latest()
+        if sample is None:
+            print("[Manager] Refusing VR_3PT: no current Pico sample for entry gate")
+            return False
+
+        self.feedback_reader.poll_feedback()
+        body_q = self.feedback_reader.full_body_q_measured
+        if body_q is None:
+            print("[Manager] Refusing VR_3PT: no robot feedback for entry gate")
+            return False
+
+        if self.controller_3pt:
+            raw_vr_3pt_pose = sample["vr_3pt_pose_np"]
+        else:
+            raw_vr_3pt_pose = _process_3pt_pose(sample["body_poses_np"])
+        candidate_pose = self.three_point._apply_calibration(raw_vr_3pt_pose)
+
+        robot_q = self.three_point._robot_model.get_configuration_from_actuated_joints(
+            body_actuated_joint_values=body_q[:29]
+        )
+        g1_poses = get_g1_key_frame_poses(self.three_point._robot_model, q=robot_q)
+        passed, details = evaluate_vr3pt_entry_gate(
+            candidate_pose,
+            g1_poses,
+            wrist_pos_max_m=self.vr3pt_entry_wrist_pos_max_m,
+            torso_pos_max_m=self.vr3pt_entry_torso_pos_max_m,
+            wrist_orn_max_deg=self.vr3pt_entry_wrist_orn_max_deg,
+        )
+        if not passed:
+            self._vr3pt_entry_gate_passed = False
+            self._vr3pt_recalibrated_since_gate = False
+            print(
+                "[Manager] Refusing VR_3PT: calibrated target mismatches current robot FK "
+                f"({details})"
+            )
+            return False
+
+        print(f"[Manager] VR_3PT entry gate passed ({details})")
+        self._vr3pt_entry_gate_passed = True
+        self._vr3pt_recalibrated_since_gate = False
+        return True
 
     def run_once(self, stream_mode: StreamMode):
         """Execute one iteration of the planner control loop."""
         try:
             # Avoid sending old commands if XRT timestamp hasn't advanced, in case of headset disconnect
-            xrt_timestamp = xrt.get_time_stamp_ns()
-            if xrt_timestamp == self.last_xrt_timestamp:
+            if self.controller_3pt:
+                latest_sample = self.reader.get_latest()
+                if latest_sample is None:
+                    return
+                xrt_timestamp = latest_sample.get("timestamp_ns")
+            else:
+                latest_sample = None
+                xrt_timestamp = xrt.get_time_stamp_ns()
+            duplicate_xr_sample = xrt_timestamp == self.last_xrt_timestamp
+            can_freeze_vr3pt = (
+                stream_mode == StreamMode.PLANNER_VR_3PT
+                and self.freeze_vr3pt_target_once
+                and self._last_vr3pt_pose is not None
+            )
+            if duplicate_xr_sample and not can_freeze_vr3pt:
                 return
             self.last_xrt_timestamp = xrt_timestamp
 
             # A+B => next mode; X+Y => previous mode (rising edges)
             a_pressed, b_pressed, x_pressed, y_pressed = get_abxy_buttons()
-            ab_now = bool(a_pressed) and bool(b_pressed)
-            xy_now = bool(x_pressed) and bool(y_pressed)
+            ab_now = bool(a_pressed) and bool(b_pressed) and not bool(x_pressed) and not bool(y_pressed)
+            xy_now = bool(x_pressed) and bool(y_pressed) and not bool(a_pressed) and not bool(b_pressed)
             if ab_now and not self.prev_ab:
                 self.mode = LocomotionMode(min(LocomotionMode.INJURED_WALK, self.mode + 1))
                 print(f"[PlannerLoop] Mode -> {self.mode.value}: {self.mode.name}")
@@ -1744,10 +2695,34 @@ class PlannerStreamer:
             vr_3pt_orientation = None
             vr_3pt_compliance = None
             if stream_mode == StreamMode.PLANNER_VR_3PT:
-                sample = self.reader.get_latest()
-                if sample is not None:
+                vr_3pt_pose = None
+                sample = latest_sample if latest_sample is not None else self.reader.get_latest()
+                if self.freeze_vr3pt_target_once and self._last_vr3pt_pose is not None:
+                    vr_3pt_pose = self._last_vr3pt_pose.copy()
+                    self.freeze_vr3pt_target_once = False
+                    print("[PlannerLoop] XR stale warning: re-sending last VR 3-point target")
+                elif sample is not None:
                     print("[PlannerLoop] Sending VR 3-point pose as target")
-                    vr_3pt_pose = self.three_point.process_smpl_pose(sample["body_poses_np"])
+                    if self.controller_3pt:
+                        raw_vr_3pt_pose = sample["vr_3pt_pose_np"]
+                        vr_3pt_pose = self.three_point.process_vr_3pt_pose(
+                            raw_vr_3pt_pose
+                        )
+                        if self.controller_3pt_logger is not None:
+                            self.controller_3pt_logger.maybe_log(
+                                "vr3pt_stream",
+                                sample,
+                                raw_vr_3pt_pose,
+                                vr_3pt_pose,
+                                self.three_point,
+                                self.feedback_reader.full_body_q_measured,
+                            )
+                    else:
+                        vr_3pt_pose = self.three_point.process_smpl_pose(sample["body_poses_np"])
+                    vr_3pt_pose = self._apply_vr3pt_ramp(vr_3pt_pose)
+                    self._last_vr3pt_pose = np.asarray(vr_3pt_pose, dtype=np.float32).copy()
+                    self.freeze_vr3pt_target_once = False
+                if vr_3pt_pose is not None:
                     vr_3pt_position = (vr_3pt_pose[:, :3].flatten()).tolist()
                     vr_3pt_orientation = vr_3pt_pose[:, 3:].flatten().tolist()
 
@@ -1814,6 +2789,20 @@ def run_pico_manager(
     with_g1_robot: bool = True,
     enable_waist_tracking: bool = False,
     enable_smpl_vis: bool = False,
+    controller_3pt: bool = False,
+    left_controller_offset_rpy: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    right_controller_offset_rpy: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    controller_pose_convention: str = "xrobotoolkit_unity",
+    headset_pose_convention: str = "xrobotoolkit_unity",
+    headset_orientation_convention: str | None = None,
+    no_vr3pt_recalib_on_switch: bool = False,
+    teleop_ramp_duration: float = 1.0,
+    vr3pt_entry_wrist_pos_max_m: float = 0.25,
+    vr3pt_entry_torso_pos_max_m: float = 0.20,
+    vr3pt_entry_wrist_orn_max_deg: float = 45.0,
+    controller_3pt_log_dir: str = "",
+    controller_3pt_log_interval: float = 1.0,
+    disable_xr_staleness_watchdog: bool = False,
 ):
     """
     Manager: creates shared PUB socket and runs pose/planner streamers based on current mode.
@@ -1827,10 +2816,37 @@ def run_pico_manager(
         )
     subprocess.Popen(["bash", "/opt/apps/roboticsservice/runService.sh"])
     xrt.init()
-    print("Waiting for body tracking data...")
-    while not xrt.is_body_data_available():
-        print("waiting for body data...")
-        time.sleep(1)
+    if controller_3pt:
+        print("Controller 3PT mode enabled: using headset + two controller poses only.")
+        print("Full-body POSE mode is disabled; use PLANNER and VR_3PT modes.")
+        print(
+            "Controller EE offsets (deg): "
+            f"left={left_controller_offset_rpy}, right={right_controller_offset_rpy}"
+        )
+        print(f"Controller pose convention: {controller_pose_convention}")
+        print(f"Headset pose convention: {headset_pose_convention}")
+        headset_orientation_convention = (
+            headset_orientation_convention or headset_pose_convention
+        )
+        print(f"Headset orientation convention: {headset_orientation_convention}")
+        if no_vr3pt_recalib_on_switch:
+            print(
+                "WARNING: VR_3PT per-switch recalibration disabled. "
+                "Use only for testing, not real robot teleop."
+            )
+        if (
+            vr3pt_entry_wrist_pos_max_m <= 0.0
+            and vr3pt_entry_torso_pos_max_m <= 0.0
+            and vr3pt_entry_wrist_orn_max_deg <= 0.0
+        ):
+            print("WARNING: VR_3PT entry gate disabled by thresholds <= 0.")
+        if not controller_3pt_log_dir:
+            controller_3pt_log_dir = os.path.join("outputs", "controller_3pt_calibration")
+    else:
+        print("Waiting for body tracking data...")
+        while not xrt.is_body_data_available():
+            print("waiting for body data...")
+            time.sleep(1)
 
     context = zmq.Context()
     socket = context.socket(zmq.PUB)
@@ -1847,7 +2863,18 @@ def run_pico_manager(
         pass
 
     # Create shared reader and 3-point pose processor
-    reader = PicoReader(max_queue_size=buffer_size)
+    reader = (
+        ControllerPoseReader(
+            max_queue_size=buffer_size,
+            left_controller_offset_rpy=left_controller_offset_rpy,
+            right_controller_offset_rpy=right_controller_offset_rpy,
+            controller_pose_convention=controller_pose_convention,
+            headset_pose_convention=headset_pose_convention,
+            headset_orientation_convention=headset_orientation_convention,
+        )
+        if controller_3pt
+        else PicoReader(max_queue_size=buffer_size)
+    )
     reader.start()
 
     three_point = ThreePointPose(
@@ -1856,6 +2883,16 @@ def run_pico_manager(
         enable_waist_tracking=enable_waist_tracking,
         enable_smpl_vis=enable_smpl_vis,
         log_prefix="PoseLoop",
+    )
+    posture_marker = Controller3PtPostureMarker() if controller_3pt else None
+    controller_3pt_logger = (
+        Controller3PtCalibrationLogger(
+            controller_3pt_log_dir,
+            controller_3pt_log_interval,
+            posture_marker=posture_marker,
+        )
+        if controller_3pt
+        else None
     )
 
     pose_streamer = PoseStreamer(
@@ -1876,14 +2913,20 @@ def run_pico_manager(
         poll_hz=20,
         zmq_feedback_host=zmq_feedback_host,
         zmq_feedback_port=zmq_feedback_port,
+        controller_3pt=controller_3pt,
+        controller_3pt_logger=controller_3pt_logger,
+        teleop_ramp_duration=teleop_ramp_duration,
+        vr3pt_entry_wrist_pos_max_m=vr3pt_entry_wrist_pos_max_m,
+        vr3pt_entry_torso_pos_max_m=vr3pt_entry_torso_pos_max_m,
+        vr3pt_entry_wrist_orn_max_deg=vr3pt_entry_wrist_orn_max_deg,
     )
 
     # State machine diagram:
     #
     #   Chain 1 (by_pressed enters/exits, left_axis_click toggles sub-mode):
     #     POSE <--(by)--> PLANNER_FROZEN_UPPER_BODY <--(left_axis_click)--> PLANNER_VR_3PT
-    #                                                                         |
-    #                                                                    (by)--> POSE
+    #                                          ▲                              |
+    #                                          └───────────────(by)───────────┘
     #
     #   Chain 2 (ax_pressed enters/exits, left_axis_click toggles sub-mode):
     #     POSE <--(ax)--> PLANNER <--(left_axis_click)--> PLANNER_VR_3PT
@@ -1893,46 +2936,108 @@ def run_pico_manager(
     #   Emergency stop from any mode: A+B+X+Y (start_combo) --> OFF
     #   POSE_PAUSE: left_menu_button held --> POSE_PAUSE, released --> POSE
     #
-    print("Manager controls: A+X=toggle mode, A+B+X+Y=start/stop policy")
+    if controller_3pt:
+        print(
+            "Manager controls: A+B+X+Y=start/stop, "
+            "Left Stick Click=toggle VR_3PT upper-body teleop, "
+            "B+Y=freeze upper body, "
+            "Right Stick Click=advance calibration posture marker"
+        )
+        print(
+            "Posture marker sequence: "
+            + " -> ".join(Controller3PtPostureMarker.LABELS)
+        )
+    else:
+        print("Manager controls: A+X=toggle mode, B+Y=freeze upper body, A+B+X+Y=start/stop policy")
     current_mode = StreamMode.OFF
     # Track which mode VR_3PT was entered from, so left_axis_click returns to it.
     # Will be either PLANNER or PLANNER_FROZEN_UPPER_BODY.
     vr3pt_parent_mode = StreamMode.PLANNER
     prev_toggle_dc = False
     prev_toggle_da = False
+    xr_watchdog = XRStalenessWatchdog()
+    if disable_xr_staleness_watchdog:
+        print("WARNING: XR staleness watchdog disabled.")
     try:
         prev_ax_pressed = False
         prev_by_pressed = False
         prev_start_combo = False
         prev_left_axis_click = False
+        prev_right_axis_click = False
         while True:
             # Poll Pico controller for buttons/axes
             a_pressed, b_pressed, x_pressed, y_pressed = get_abxy_buttons()
 
             left_menu_button, _, _, left_grip_mgr, _ = get_controller_inputs()
 
-            left_axis_click, _ = get_axis_clicks()
+            left_axis_click, right_axis_click = get_axis_clicks()
 
             # Rising edge: A+X pressed together -> toggle POSE/PLANNER mode
-            ax_pressed = (a_pressed) and (x_pressed)
+            ax_pressed = bool(a_pressed) and bool(x_pressed) and not bool(b_pressed) and not bool(y_pressed)
 
             # Rising edge: B+Y pressed together -> toggle POSE/PLANNER_FROZEN_UPPER_BODY mode
-            by_pressed = (b_pressed) and (y_pressed)
+            by_pressed = bool(b_pressed) and bool(y_pressed) and not bool(a_pressed) and not bool(x_pressed)
 
             # Rising edge: A+B+X+Y pressed together -> toggle policy start/stop (planner=True)
-            start_combo = (a_pressed) and (b_pressed) and (x_pressed) and (y_pressed)
+            start_combo = bool(a_pressed) and bool(b_pressed) and bool(x_pressed) and bool(y_pressed)
+
+            if not disable_xr_staleness_watchdog:
+                xr_state = xr_watchdog.poll(
+                    reader.get_last_sample_monotonic_ns()
+                    if controller_3pt and hasattr(reader, "get_last_sample_monotonic_ns")
+                    else None,
+                    time.monotonic_ns(),
+                    active=controller_3pt and current_mode == StreamMode.PLANNER_VR_3PT,
+                )
+                if xr_state == "warn":
+                    planner_streamer.freeze_vr3pt_target_once = True
+                elif xr_state == "estop":
+                    print("[Manager] XR staleness E-STOP: stopping policy and exiting")
+                    socket.send(build_command_message(start=False, stop=True, planner=True))
+                    exit()
+
+            if (
+                controller_3pt
+                and right_axis_click
+                and not prev_right_axis_click
+                and posture_marker is not None
+            ):
+                posture_marker.advance()
+                sample = reader.get_latest()
+                if sample is not None and controller_3pt_logger is not None:
+                    raw_vr_3pt_pose = sample["vr_3pt_pose_np"]
+                    controller_3pt_logger.log(
+                        "posture_marker",
+                        sample,
+                        raw_vr_3pt_pose,
+                        three_point.process_vr_3pt_pose(raw_vr_3pt_pose),
+                        three_point,
+                        planner_streamer.feedback_reader.full_body_q_measured,
+                    )
 
             new_mode = current_mode
             if current_mode == StreamMode.OFF:
                 if start_combo and not prev_start_combo:
                     new_mode = StreamMode.PLANNER
                     # Calibrate VR 3pt tracking NOW: operator should be in zero-ref pose.
-                    # Uses the current Pico SMPL frame + FK of all-zero body joints.
+                    # Uses the current Pico frame + FK of all-zero body joints.
                     sample = reader.get_latest()
                     if sample is not None:
-                        three_point.calibrate_now(sample["body_poses_np"])
+                        if controller_3pt:
+                            three_point.calibrate_vr_3pt_now(sample["vr_3pt_pose_np"])
+                            if controller_3pt_logger is not None:
+                                controller_3pt_logger.log(
+                                    "initial_calibration",
+                                    sample,
+                                    sample["vr_3pt_pose_np"],
+                                    three_point.process_vr_3pt_pose(sample["vr_3pt_pose_np"]),
+                                    three_point,
+                                    None,
+                                )
+                        else:
+                            three_point.calibrate_now(sample["body_poses_np"])
                     else:
-                        print("[Manager] WARNING: No SMPL data available for calibration")
+                        print("[Manager] WARNING: No Pico data available for calibration")
 
             elif current_mode == StreamMode.PLANNER:
                 # Chain 2: POSE <--(ax)--> PLANNER <--(left_axis_click)--> VR_3PT
@@ -1972,7 +3077,7 @@ def run_pico_manager(
                 # VR_3PT is reachable from both chains:
                 #   left_axis_click → return to parent (PLANNER or FROZEN)
                 #   ax_pressed      → POSE (chain 2 exit)
-                #   by_pressed      → POSE (chain 1 exit)
+                #   by_pressed      → freeze current upper body
                 if start_combo and not prev_start_combo:
                     new_mode = StreamMode.OFF
                 elif left_axis_click and not prev_left_axis_click:
@@ -1980,36 +3085,57 @@ def run_pico_manager(
                 elif ax_pressed and not prev_ax_pressed:
                     new_mode = StreamMode.POSE
                 elif by_pressed and not prev_by_pressed:
-                    new_mode = StreamMode.POSE
+                    new_mode = StreamMode.PLANNER_FROZEN_UPPER_BODY
 
             # Handle mode transitions before running loop
             if new_mode != current_mode:
-                if current_mode == StreamMode.POSE:
-                    pose_streamer.on_mode_exit()
+                if controller_3pt and new_mode == StreamMode.POSE:
+                    if current_mode == StreamMode.PLANNER_VR_3PT:
+                        new_mode = vr3pt_parent_mode
+                    else:
+                        new_mode = StreamMode.PLANNER_VR_3PT
+                    print("[Manager] Controller 3PT mode remapped POSE request to VR_3PT")
 
-                # Track parent when entering VR_3PT
                 if new_mode == StreamMode.PLANNER_VR_3PT:
-                    vr3pt_parent_mode = current_mode
-                    print(f"[Manager] VR_3PT parent: {vr3pt_parent_mode.name}")
+                    if not planner_streamer.check_vr3pt_entry_mismatch():
+                        new_mode = current_mode
 
-                if new_mode == StreamMode.POSE:
-                    pose_streamer.reset_yaw()
-                elif new_mode == StreamMode.PLANNER and current_mode != StreamMode.PLANNER_VR_3PT:
-                    # Only reset yaw when freshly entering PLANNER from POSE,
-                    # not when returning from VR_3PT sub-mode
-                    planner_streamer.reset_yaw()
-                elif new_mode == StreamMode.PLANNER_FROZEN_UPPER_BODY:
-                    if current_mode != StreamMode.PLANNER_VR_3PT:
-                        # Freshly entering from POSE: reset yaw and grab initial targets
+                if new_mode != current_mode:
+                    if current_mode == StreamMode.POSE:
+                        pose_streamer.on_mode_exit()
+
+                    if current_mode == StreamMode.PLANNER_VR_3PT:
+                        planner_streamer.cancel_vr3pt_ramp()
+
+                    # Track parent when entering VR_3PT
+                    if new_mode == StreamMode.PLANNER_VR_3PT:
+                        vr3pt_parent_mode = current_mode
+                        print(f"[Manager] VR_3PT parent: {vr3pt_parent_mode.name}")
+
+                    if new_mode == StreamMode.POSE:
+                        pose_streamer.reset_yaw()
+                    elif new_mode == StreamMode.PLANNER and current_mode != StreamMode.PLANNER_VR_3PT:
+                        # Only reset yaw when freshly entering PLANNER from POSE,
+                        # not when returning from VR_3PT sub-mode
                         planner_streamer.reset_yaw()
-                    # Always re-grab the latest robot state as frozen targets,
-                    # whether entering from POSE or returning from VR_3PT
-                    # (the old targets are stale after VR_3PT moved the arms)
-                    planner_streamer.save_upper_body_position_target()
-                elif new_mode == StreamMode.PLANNER_VR_3PT:
-                    # Recalibrate VR tracking against the robot's actual current pose
-                    # (read via g1_debug feedback + FK) to prevent sudden jumps
-                    planner_streamer.recalibrate_for_vr3pt()
+                    elif new_mode == StreamMode.PLANNER_FROZEN_UPPER_BODY:
+                        if current_mode != StreamMode.PLANNER_VR_3PT:
+                            # Freshly entering from POSE: reset yaw and grab initial targets
+                            planner_streamer.reset_yaw()
+                        # Always re-grab the latest robot state as frozen targets,
+                        # whether entering from POSE or returning from VR_3PT
+                        # (the old targets are stale after VR_3PT moved the arms)
+                        planner_streamer.save_upper_body_position_target()
+                    elif new_mode == StreamMode.PLANNER_VR_3PT:
+                        # Recalibrate VR tracking against the robot's actual current pose
+                        # (read via g1_debug feedback + FK) to prevent sudden jumps
+                        if no_vr3pt_recalib_on_switch:
+                            print("[Manager] Skipping VR_3PT per-switch recalibration")
+                        else:
+                            planner_streamer.recalibrate_for_vr3pt()
+                        planner_streamer.start_vr3pt_ramp(
+                            require_recalibration=not no_vr3pt_recalib_on_switch
+                        )
 
             # Run one iteration of the new mode
             if new_mode == StreamMode.POSE:
@@ -2060,6 +3186,7 @@ def run_pico_manager(
             prev_by_pressed = by_pressed
             prev_start_combo = start_combo
             prev_left_axis_click = left_axis_click
+            prev_right_axis_click = right_axis_click
 
     except KeyboardInterrupt:
         print("\nStopping manager...")
@@ -2156,6 +3283,133 @@ if __name__ == "__main__":
         action="store_true",
         help="Enable SMPL body joint visualization (24 joint spheres) in the VR3pt viewer",
     )
+    parser.add_argument(
+        "--controller_3pt",
+        action="store_true",
+        help=(
+            "Use only PICO headset + two controller poses for VR_3PT upper-body teleop. "
+            "This does not require ankle trackers, but full-body POSE mode is disabled."
+        ),
+    )
+    parser.add_argument(
+        "--left_controller_offset_rpy",
+        nargs=3,
+        type=float,
+        default=(0.0, 0.0, 0.0),
+        metavar=("ROLL", "PITCH", "YAW"),
+        help=(
+            "Extra left controller-to-EE orientation offset in degrees, applied as "
+            "extrinsic xyz roll/pitch/yaw before VR_3PT calibration."
+        ),
+    )
+    parser.add_argument(
+        "--right_controller_offset_rpy",
+        nargs=3,
+        type=float,
+        default=(0.0, 0.0, 0.0),
+        metavar=("ROLL", "PITCH", "YAW"),
+        help=(
+            "Extra right controller-to-EE orientation offset in degrees, applied as "
+            "extrinsic xyz roll/pitch/yaw before VR_3PT calibration."
+        ),
+    )
+    parser.add_argument(
+        "--controller_pose_convention",
+        type=str,
+        choices=CONTROLLER_POSE_CONVENTIONS,
+        default="xrobotoolkit_unity",
+        help=(
+            "Base coordinate transform for headset/controller poses. "
+            "xrobotoolkit_unity is the previous behavior; openxr_unitree matches "
+            "Unitree televuer's OpenXR-to-robot basis transform."
+        ),
+    )
+    parser.add_argument(
+        "--headset_pose_convention",
+        type=str,
+        choices=CONTROLLER_POSE_CONVENTIONS,
+        default="xrobotoolkit_unity",
+        help=(
+            "Base coordinate transform for headset pose. Keep xrobotoolkit_unity for "
+            "GR00T upper-body/head tracking; controller_pose_convention can be "
+            "openxr_unitree independently for hand controller axes."
+        ),
+    )
+    parser.add_argument(
+        "--headset_orientation_convention",
+        type=str,
+        choices=CONTROLLER_POSE_CONVENTIONS,
+        default=None,
+        help=(
+            "Base coordinate transform for headset orientation. Defaults to "
+            "--headset_pose_convention. Use openxr_unitree if headset forward/back tilt "
+            "is mapped to robot side lean."
+        ),
+    )
+    parser.add_argument(
+        "--no_vr3pt_recalib_on_switch",
+        action="store_true",
+        help=(
+            "Do not recalibrate VR_3PT when entering it with Left Stick Click. "
+            "Useful for testing wrist axis alignment after initial CALIB_FULL calibration."
+        ),
+    )
+    parser.add_argument(
+        "--teleop_ramp_duration",
+        type=float,
+        default=1.0,
+        help=(
+            "Seconds to ramp VR_3PT teleop targets after entering teleoperation mode. "
+            "Set to 0 to disable ramping."
+        ),
+    )
+    parser.add_argument(
+        "--vr3pt_entry_max_mismatch",
+        type=float,
+        default=None,
+        help=(
+            "Deprecated alias for --vr3pt_entry_wrist_pos_max_m. "
+            "Kept for old commands."
+        ),
+    )
+    parser.add_argument(
+        "--vr3pt_entry_wrist_pos_max_m",
+        type=float,
+        default=0.25,
+        help="Maximum wrist position mismatch in meters when entering VR_3PT.",
+    )
+    parser.add_argument(
+        "--vr3pt_entry_torso_pos_max_m",
+        type=float,
+        default=0.20,
+        help="Maximum torso/head-point position mismatch in meters when entering VR_3PT.",
+    )
+    parser.add_argument(
+        "--vr3pt_entry_wrist_orn_max_deg",
+        type=float,
+        default=45.0,
+        help="Maximum wrist orientation mismatch in degrees when entering VR_3PT.",
+    )
+    parser.add_argument(
+        "--controller_3pt_log_dir",
+        type=str,
+        default="",
+        help=(
+            "Directory for controller-only calibration JSONL logs. Defaults to "
+            "outputs/controller_3pt_calibration when --controller_3pt is used."
+        ),
+    )
+    parser.add_argument(
+        "--controller_3pt_log_interval",
+        type=float,
+        default=1.0,
+        help="Seconds between saved controller/G1 frame logs while in VR_3PT.",
+    )
+    parser.add_argument(
+        "--disable_xr_staleness_watchdog",
+        action="store_true",
+        help="Disable manager-side XR stale-frame stop/freeze checks. Use only for harnessed diagnostics.",
+    )
     args = parser.parse_args()
 
     # Standalone VR3Pt test modes (exit after finishing)
@@ -2196,6 +3450,24 @@ if __name__ == "__main__":
             with_g1_robot=with_g1_robot,
             enable_waist_tracking=args.waist_tracking,
             enable_smpl_vis=args.vis_smpl,
+            controller_3pt=args.controller_3pt,
+            left_controller_offset_rpy=tuple(args.left_controller_offset_rpy),
+            right_controller_offset_rpy=tuple(args.right_controller_offset_rpy),
+            controller_pose_convention=args.controller_pose_convention,
+            headset_pose_convention=args.headset_pose_convention,
+            headset_orientation_convention=args.headset_orientation_convention,
+            no_vr3pt_recalib_on_switch=args.no_vr3pt_recalib_on_switch,
+            teleop_ramp_duration=args.teleop_ramp_duration,
+            vr3pt_entry_wrist_pos_max_m=(
+                args.vr3pt_entry_max_mismatch
+                if args.vr3pt_entry_max_mismatch is not None
+                else args.vr3pt_entry_wrist_pos_max_m
+            ),
+            vr3pt_entry_torso_pos_max_m=args.vr3pt_entry_torso_pos_max_m,
+            vr3pt_entry_wrist_orn_max_deg=args.vr3pt_entry_wrist_orn_max_deg,
+            controller_3pt_log_dir=args.controller_3pt_log_dir,
+            controller_3pt_log_interval=args.controller_3pt_log_interval,
+            disable_xr_staleness_watchdog=args.disable_xr_staleness_watchdog,
         )
     else:
         # Run legacy single-thread pose streaming

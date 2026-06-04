@@ -91,6 +91,7 @@ Documentation
    tutorials/zmq
    tutorials/manager
    tutorials/vr_wholebody_teleop
+   tutorials/xr_upperbody_bridge
    tutorials/data_collection
    tutorials/vla_workflow
    tutorials/vla_inference
@@ -109,6 +110,7 @@ Documentation
    :caption: Best Practices
 
    user_guide/teleoperation
+   user_guide/real_robot_safety
    user_guide/troubleshooting
 
 .. toctree::
