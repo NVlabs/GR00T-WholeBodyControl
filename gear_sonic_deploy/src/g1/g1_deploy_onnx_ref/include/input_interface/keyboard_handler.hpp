@@ -117,6 +117,8 @@ class SimpleKeyboard : public InputInterface {
     const double momentum_decay_rate = 0.999;  ///< Per-frame multiplicative decay.
     const double momentum_threshold = 0.1;     ///< Below this, transition to IDLE.
 
+    bool ContinuousHeadingUpdate() const override { return true; }
+
     /**
      * @brief Construct the keyboard handler.
      *

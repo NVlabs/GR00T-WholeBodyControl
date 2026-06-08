@@ -90,7 +90,8 @@ public:
         const std::array<double, 4>& init_ref_data_root_rot_array,
         DataBuffer<HeadingState>& heading_state_buffer,
         std::shared_ptr<const MotionSequence> current_motion,
-        int current_frame
+        int current_frame,
+        const std::array<double, 29>& body_q_action
     ) = 0;
 
     /// @return The OutputType tag for this concrete implementation.
@@ -141,10 +142,12 @@ protected:
         const std::array<double, 4>& init_ref_data_root_rot_array,
         DataBuffer<HeadingState>& heading_state_buffer,
         std::shared_ptr<const MotionSequence> current_motion,
-        int current_frame
+        int current_frame,
+        const std::array<double, 29>& body_q_action
     )
     {
         // Static key strings (avoid repeated allocations)
+        static const std::string kBodyQAction = "body_q_action";
         static const std::string kBaseTransTarget = "base_trans_target";
         static const std::string kBaseQuatTarget = "base_quat_target";
         static const std::string kBodyQTarget = "body_q_target";
@@ -269,6 +272,11 @@ protected:
         output_data_map_[kVr3pointPosition].assign(vr_3point_position_sent.begin(), vr_3point_position_sent.end());
         output_data_map_[kVr3pointOrientation].assign(vr_3point_orientation.begin(), vr_3point_orientation.end());
         output_data_map_[kVr3pointCompliance].assign(vr_3point_compliance.begin(), vr_3point_compliance.end());
+
+        output_data_map_[kBodyQAction].assign(body_q_action.begin(), body_q_action.end());
+
+        output_data_sbuf_.clear();
+        msgpack::pack(output_data_sbuf_, output_data_map_);
     }
 
     /// Protected constructor – sub-classes must provide a StateLogger reference.

@@ -115,6 +115,8 @@ public:
       return type_;
     }
 
+    virtual bool ContinuousHeadingUpdate() const { return false; }
+
     /// @return True if this interface provides upper-body joint targets (17 DOF).
     virtual bool HasUpperBodyControl() const {
       return has_upper_body_control_;

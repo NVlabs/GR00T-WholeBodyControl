@@ -169,7 +169,8 @@ public:
         const std::array<double, 4>& init_ref_data_root_rot_array,
         DataBuffer<HeadingState>& heading_state_buffer,
         std::shared_ptr<const MotionSequence> current_motion,
-        int current_frame
+        int current_frame,
+        const std::array<double, 29>& body_q_action
     ) override
     {
         // 1. Compute visualisation data (populates output_data_map_)
@@ -182,7 +183,8 @@ public:
             init_ref_data_root_rot_array,
             heading_state_buffer,
             current_motion,
-            current_frame
+            current_frame,
+            body_q_action
         );
 
         // 2. Build a single combined message with state-logger + visualisation fields

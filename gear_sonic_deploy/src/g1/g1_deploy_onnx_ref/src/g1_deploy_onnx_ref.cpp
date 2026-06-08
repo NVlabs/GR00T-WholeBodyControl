@@ -639,6 +639,23 @@ class G1Deploy {
         auto first_ref_rot = quat_mul_d(apply_delta_heading, first_body_quat[0]);
         ref_first_heading = calc_heading_quat_d(first_ref_rot);
       }
+      if (reinitialize_heading_) {
+        heading_state_buffer_.SetData(HeadingState(base_quat, 0.0));
+        reinitialize_heading_ = false;
+        const auto motion_body_quat_init = current_motion_->BodyQuaternions(current_frame_);
+        init_ref_data_root_rot_array_ = motion_body_quat_init[0];
+        std::cout << "Reset heading state to " << base_quat[0] << ", " << base_quat[1] << ", " << base_quat[2] << ", " << base_quat[3] << std::endl;
+        std::cout << "Reset delta heading to 0" << std::endl;
+        std::cout << "Reset init reference data root rotation to current frame: " << init_ref_data_root_rot_array_[0] << ", " << init_ref_data_root_rot_array_[1] << ", " << init_ref_data_root_rot_array_[2] << ", " << init_ref_data_root_rot_array_[3] << std::endl;
+        std::cout << "Reference motion name: " << current_motion_->name << std::endl;
+      } else if (input_interface_->ContinuousHeadingUpdate()) {
+          heading_state_buffer_.SetData(HeadingState(base_quat, 0.0));
+          const auto motion_body_quat_cf =
+      current_motion_->BodyQuaternions(current_frame_);
+          init_ref_data_root_rot_array_ = motion_body_quat_cf[0];
+      }
+
+      
 
       // Gather orientations from multiple future frames with step intervals
       for (int frame_idx = 0; frame_idx < num_frames; frame_idx++) {
@@ -2156,7 +2173,8 @@ class G1Deploy {
       std::string zmq_out_topic = "g1_debug",
       bool enable_motion_recording = false,
       std::array<double, 3> initial_compliance = {0.05, 0.05, 0.0},
-      double initial_max_close_ratio = 1.0)
+      double initial_max_close_ratio = 1.0,
+      std::string default_motion_name = "")
       : time_(0.0),
         publish_dt_(0.002),
         control_dt_(0.02),
@@ -2264,7 +2282,22 @@ class G1Deploy {
         if (!motion_reader_.motions.empty()) {
           std::cout << "✓ Motion data loaded successfully!" << std::endl;
           // motion_reader_.PrintSummary();
-          motion_reader_.current_motion_index_ = 0;
+
+          // Find the default motion by name
+          int default_motion_index = 0;
+          for (size_t i = 0; i < motion_reader_.motions.size(); i++) {
+            if (motion_reader_.motions[i]->name == default_motion_name) {
+              default_motion_index = i;
+              std::cout << "✓ Found default motion '" << default_motion_name << "' at index " << i << std::endl;
+              break;
+            }
+          }
+          if (default_motion_index == 0 && motion_reader_.motions[0]->name != default_motion_name) {
+            std::cout << "⚠ Warning: Default motion '" << default_motion_name << "' not found, using index 0 ("
+                      << motion_reader_.motions[0]->name << ")" << std::endl;
+          }
+
+          motion_reader_.current_motion_index_ = default_motion_index;
           std::string motion_name;
           {
             std::lock_guard<std::mutex> lock(current_motion_mutex_);
@@ -3799,7 +3832,7 @@ class G1Deploy {
 
       switch (program_state_) {
         case ProgramState::INIT:
-          if (!InitControl()) {
+        if (!InitControl()) {
             std::cout << "LowState is not available, waiting for robot to be ready" << std::endl;
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
           }
@@ -3962,13 +3995,25 @@ class G1Deploy {
           
           auto hand_joint_end_time = std::chrono::steady_clock::now();
 
+          // Read current motor command for publishing (action produced this tick)
+          std::array<double, 29> body_q_action = {};
+          {
+            const auto mc = motor_command_buffer_.GetDataWithTime().data;
+            if (mc) {
+              for (int i = 0; i < 29; i++) {
+                body_q_action[i] = static_cast<double>(mc->q_target.at(i));
+              }
+            }
+          }
+
           // Publish output data (state logger data, robot config, command/motion data) to all output interfaces
           for (auto& output_interface : output_interfaces_) {
             if (output_interface) {
               output_interface->publish(
                 vr_3point_position_buffer_, vr_3point_orientation_buffer_, vr_3point_compliance_buffer_,
                 left_hand_joint_buffer_, right_hand_joint_buffer_, init_ref_data_root_rot_array_,
-                heading_state_buffer_, current_motion_copy, current_frame_copy
+                heading_state_buffer_, current_motion_copy, current_frame_copy,
+                body_q_action
               );
             }
           }
@@ -4134,6 +4179,7 @@ int main(int argc, char const* argv[]) {
     std::cout << "  --max-close-ratio <value>: set initial hand max close ratio (0.2-1.0; default: 1.0 = full closure)" << std::endl;
     std::cout << "                             0.2 = limited (80% open), 1.0 = full closure allowed" << std::endl;
     std::cout << "                             Keyboard controls: x/c = +/- 0.1 (always available)" << std::endl;
+    std::cout << "  --default-motion <name>: set the default motion to load on startup (default: first motion alphabetically)" << std::endl;
     std::cout << "\nExamples:" << std::endl;
     std::cout << "  " << argv[0] << " enp5s0 policy/single_frame/model.onnx reference/bones_072925_test/ --planner-file policy/planner.onnx --obs-config policy/single_frame/observation_config.yaml --disable-crc-check" << std::endl;
     std::cout << "  " << argv[0] << " enp5s0 policy/token/model.onnx reference/bones_072925_test/ --obs-config policy/token/observation_config.yaml --encoder-file policy/token/encoder.onnx" << std::endl;
@@ -4177,6 +4223,7 @@ int main(int argc, char const* argv[]) {
   std::string zmq_out_topic = "g1_debug";
   std::array<double, 3> initial_compliance = {0.5, 0.5, 0.0}; // initial compliance is 0.5 for both hands (keyboard controllable)
   double initial_max_close_ratio = 1.0; // default allows full closure, use --max-close-ratio to limit
+  std::string default_motion_name = "neutral_kick_R_001__A543"; // default motion to load on startup
   for (int i = 4; i < argc; i++) {
     if (std::string(argv[i]) == "--disable-crc-check") {
       disableCrcCheck = true;
@@ -4395,7 +4442,7 @@ int main(int argc, char const* argv[]) {
             std::cerr << "Error: --max-close-ratio must be between 0.2 and 1.0" << std::endl;
             exit(1);
           }
-          std::cout << "[INFO] Initial hand max close ratio set to: " << initial_max_close_ratio 
+          std::cout << "[INFO] Initial hand max close ratio set to: " << initial_max_close_ratio
                     << " (0.2 = limited, 1.0 = full closure)" << std::endl;
         } catch (...) {
           std::cerr << "Error: Invalid max close ratio value: " << argv[i + 1] << std::endl;
@@ -4404,6 +4451,15 @@ int main(int argc, char const* argv[]) {
         i++; // Skip the next argument since it's the ratio value
       } else {
         std::cerr << "Error: --max-close-ratio requires a value argument" << std::endl;
+        exit(1);
+      }
+    } else if (std::string(argv[i]) == "--default-motion") {
+      if (i + 1 < argc) {
+        default_motion_name = argv[i + 1];
+        std::cout << "[INFO] Default motion set to: " << default_motion_name << std::endl;
+        i++; // Skip the next argument since it's the motion name
+      } else {
+        std::cerr << "Error: --default-motion requires a motion name argument" << std::endl;
         exit(1);
       }
     }
@@ -4438,7 +4494,8 @@ int main(int argc, char const* argv[]) {
     zmq_out_topic,
     enableMotionRecording,
     initial_compliance,
-    initial_max_close_ratio
+    initial_max_close_ratio,
+    default_motion_name
   );
   std::cout << "[DEBUG] G1Deploy object created successfully!" << std::endl;
   

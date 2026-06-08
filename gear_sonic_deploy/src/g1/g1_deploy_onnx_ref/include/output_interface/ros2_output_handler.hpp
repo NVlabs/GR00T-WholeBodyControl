@@ -169,7 +169,8 @@ public:
         const std::array<double, 4>& init_ref_data_root_rot_array,
         DataBuffer<HeadingState>& heading_state_buffer,
         std::shared_ptr<const MotionSequence> current_motion,
-        int current_frame
+        int current_frame,
+        const std::array<double, 29>& body_q_action
     ) override {
         if (!node_ || !rclcpp::ok()) {
             return;

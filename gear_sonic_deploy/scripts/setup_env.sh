@@ -5,6 +5,14 @@
 
 echo "🔧 Setting up G1 Deploy environment..."
 
+# Ensure core system binaries are available even if PATH is partially broken
+CORE_PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+if [ -n "$PATH" ]; then
+    export PATH="$CORE_PATH:$PATH"
+else
+    export PATH="$CORE_PATH"
+fi
+
 # Run jetson_clocks on Jetson systems (bare-metal only)
 if command -v jetson_clocks &> /dev/null; then
     if [ -f "/.dockerenv" ]; then
@@ -30,10 +38,10 @@ ONNX_RUNTIME_PATHS=(
 )
 
 ONNX_FOUND=false
-for path in "${ONNX_RUNTIME_PATHS[@]}"; do
-    if [ -d "$path" ]; then
-        export onnxruntime_DIR="$path/lib/cmake/onnxruntime"
-        echo "✅ ONNX Runtime found at: $path"
+for onnx_path in "${ONNX_RUNTIME_PATHS[@]}"; do
+    if [ -d "$onnx_path" ]; then
+        export onnxruntime_DIR="$onnx_path/lib/cmake/onnxruntime"
+        echo "✅ ONNX Runtime found at: $onnx_path"
         ONNX_FOUND=true
         break
     fi
@@ -123,6 +131,13 @@ export OPENSSL_ROOT_DIR="/usr"
 # ROS2 Environment Setup - dynamically find ROS2 installation
 ROS2_FOUND=false
 
+# Source the ROS setup file that matches the current shell
+if [ -n "$ZSH_VERSION" ]; then
+    ROS2_SETUP_FILE="setup.zsh"
+else
+    ROS2_SETUP_FILE="setup.bash"
+fi
+
 # Common ROS2 distributions in order of preference (newest first)
 ROS2_DISTROS=("jazzy" "iron" "humble" "galactic" "foxy" "eloquent" "dashing" "crystal")
 ROS2_INSTALL_PATHS=("/opt/ros" "/usr/local/ros" "$HOME/ros2_ws/install")
@@ -133,7 +148,7 @@ for install_path in "${ROS2_INSTALL_PATHS[@]}"; do
     fi
     
     for distro in "${ROS2_DISTROS[@]}"; do
-        ros2_setup_file="$install_path/$distro/setup.bash"
+        ros2_setup_file="$install_path/$distro/$ROS2_SETUP_FILE"
         if [ -f "$ros2_setup_file" ]; then
             source "$ros2_setup_file"
             export RMW_IMPLEMENTATION=rmw_fastrtps_cpp

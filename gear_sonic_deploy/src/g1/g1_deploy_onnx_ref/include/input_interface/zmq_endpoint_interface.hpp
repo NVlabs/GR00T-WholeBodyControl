@@ -124,6 +124,8 @@ public:
 
     static constexpr std::string_view LOCALHOST = "localhost";
 
+    bool ContinuousHeadingUpdate() const override { return !use_zmq_stream; }
+
     ZMQEndpointInterface(
         const std::string& host = std::string(LOCALHOST),
         int port = 5556,
@@ -355,7 +357,10 @@ public:
         }
         if (stop_control) { operator_state.stop = true; }
         if (this->report_temperature) { report_temperature = true; }
-        if (start_control) { operator_state.start = true; }
+        if (start_control) { 
+            operator_state.start = true; 
+            reinitialize_heading = true;
+        }
 
         // Handle delta heading controls
         if (delta_left) {
