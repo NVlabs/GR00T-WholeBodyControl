@@ -1,0 +1,92 @@
+# SONIC Release (Low-Latency) - Observation Configuration
+# =======================================================
+# For ONNX models exported from the low-latency sonic_release checkpoint
+# (smpl 4-frame lookahead; g1/teleop lookahead at step1, body-frame orientation).
+#
+# Encoder input dimension: 1247   Decoder/policy dimension: 994   token: 64
+# Uses the unitoken_all_noz tokenizer config (3 encoders: g1, teleop, smpl)
+#
+# Requires the smpl_*_4frame_step1 entries in GetObservationRegistry()
+# (src/g1/g1_deploy_onnx_ref/src/g1_deploy_onnx_ref.cpp) + a rebuild to load.
+
+observations:
+
+  - name: "token_state"
+    enabled: true
+
+  - name: "his_base_angular_velocity_10frame_step1"
+    enabled: true
+
+  - name: "his_body_joint_positions_10frame_step1"
+    enabled: true
+
+  - name: "his_body_joint_velocities_10frame_step1"
+    enabled: true
+
+  - name: "his_last_actions_10frame_step1"
+    enabled: true
+
+  - name: "his_gravity_dir_10frame_step1"
+    enabled: true
+
+encoder:
+  dimension: 64
+  use_fp16: false
+  encoder_observations:
+    # Shared
+    - name: "encoder_mode_4"
+      enabled: true
+    # g1 encoder: command_multi_future_nonflat (positions + velocities), step1
+    - name: "motion_joint_positions_10frame_step1"
+      enabled: true
+    - name: "motion_joint_velocities_10frame_step1"
+      enabled: true
+    # g1 encoder: motion_anchor_ori_b_mf_nonflat (body, multi-frame FIRST), step1
+    - name: "motion_anchor_orientation_10frame_step1"
+      enabled: true
+    # teleop encoder: motion_anchor_ori_b (body, single-frame SECOND)
+    - name: "motion_anchor_orientation"
+      enabled: true
+    # teleop encoder: command_multi_future_lower_body, step1
+    - name: "motion_joint_positions_lowerbody_10frame_step1"
+      enabled: true
+    - name: "motion_joint_velocities_lowerbody_10frame_step1"
+      enabled: true
+    # teleop encoder: vr_3point
+    - name: "vr_3point_local_target"
+      enabled: true
+    - name: "vr_3point_local_orn_target"
+      enabled: true
+    # smpl encoder: smpl_joints_multi_future_local_nonflat (4 frames, step1)  <-- LOW-LATENCY
+    - name: "smpl_joints_4frame_step1"
+      enabled: true
+    # smpl encoder: smpl_root_ori_b_multi_future (body, 4 frames, step1)      <-- LOW-LATENCY
+    - name: "smpl_anchor_orientation_4frame_step1"
+      enabled: true
+    # smpl encoder: joint_pos_multi_future_wrist_for_smpl (4 frames, step1)   <-- LOW-LATENCY
+    - name: "motion_joint_positions_wrists_4frame_step1"
+      enabled: true
+  encoder_modes:
+    - name: "g1"
+      mode_id: 0
+      required_observations:
+        - encoder_mode_4
+        - motion_joint_positions_10frame_step1
+        - motion_joint_velocities_10frame_step1
+        - motion_anchor_orientation_10frame_step1
+    - name: "teleop"
+      mode_id: 1
+      required_observations:
+        - encoder_mode_4
+        - motion_joint_positions_lowerbody_10frame_step1
+        - motion_joint_velocities_lowerbody_10frame_step1
+        - vr_3point_local_target
+        - vr_3point_local_orn_target
+        - motion_anchor_orientation
+    - name: "smpl"
+      mode_id: 2
+      required_observations:
+        - encoder_mode_4
+        - smpl_joints_4frame_step1
+        - smpl_anchor_orientation_4frame_step1
+        - motion_joint_positions_wrists_4frame_step1
