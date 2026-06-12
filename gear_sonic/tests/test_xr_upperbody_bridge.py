@@ -7,10 +7,12 @@ import pytest
 from gear_sonic.utils.teleop.zmq.zmq_planner_sender import HEADER_SIZE
 from gear_sonic.utils.teleop.xr_upperbody_bridge import (
     BridgeConfig,
+    G1_CALIB_FULL_UPPER_BODY,
     UpperBodyFilter,
     build_manager_state_message,
     build_frame_planner_message,
     build_inspection_report,
+    build_stop_standing_message,
     collect_range_warnings,
     load_frames,
     normalize_live_source_payload,
@@ -30,6 +32,12 @@ def _decode_header(message: bytes, topic: str = "planner") -> dict:
     start = len(topic)
     raw = message[start : start + HEADER_SIZE].rstrip(b"\x00")
     return json.loads(raw.decode("utf-8"))
+
+
+def test_calib_full_upper_body_matches_teleop_all_zero_reference() -> None:
+    assert G1_CALIB_FULL_UPPER_BODY.shape == (17,)
+    assert G1_CALIB_FULL_UPPER_BODY.dtype == np.float32
+    assert np.allclose(G1_CALIB_FULL_UPPER_BODY, np.zeros(17, dtype=np.float32))
 
 
 def test_load_jsonl_frames_with_defaults(tmp_path: Path) -> None:
@@ -328,7 +336,7 @@ def test_start_ramp_blends_from_feedback_seed_to_target() -> None:
     assert np.allclose(upper, np.full(17, 0.5))
 
 
-def test_exit_ramp_keeps_bridge_rate_limiter_active() -> None:
+def test_exit_ramp_uses_sender_ramped_target_without_rate_limiter() -> None:
     config = BridgeConfig(max_abs_joint=2.0, max_joint_step=0.2)
     filt = UpperBodyFilter(config)
     filt.seed(np.ones(17, dtype=np.float32))
@@ -345,7 +353,7 @@ def test_exit_ramp_keeps_bridge_rate_limiter_active() -> None:
     message = build_frame_planner_message(frame, config, filt)
     upper = unpack_bridge_message(message, topic="planner")["upper_body_position"]
 
-    assert np.allclose(upper, np.full(17, 0.8))
+    assert np.allclose(upper, np.full(17, 0.25))
 
 
 def test_build_planner_message_fields() -> None:
@@ -371,6 +379,38 @@ def test_build_planner_message_fields() -> None:
     assert fields["upper_body_velocity"]["shape"] == [17]
     assert fields["left_hand_joints"]["shape"] == [7]
     assert fields["right_hand_joints"]["shape"] == [7]
+
+
+def test_stop_standing_message_ramps_upper_body_to_default_standing() -> None:
+    frame = load_frames(
+        [
+            {
+                "upper_body_position": [0.0] * 17,
+                "upper_body_velocity": [0.2] * 17,
+                "left_hand_joints": [0.3] * 7,
+                "right_hand_joints": [0.4] * 7,
+                "stop": True,
+            }
+        ]
+    )[0]
+
+    message = build_stop_standing_message(frame, alpha=1.0)
+    fields = {field["name"]: field for field in _decode_header(message)["fields"]}
+    decoded = unpack_bridge_message(message, topic="planner")
+
+    assert message.startswith(b"planner")
+    assert fields["upper_body_position"]["shape"] == [17]
+    assert fields["upper_body_velocity"]["shape"] == [17]
+    assert "left_hand_joints" not in fields
+    assert "right_hand_joints" not in fields
+    assert int(decoded["mode"][0]) == 0
+    assert np.allclose(decoded["movement"], np.zeros(3))
+    assert float(decoded["speed"][0]) == 0.0
+    assert np.allclose(
+        decoded["upper_body_position"],
+        np.asarray([0.0, 0.0, 0.0, 0.2, 0.2, 0.2, -0.2, 0.0, 0.0, 0.6, 0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32),
+    )
+    assert np.allclose(decoded["upper_body_velocity"], np.zeros(17))
 
 
 def test_build_manager_state_message_for_data_exporter() -> None:

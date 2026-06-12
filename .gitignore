@@ -207,6 +207,9 @@ teleop_vids/
 *.code-workspace
 # Motion/training data (large local datasets, not tracked in git)
 data/
+!gear_sonic/data/
+!gear_sonic/data/cleanse_lerobot_dataset.py
+!gear_sonic/data/episode_review.py
 bones_seed_smpl/
 sonic_release/
 # Training output logs

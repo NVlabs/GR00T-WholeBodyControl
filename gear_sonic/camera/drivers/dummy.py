@@ -4,6 +4,8 @@
 ``ReplayDummySensor`` loops frames from a video file.
 """
 
+from __future__ import annotations
+
 import time
 from typing import Any
 
@@ -52,8 +54,9 @@ class DummySensor(Sensor):
 class ReplayDummySensor(DummySensor):
     """Loops frames from a video file, useful for offline testing."""
 
-    def __init__(self, video_path: str):
+    def __init__(self, video_path: str, mount_position: str = "color_image"):
         self.video_path = video_path
+        self.mount_position = mount_position
         self.image_ctr = 0
         self.video_reader = cv2.VideoCapture(video_path)
         self.frames = []
@@ -62,23 +65,22 @@ class ReplayDummySensor(DummySensor):
             if not ret:
                 break
             self.frames.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        if not self.frames:
+            raise ValueError(f"No frames loaded from replay video: {video_path}")
 
     def read(self) -> dict[str, Any] | None:
-        self.image_ctr += 1
-        if self.image_ctr >= len(self.frames):
-            self.image_ctr = 0
-
         img = self.frames[self.image_ctr]
+        self.image_ctr = (self.image_ctr + 1) % len(self.frames)
         img = cv2.resize(img, (640, 480))
         return {
-            "color_image": img,
-            "timestamp": {"color_image": time.time()},
+            "timestamps": {self.mount_position: time.time()},
+            "images": {self.mount_position: img},
         }
 
     def serialize(self, data: dict[str, Any]) -> dict[str, Any]:
         serialized_msg = ImageMessageSchema(
-            timestamps=data["timestamp"] if isinstance(data["timestamp"], dict) else {"color_image": data["timestamp"]},
-            images={"color_image": data["color_image"]},
+            timestamps=data["timestamps"],
+            images=data["images"],
         )
         return serialized_msg.serialize()
 

@@ -47,7 +47,6 @@ import numpy as np
 import pandas as pd
 import tyro
 
-
 SMPL_POSE_COLUMN = "teleop.smpl_pose"
 
 
@@ -334,6 +333,24 @@ def write_output_dataset(
     if script_config is not None:
         info["script_config"] = script_config
 
+    task_text_to_index: dict[str, int] = {}
+    merged_tasks_meta: list[dict] = []
+
+    def add_task_text(task_text: str):
+        if task_text not in task_text_to_index:
+            task_text_to_index[task_text] = len(merged_tasks_meta)
+            merged_tasks_meta.append(
+                {"task_index": task_text_to_index[task_text], "task": task_text}
+            )
+
+    for ep in all_episodes:
+        for task_text in ep["episode_meta"].get("tasks", []):
+            add_task_text(str(task_text))
+    for task in tasks_meta:
+        task_text = task.get("task")
+        if task_text is not None:
+            add_task_text(str(task_text))
+
     total_frames = 0
     episodes_jsonl = []
 
@@ -344,6 +361,9 @@ def write_output_dataset(
         df["episode_index"] = i
         df["index"] = range(total_frames, total_frames + ep_len)
         df["frame_index"] = range(ep_len)
+        task_texts = [str(task) for task in ep["episode_meta"].get("tasks", [])]
+        if task_texts and "task_index" in df.columns:
+            df["task_index"] = task_text_to_index[task_texts[0]]
         if "timestamp" in df.columns:
             df["timestamp"] = [j / fps for j in range(ep_len)]
 
@@ -388,6 +408,7 @@ def write_output_dataset(
 
     info["total_episodes"] = len(all_episodes)
     info["total_frames"] = total_frames
+    info["total_tasks"] = len(merged_tasks_meta)
 
     with open(meta_dir / "info.json", "w", encoding="utf-8") as f:
         json.dump(info, f, indent=4)
@@ -396,9 +417,9 @@ def write_output_dataset(
         for ep in episodes_jsonl:
             f.write(json.dumps(ep) + "\n")
 
-    if tasks_meta:
+    if merged_tasks_meta:
         with open(meta_dir / "tasks.jsonl", "w", encoding="utf-8") as f:
-            for task in tasks_meta:
+            for task in merged_tasks_meta:
                 f.write(json.dumps(task) + "\n")
 
     return total_frames

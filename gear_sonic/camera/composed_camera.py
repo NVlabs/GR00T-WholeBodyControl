@@ -395,7 +395,7 @@ class ComposedCameraSensor(Sensor, SensorServer):
             from gear_sonic.camera.drivers.dummy import ReplayDummySensor
 
             print(f"Initializing Replay Dummy Sensor for camera type: {camera_type}")
-            return ReplayDummySensor(video_path=camera_type)
+            return ReplayDummySensor(video_path=camera_type, mount_position=mount_position)
 
         elif camera_type == "usb":
             from gear_sonic.camera.drivers.usb_camera import USBCameraConfig, USBCameraSensor

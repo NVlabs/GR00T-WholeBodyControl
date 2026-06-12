@@ -30,6 +30,11 @@ XR_G1_29_ARM_DOF = 14
 HAND_DOF = 7
 DUAL_HAND_DOF = 14
 G1_UPPER_BODY_JOINT_INDICES = [12, 13, 14, 15, 22, 16, 23, 17, 24, 18, 25, 19, 26, 20, 27, 21, 28]
+G1_CALIB_FULL_UPPER_BODY = np.zeros(UPPER_BODY_DOF, dtype=np.float32)
+G1_STANDING_UPPER_BODY = np.asarray(
+    [0.0, 0.0, 0.0, 0.2, 0.2, 0.2, -0.2, 0.0, 0.0, 0.6, 0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    dtype=np.float32,
+)
 
 
 @dataclass(frozen=True)
@@ -107,6 +112,13 @@ class UpperBodyFilter:
             -self._config.max_abs_joint,
             self._config.max_abs_joint,
         )
+        if ramp_phase in {"out", "hold", "pause"}:
+            # These phases are already explicitly ramped by the XR source.
+            # Applying the bridge's fixed per-frame limiter here can leave the
+            # streamed target behind the source ramp; when the source exits, the
+            # downstream controller can then jump to its idle/CALIB posture.
+            self._last_position = clipped
+            return clipped.copy()
         if ramp_phase in {"start", "in", "resume"} and self._last_position is not None:
             alpha = float(np.clip(ramp_alpha, 0.0, 1.0))
             ramped = (1.0 - alpha) * self._last_position + alpha * clipped
@@ -570,6 +582,27 @@ def build_frame_planner_message(
     )
 
 
+def build_stop_standing_message(frame: UpperBodyFrame, alpha: float = 1.0) -> bytes:
+    """Build an idle planner frame that ramps upper-body targets to standing."""
+
+    alpha = float(np.clip(alpha, 0.0, 1.0))
+    alpha = alpha * alpha * (3.0 - 2.0 * alpha)
+    start = np.asarray(frame.upper_body_position, dtype=np.float32)
+    upper_body_position = (1.0 - alpha) * start + alpha * G1_STANDING_UPPER_BODY
+
+    return build_planner_message(
+        0,
+        [0.0, 0.0, 0.0],
+        frame.facing,
+        speed=0.0,
+        height=-1.0,
+        upper_body_position=upper_body_position.tolist(),
+        upper_body_velocity=[0.0] * UPPER_BODY_DOF,
+        left_hand_position=None,
+        right_hand_position=None,
+    )
+
+
 def build_manager_state_message(
     *,
     stream_mode: int = 5,
@@ -647,7 +680,8 @@ def _send_zmq_json_loop(args: argparse.Namespace) -> int:
     context = zmq.Context.instance()
     sub = context.socket(zmq.SUB)
     sub.setsockopt_string(zmq.SUBSCRIBE, args.source_topic)
-    sub.setsockopt(zmq.RCVTIMEO, int(args.source_timeout_s * 1000))
+    recv_timeout_s = min(args.source_timeout_s, 1.0 / args.hz)
+    sub.setsockopt(zmq.RCVTIMEO, max(1, int(recv_timeout_s * 1000)))
     sub.connect(f"tcp://{args.source_host}:{args.source_port}")
 
     pub = context.socket(zmq.PUB)
@@ -686,6 +720,9 @@ def _send_zmq_json_loop(args: argparse.Namespace) -> int:
             )
 
     previous_frame: UpperBodyFrame | None = None
+    release_frame: UpperBodyFrame | None = None
+    release_until = 0.0
+    last_release_time = 0.0
     published = 0
     last_warn_time = 0.0
     last_debug_time = 0.0
@@ -700,6 +737,18 @@ def _send_zmq_json_loop(args: argparse.Namespace) -> int:
                 raw = sub.recv()
             except zmq.Again:
                 now = time.monotonic()
+                if release_frame is not None and now < release_until:
+                    if now - last_release_time >= (1.0 / args.hz):
+                        duration = max(args.stop_release_s, 1e-6)
+                        alpha = 1.0 - max(0.0, release_until - now) / duration
+                        pub.send(build_stop_standing_message(release_frame, alpha=alpha))
+                        pub.send(build_manager_state_message(stream_mode=args.stream_mode))
+                        last_release_time = now
+                        published += 1
+                    if args.once:
+                        break
+                    continue
+                release_frame = None
                 if now - last_warn_time > 1.0:
                     print("[xr_upperbody_bridge] waiting for live XR JSON source...")
                     last_warn_time = now
@@ -725,6 +774,16 @@ def _send_zmq_json_loop(args: argparse.Namespace) -> int:
                 )
             )
             published += 1
+            if frame.stop and args.stop_release_s > 0.0:
+                release_frame = frame
+                release_until = time.monotonic() + args.stop_release_s
+                last_release_time = 0.0
+                if args.debug_live:
+                    print(
+                        "[xr_upperbody_bridge] stop=true received; publishing "
+                        f"{args.stop_release_s:.2f}s standing upper-body ramp frames",
+                        flush=True,
+                    )
             if args.debug_live:
                 now = time.monotonic()
                 if now - last_debug_time >= args.debug_interval:
@@ -880,6 +939,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Interval between repeated start=true command messages.",
     )
     parser.add_argument("--send-stop-on-exit", action="store_true", help="Send stop=true before exit")
+    parser.add_argument(
+        "--stop-release-s",
+        type=float,
+        default=1.2,
+        help=(
+            "After a live XR frame with stop=true, keep publishing idle planner "
+            "frames that ramp upper_body_position from CALIB/idle to the G1 "
+            "standing upper-body target before the XR source disappears."
+        ),
+    )
     parser.add_argument(
         "--stream-mode",
         type=int,

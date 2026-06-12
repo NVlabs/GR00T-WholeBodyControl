@@ -64,6 +64,14 @@ data_collection = [
     "lerobot @ git+https://github.com/huggingface/lerobot.git@a445d9c9da6bea99a8972daa4fe1fdd053d711d2",
     "datasets==3.6.0",
 ]
+# Dataset review UI: local Gradio page for video, prompt, joint velocity plots, and trims.
+# Usage: pip install -e "gear_sonic[review]"
+review = [
+    "gradio",
+    "pandas",
+    "pyarrow",
+    "matplotlib",
+]
 # Camera server: runs on the robot to publish camera frames over ZMQ
 # Includes depthai (OAK cameras) by default. For other SDKs (pyrealsense2),
 # install them separately into the .venv_camera venv.
