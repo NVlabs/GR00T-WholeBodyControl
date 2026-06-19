@@ -6,6 +6,8 @@ between motion library data and robot joints.
 
 import torch
 
+from gear_sonic.utils import inspire_hand_spec
+
 # G1 body joint names in IsaacLab order (29 DOF)
 G1_ISAACLab_ORDER = [
     "left_hip_pitch_joint",
@@ -39,23 +41,11 @@ G1_ISAACLab_ORDER = [
     "right_wrist_yaw_joint",
 ]
 
-# G1 hand joint names (14 DOF) - order from g1_43dof.yaml
-G1_HAND_JOINTS = [
-    "left_hand_index_0_joint",
-    "left_hand_index_1_joint",
-    "left_hand_middle_0_joint",
-    "left_hand_middle_1_joint",
-    "left_hand_thumb_0_joint",
-    "left_hand_thumb_1_joint",
-    "left_hand_thumb_2_joint",
-    "right_hand_index_0_joint",
-    "right_hand_index_1_joint",
-    "right_hand_middle_0_joint",
-    "right_hand_middle_1_joint",
-    "right_hand_thumb_0_joint",
-    "right_hand_thumb_1_joint",
-    "right_hand_thumb_2_joint",
-]
+# G1 hand joint names (12 DOF) - Inspire RH56, 6 drives per hand in SDK
+# angle_set order (pinky, ring, middle, index, thumb_bend, thumb_rot).
+G1_HAND_JOINTS = inspire_hand_spec.joint_names(is_left=True) + inspire_hand_spec.joint_names(
+    is_left=False
+)
 
 # Caches for joint indices
 _body_joint_indices_cache = {}
@@ -81,5 +71,5 @@ def get_body_joint_indices(asset) -> torch.Tensor:
 
 
 def get_hand_joint_indices(asset) -> torch.Tensor:
-    """Get indices of hand joints (14 DOF) using G1_HAND_JOINTS."""
+    """Get indices of hand joints (12 DOF) using G1_HAND_JOINTS."""
     return _get_joint_indices_by_names(asset, G1_HAND_JOINTS, _hand_joint_indices_cache)

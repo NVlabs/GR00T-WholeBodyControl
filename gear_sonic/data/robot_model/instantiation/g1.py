@@ -32,7 +32,7 @@ def instantiate_g1_robot_model(
     model_data_dir = Path(__file__).resolve().parent.parent / "model_data" / "g1"
     robot_model_config = {
         "asset_path": str(model_data_dir),
-        "urdf_path": str(model_data_dir / "g1_29dof_with_hand.urdf"),
+        "urdf_path": str(model_data_dir / "g1_29dof_with_inspire_hand.urdf"),
     }
     assert waist_location in [
         "lower_body",

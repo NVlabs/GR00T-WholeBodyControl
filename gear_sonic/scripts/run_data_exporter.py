@@ -31,6 +31,7 @@ import tyro
 import zmq
 
 from gear_sonic.data.exporter import Gr00tDataExporter
+from gear_sonic.utils import inspire_hand_spec
 from gear_sonic.data.features_sonic_vla import (
     get_features_sonic_vla,
     get_g1_robot_model,
@@ -757,13 +758,13 @@ class GrootDataCollector:
             hand_msg["left_hand_joints"].astype(np.float32)
             if hand_msg is not None
             and hand_msg.get("left_hand_joints") is not None
-            else np.zeros(7, dtype=np.float32)
+            else np.zeros(inspire_hand_spec.NUM_INSPIRE_DOF, dtype=np.float32)
         )
         frame_data["teleop.right_hand_joints"] = (
             hand_msg["right_hand_joints"].astype(np.float32)
             if hand_msg is not None
             and hand_msg.get("right_hand_joints") is not None
-            else np.zeros(7, dtype=np.float32)
+            else np.zeros(inspire_hand_spec.NUM_INSPIRE_DOF, dtype=np.float32)
         )
 
         # Planner command fields

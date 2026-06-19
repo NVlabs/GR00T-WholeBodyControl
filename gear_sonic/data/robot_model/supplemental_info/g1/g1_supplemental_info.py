@@ -8,6 +8,7 @@ import numpy as np
 from gear_sonic.data.robot_model.supplemental_info.robot_supplemental_info import (
     RobotSupplementalInfo,
 )
+from gear_sonic.utils import inspire_hand_spec
 
 
 class WaistLocation(Enum):
@@ -40,7 +41,7 @@ class G1SupplementalInfo(RobotSupplementalInfo):
         waist_location: WaistLocation = WaistLocation.LOWER_BODY,
         elbow_pose: ElbowPose = ElbowPose.LOW,
     ):
-        name = "G1_G1ThreeFinger"
+        name = "G1_G1InspireHand"
 
         # Define all actuated joints
         body_actuated_joints = [
@@ -80,27 +81,10 @@ class G1SupplementalInfo(RobotSupplementalInfo):
             "right_wrist_yaw_joint",
         ]
 
-        left_hand_actuated_joints = [
-            # Left hand
-            "left_hand_thumb_0_joint",
-            "left_hand_thumb_1_joint",
-            "left_hand_thumb_2_joint",
-            "left_hand_index_0_joint",
-            "left_hand_index_1_joint",
-            "left_hand_middle_0_joint",
-            "left_hand_middle_1_joint",
-        ]
-
-        right_hand_actuated_joints = [
-            # Right hand
-            "right_hand_thumb_0_joint",
-            "right_hand_thumb_1_joint",
-            "right_hand_thumb_2_joint",
-            "right_hand_index_0_joint",
-            "right_hand_index_1_joint",
-            "right_hand_middle_0_joint",
-            "right_hand_middle_1_joint",
-        ]
+        # Inspire RH56 6-DOF hand, in SDK angle_set drive order
+        # (pinky, ring, middle, index, thumb_bend, thumb_rot).
+        left_hand_actuated_joints = inspire_hand_spec.joint_names(is_left=True)
+        right_hand_actuated_joints = inspire_hand_spec.joint_names(is_left=False)
 
         # Define joint limits from URDF
         joint_limits = {
@@ -138,23 +122,14 @@ class G1SupplementalInfo(RobotSupplementalInfo):
             "right_wrist_roll_joint": [-1.972222054, 1.972222054],
             "right_wrist_pitch_joint": [-1.614429558, 1.614429558],
             "right_wrist_yaw_joint": [-1.614429558, 1.614429558],
-            # Left hand
-            "left_hand_thumb_0_joint": [-1.04719755, 1.04719755],
-            "left_hand_thumb_1_joint": [-0.72431163, 1.04719755],
-            "left_hand_thumb_2_joint": [0, 1.74532925],
-            "left_hand_index_0_joint": [-1.57079632, 0],
-            "left_hand_index_1_joint": [-1.74532925, 0],
-            "left_hand_middle_0_joint": [-1.57079632, 0],
-            "left_hand_middle_1_joint": [-1.74532925, 0],
-            # Right hand
-            "right_hand_thumb_0_joint": [-1.04719755, 1.04719755],
-            "right_hand_thumb_1_joint": [-0.72431163, 1.04719755],
-            "right_hand_thumb_2_joint": [0, 1.74532925],
-            "right_hand_index_0_joint": [-1.57079632, 0],
-            "right_hand_index_1_joint": [-1.74532925, 0],
-            "right_hand_middle_0_joint": [-1.57079632, 0],
-            "right_hand_middle_1_joint": [-1.74532925, 0],
         }
+
+        # Inspire RH56 hand limits (radians), kept in sync with the URDF and the
+        # radian<->drive mapping in inspire_hand_spec.
+        for is_left in (True, False):
+            for name in inspire_hand_spec.joint_names(is_left):
+                suffix = name.rsplit("_joint", 1)[0].split("_hand_", 1)[1]
+                joint_limits[name] = list(inspire_hand_spec.JOINT_LIMITS[suffix])
 
         # Define joint groups
         joint_groups = {
@@ -213,29 +188,13 @@ class G1SupplementalInfo(RobotSupplementalInfo):
                 "groups": [],
             },
             "arms": {"joints": [], "groups": ["left_arm", "right_arm"]},
-            # Hand groups
+            # Hand groups (Inspire RH56 6-DOF, SDK drive order)
             "left_hand": {
-                "joints": [
-                    "left_hand_index_0_joint",
-                    "left_hand_index_1_joint",
-                    "left_hand_middle_0_joint",
-                    "left_hand_middle_1_joint",
-                    "left_hand_thumb_0_joint",
-                    "left_hand_thumb_1_joint",
-                    "left_hand_thumb_2_joint",
-                ],
+                "joints": list(left_hand_actuated_joints),
                 "groups": [],
             },
             "right_hand": {
-                "joints": [
-                    "right_hand_index_0_joint",
-                    "right_hand_index_1_joint",
-                    "right_hand_middle_0_joint",
-                    "right_hand_middle_1_joint",
-                    "right_hand_thumb_0_joint",
-                    "right_hand_thumb_1_joint",
-                    "right_hand_thumb_2_joint",
-                ],
+                "joints": list(right_hand_actuated_joints),
                 "groups": [],
             },
             "hands": {"joints": [], "groups": ["left_hand", "right_hand"]},

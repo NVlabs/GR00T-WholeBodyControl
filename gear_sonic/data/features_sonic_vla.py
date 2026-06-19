@@ -133,12 +133,12 @@ def get_modality_config_sonic_vla(robot_model: RobotModel) -> dict:
             },
             "left_hand_joints": {
                 "start": 0,
-                "end": 7,
+                "end": 6,
                 "original_key": "teleop.left_hand_joints",
             },
             "right_hand_joints": {
                 "start": 0,
-                "end": 7,
+                "end": 6,
                 "original_key": "teleop.right_hand_joints",
             },
             "left_wrist_joints": {
@@ -295,12 +295,12 @@ def get_features_sonic_vla(robot_model: RobotModel) -> dict:
         },
         "teleop.left_hand_joints": {
             "dtype": "float32",
-            "shape": (7,),
+            "shape": (6,),
             "names": "left_hand_joints",
         },
         "teleop.right_hand_joints": {
             "dtype": "float32",
-            "shape": (7,),
+            "shape": (6,),
             "names": "right_hand_joints",
         },
         "teleop.smpl_frame_index": {

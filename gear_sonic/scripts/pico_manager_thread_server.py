@@ -35,6 +35,7 @@ from scipy.spatial.transform import Rotation as R, Rotation as sRot
 import torch
 import zmq
 
+from gear_sonic.utils import inspire_hand_spec
 from gear_sonic.utils.teleop.zmq.zmq_poller import ZMQPoller
 from gear_sonic.trl.utils.rotation_conversion import decompose_rotation_aa
 from gear_sonic.trl.utils.torch_transform import (
@@ -702,8 +703,8 @@ def compute_hand_joints_from_inputs(
         left_hand_joints = left_solver({"position": left_finger_data})
         right_hand_joints = right_solver({"position": right_finger_data})
     else:
-        left_hand_joints = np.zeros((1, 7), dtype=np.float32)
-        right_hand_joints = np.zeros((1, 7), dtype=np.float32)
+        left_hand_joints = np.zeros((1, inspire_hand_spec.NUM_INSPIRE_DOF), dtype=np.float32)
+        right_hand_joints = np.zeros((1, inspire_hand_spec.NUM_INSPIRE_DOF), dtype=np.float32)
     return left_hand_joints, right_hand_joints
 
 

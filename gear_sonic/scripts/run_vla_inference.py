@@ -34,6 +34,7 @@ import zmq
 
 from gear_sonic.camera.composed_camera import ComposedCameraClientSensor
 from gear_sonic.data.robot_model.instantiation.g1 import instantiate_g1_robot_model
+from gear_sonic.utils import inspire_hand_spec
 from gear_sonic.utils.data_collection.keyboard_subscriber import (
     DEFAULT_ZMQ_KEYBOARD_PORT,
     ZMQKeyboardSubscriber,
@@ -145,8 +146,8 @@ def pack_latent_action_message(
     Args:
         motion_token: Shape ``[64]`` (flat) or ``[1, 64]``.
         frame_index:  Shape ``[1]``.
-        left_hand_joints:  Shape ``[7]`` or ``[1, 7]``, optional.
-        right_hand_joints: Shape ``[7]`` or ``[1, 7]``, optional.
+        left_hand_joints:  Shape ``[6]`` or ``[1, 6]``, optional (Inspire 6-DOF).
+        right_hand_joints: Shape ``[6]`` or ``[1, 6]``, optional (Inspire 6-DOF).
 
     Returns:
         Packed ZMQ message bytes.
@@ -167,24 +168,25 @@ def pack_latent_action_message(
         "frame_index": frame_index,
     }
 
+    n_hand = inspire_hand_spec.NUM_INSPIRE_DOF
     if left_hand_joints is not None:
         left_hand_joints = np.asarray(left_hand_joints, dtype=np.float32)
         if left_hand_joints.ndim == 1:
-            if left_hand_joints.shape[0] != 7:
+            if left_hand_joints.shape[0] != n_hand:
                 raise ValueError(
-                    f"left_hand_joints must have shape [7], got {left_hand_joints.shape}"
+                    f"left_hand_joints must have shape [{n_hand}], got {left_hand_joints.shape}"
                 )
-            left_hand_joints = left_hand_joints.reshape(1, 7)
+            left_hand_joints = left_hand_joints.reshape(1, n_hand)
         pose_data["left_hand_joints"] = left_hand_joints
 
     if right_hand_joints is not None:
         right_hand_joints = np.asarray(right_hand_joints, dtype=np.float32)
         if right_hand_joints.ndim == 1:
-            if right_hand_joints.shape[0] != 7:
+            if right_hand_joints.shape[0] != n_hand:
                 raise ValueError(
-                    f"right_hand_joints must have shape [7], got {right_hand_joints.shape}"
+                    f"right_hand_joints must have shape [{n_hand}], got {right_hand_joints.shape}"
                 )
-            right_hand_joints = right_hand_joints.reshape(1, 7)
+            right_hand_joints = right_hand_joints.reshape(1, n_hand)
         pose_data["right_hand_joints"] = right_hand_joints
 
     return pack_pose_message(pose_data, topic="pose", version=4)
@@ -235,10 +237,7 @@ def prepare_observation_from_sensors(
 
     cam_img = camera_msg["images"]["ego_view"]
 
-    # Copy index finger data to middle finger (hardware coupling)
-    state_msg["left_hand_q"][5] = state_msg["left_hand_q"][3]
-    state_msg["left_hand_q"][6] = state_msg["left_hand_q"][4]
-
+    # Inspire RH56: 6 independent drives per hand, no inter-finger coupling.
     qpos = robot_model.get_configuration_from_actuated_joints(
         body_actuated_joint_values=state_msg["body_q"],
         left_hand_actuated_joint_values=state_msg["left_hand_q"],
