@@ -8,6 +8,7 @@ from scipy.spatial.transform import Rotation as R
 from decoupled_wbc.control.base.humanoid_env import Hands, HumanoidEnv
 from decoupled_wbc.control.envs.g1.g1_body import G1Body
 from decoupled_wbc.control.envs.g1.g1_hand import G1ThreeFingerHand
+from decoupled_wbc.control.envs.g1.g1_inspire_hand import G1InspireHand
 from decoupled_wbc.control.envs.g1.sim.simulator_factory import SimulatorFactory, init_channel
 from decoupled_wbc.control.envs.g1.utils.joint_safety import JointSafetyMonitor
 from decoupled_wbc.control.robot_model.instantiation.g1 import instantiate_g1_robot_model
@@ -51,9 +52,20 @@ class G1Env(HumanoidEnv):
                 f"Gravity compensation enabled for joint groups: {self.gravity_compensation_joints}"
             )
         if self.with_hands:
+            # Select the hand implementation. Must match the hand_type used to build
+            # the robot model (dex3 = 7 DOF/hand, inspire = 6 DOF/hand).
+            hand_type = config.get("HAND_TYPE", "dex3")
+            if hand_type == "dex3":
+                hand_cls = G1ThreeFingerHand
+            elif hand_type == "inspire":
+                hand_cls = G1InspireHand
+            else:
+                raise ValueError(
+                    f"Unsupported HAND_TYPE: {hand_type}. Must be 'dex3' or 'inspire'."
+                )
             self._hands = Hands()
-            self._hands.left = G1ThreeFingerHand(is_left=True)
-            self._hands.right = G1ThreeFingerHand(is_left=False)
+            self._hands.left = hand_cls(is_left=True)
+            self._hands.right = hand_cls(is_left=False)
 
         # Initialize simulator if in simulation mode
         self.use_sim = self.config.get("ENV_TYPE") == "sim"

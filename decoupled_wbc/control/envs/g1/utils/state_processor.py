@@ -13,6 +13,8 @@ from unitree_sdk2py.idl.unitree_hg.msg.dds_ import (
     OdoState_,
 )
 
+from decoupled_wbc.control.envs.g1.utils import inspire_hand_spec
+
 
 class BodyStateProcessor:
     def __init__(self, config):
@@ -139,5 +141,46 @@ class HandStateProcessor:
             )
             .astype(np.float64)
             .reshape(1, -1)
+        )
+        return state_data
+
+
+class InspireHandStateProcessor:
+    """Reads Inspire RH56 hand state from the Inspire DDS SDK.
+
+    Subscribes to ``rt/inspire_hand/state/{l,r}`` (published by the separate Inspire
+    driver) and converts the normalized ``angle_act`` drive units back to joint
+    angles in radians. The Inspire state message does not provide joint velocity,
+    acceleration or torque, so those are reported as zeros to keep the same
+    observation layout as the dex3 ``HandStateProcessor``.
+    """
+
+    def __init__(self, is_left: bool = True):
+        # Imported lazily so dex3-only deployments don't require inspire_sdkpy.
+        from inspire_sdkpy import inspire_dds
+
+        self.is_left = is_left
+        suffix = "l" if is_left else "r"
+        self.state_sub = ChannelSubscriber(
+            f"rt/inspire_hand/state/{suffix}", inspire_dds.inspire_hand_state
+        )
+        self.state_sub.Init(None, 0)
+        self.state = None
+        self.num_dof = inspire_hand_spec.NUM_INSPIRE_DOF
+
+    def _prepare_low_state(self) -> np.ndarray:
+        self.state = self.state_sub.Read()
+
+        if not self.state:
+            print("No state received")
+            return
+
+        # angle_act is in normalized drive units [0, 1000]; convert to radians.
+        q = inspire_hand_spec.drive_to_rad(self.state.angle_act[: self.num_dof])
+        zeros = np.zeros(self.num_dof)
+
+        # Layout matches HandStateProcessor: [q, dq, tau_est, ddq].
+        state_data = (
+            np.concatenate([q, zeros, zeros, zeros], axis=0).astype(np.float64).reshape(1, -1)
         )
         return state_data

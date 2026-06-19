@@ -48,6 +48,7 @@ def override_wbc_config(
         "enable_gravity_compensation": config.enable_gravity_compensation,
         "gravity_compensation_joints": config.gravity_compensation_joints,
         "high_elbow_pose": config.high_elbow_pose,
+        "HAND_TYPE": config.hand_type,
     }
 
     if missed_keys_only:
@@ -110,6 +111,11 @@ class BaseConfig(ArgsConfigTemplate):
 
     high_elbow_pose: bool = False
     """Enable high elbow pose configuration for default joint positions."""
+
+    hand_type: Literal["dex3", "inspire"] = "dex3"
+    """End effector type: 'dex3' (Unitree three-finger, 7 DOF/hand) or 'inspire'
+    (Inspire RH56, 6 DOF/hand). Selects the robot model URDF, hand IK solver, and
+    hand control implementation."""
 
     verbose: bool = True
     """Whether to print verbose output."""

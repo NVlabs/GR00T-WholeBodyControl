@@ -151,6 +151,10 @@ WeakMotorJointIndex:
 
 NUM_MOTORS: 29
 NUM_JOINTS: 29
+# End effector type: 'dex3' (Unitree three-finger, 7 DOF/hand) or 'inspire'
+# (Inspire RH56, 6 DOF/hand). Must match the hand_type used to build the robot
+# model. For 'inspire', set NUM_HAND_MOTORS/NUM_HAND_JOINTS to 6.
+HAND_TYPE: 'dex3'
 NUM_HAND_MOTORS: 7
 NUM_HAND_JOINTS: 7
 NUM_UPPER_BODY_JOINTS: 17

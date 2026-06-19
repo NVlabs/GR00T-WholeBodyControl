@@ -1,0 +1,3 @@
+[submodule "external_dependencies/inspire_hand_ws"]
+	path = external_dependencies/inspire_hand_ws
+	url = https://github.com/NaCl-1374/inspire_hand_ws.git

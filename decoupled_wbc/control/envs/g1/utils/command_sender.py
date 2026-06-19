@@ -6,6 +6,8 @@ from unitree_sdk2py.idl.default import unitree_hg_msg_dds__HandCmd_
 from unitree_sdk2py.idl.unitree_hg.msg.dds_ import HandCmd_
 from unitree_sdk2py.utils.crc import CRC
 
+from decoupled_wbc.control.envs.g1.utils import inspire_hand_spec
+
 
 class BodyCommandSender:
     def __init__(self, config: Dict):
@@ -143,4 +145,41 @@ class HandCommandSender:
             self.cmd.motor_cmd[i].kp = self.kp[i]
             self.cmd.motor_cmd[i].kd = self.kd[i]
 
+        self.cmd_pub.Write(self.cmd)
+
+
+# Inspire control mode bitfield (see inspire_hand_ws/readme.md). 0b0001 = angle.
+INSPIRE_MODE_ANGLE = 0b0001
+
+
+class InspireHandCommandSender:
+    """Publishes angle commands to an Inspire RH56 hand over the Inspire DDS SDK.
+
+    The Inspire driver (``ModbusDataHandler`` / Headless_driver) runs separately on
+    the hand host and bridges these DDS messages to Modbus. This sender only needs to
+    publish ``inspire_hand_ctrl`` on ``rt/inspire_hand/ctrl/{l,r}``, mirroring how
+    ``HandCommandSender`` publishes to the dex3 topics.
+    """
+
+    def __init__(self, is_left: bool = True):
+        # Imported lazily so dex3-only deployments don't require inspire_sdkpy.
+        from inspire_sdkpy import inspire_dds, inspire_hand_defaut
+
+        self.is_left = is_left
+        suffix = "l" if is_left else "r"
+        self.cmd_pub = ChannelPublisher(f"rt/inspire_hand/ctrl/{suffix}", inspire_dds.inspire_hand_ctrl)
+        self.cmd_pub.Init()
+
+        self.cmd = inspire_hand_defaut.get_inspire_hand_ctrl()
+        self.hand_dof = inspire_hand_spec.NUM_INSPIRE_DOF
+
+    def send_command(self, cmd: np.ndarray):
+        """Send a joint-angle command.
+
+        Args:
+            cmd: length-6 array of joint angles in radians, in the actuator order
+                 defined by inspire_hand_spec.JOINT_ORDER.
+        """
+        self.cmd.angle_set = inspire_hand_spec.rad_to_drive(cmd)
+        self.cmd.mode = INSPIRE_MODE_ANGLE
         self.cmd_pub.Write(self.cmd)
