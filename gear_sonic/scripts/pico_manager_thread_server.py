@@ -1574,8 +1574,16 @@ def _init_input_source(
         reader = input_readers.IsaacTeleopReader(max_queue_size=buffer_size)
         reader.start()
         print("Using Isaac Teleop (in-process CloudXR / DeviceIO), waiting for data...")
+        # Check for data every second so the connection is detected promptly, but
+        # only print the waiting message every 5th iteration (~5s) to reduce spam.
+        wait_iterations = 0
         while reader.get_latest() is None:
-            print("waiting for Isaac Teleop body data (connect the headset to CloudXR)...")
+            if wait_iterations % 5 == 0:
+                print(
+                    f"[{time.strftime('%H:%M:%S')}] waiting for Isaac Teleop body data "
+                    "(connect the headset to CloudXR)..."
+                )
+            wait_iterations += 1
             time.sleep(1)
         return reader
 
