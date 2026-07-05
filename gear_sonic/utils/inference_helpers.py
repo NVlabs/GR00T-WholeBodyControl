@@ -95,7 +95,11 @@ def export_universal_token_module_as_onnx(
     encoder_tokenizer_obs = [f for f in encoder_input_features if f not in special_keys]
     decoder_tokenizer_obs = [f for f in decoder_input_features if f not in special_keys]
 
-    required_tokenizer_obs = list(set(encoder_tokenizer_obs + decoder_tokenizer_obs))
+    # required_tokenizer_obs = list(set(encoder_tokenizer_obs + decoder_tokenizer_obs))
+    required_set = set(encoder_tokenizer_obs + decoder_tokenizer_obs)
+    required_tokenizer_obs = [
+        name for name in module.tokenizer_obs_names if name in required_set
+    ]
 
     # Calculate total input dimension
     total_feature_dim = 0
