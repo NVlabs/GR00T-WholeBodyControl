@@ -105,7 +105,7 @@ python gear_sonic/scripts/launch_inference.py \
 
 SONIC supports real-time whole-body teleoperation via PICO VR headset, enabling natural human-to-robot motion transfer for data collection and interactive control.
 
-This repo can also drive the headset over Isaac Teleop / CloudXR by launching `gear_sonic/scripts/pico_manager_thread_server.py --input-source isaac-teleop`. The streamer hosts the CloudXR runtime in-process via `isaacteleop[cloudxr]` — no separate publisher container required. That path is currently documented and supported only for **G1 with a Thor backpack**. The Isaac Teleop bring-up steps are documented in [`docs/source/tutorials/isaac_teleop_publisher_setup.md`](docs/source/tutorials/isaac_teleop_publisher_setup.md).
+This repo can also drive the headset over Isaac Teleop / CloudXR by launching `gear_sonic/scripts/pico_manager_thread_server.py --input-source isaac-teleop`. The streamer hosts the CloudXR runtime in-process via `isaacteleop[cloudxr]` — no separate publisher container required. That path is currently documented and supported only for **G1 with a Thor backpack**. As of 07/08/2026, CloudXR 6.2.0 does not support mobile Blackwell GPUs, including GeForce RTX 50-series Laptop GPUs; desktop Blackwell support does not extend to the corresponding laptop variants. The Isaac Teleop bring-up steps and compatibility notes are documented in [`docs/source/tutorials/isaac_teleop_publisher_setup.md`](docs/source/tutorials/isaac_teleop_publisher_setup.md).
 
 <div align="center">
 <table>

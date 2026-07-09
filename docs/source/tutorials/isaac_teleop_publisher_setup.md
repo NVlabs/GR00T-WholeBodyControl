@@ -5,6 +5,8 @@ This page documents the Isaac Teleop / CloudXR bring-up for **G1 with a Thor bac
 ```{admonition} Scope
 :class: important
 This workflow is currently documented and supported only for **G1 + Thor backpack**.
+
+As of 07/08/2026, CloudXR 6.2.0 does not support mobile Blackwell GPUs, including GeForce RTX 50-series Laptop GPUs. Support for desktop Blackwell GPUs does not extend to the corresponding laptop variants. This restriction does not apply to the supported Jetson Thor path documented here.
 ```
 
 ## Prerequisites
@@ -157,6 +159,12 @@ This should also be consistent with the [instructions found at IsaacTeleop](http
 
 ## Troubleshooting
 
+### Streaming connection times out on a Blackwell laptop GPU
+
+The CloudXR client may time out after about 30 seconds with error `0xC0F22219`, while `cxr_streamsdk` reports that the GPU device ID is not white-listed. If the server uses a GeForce RTX 50-series Laptop GPU, this is a CloudXR 6.2.0 compatibility limitation: mobile Blackwell GPUs are not supported. Changing network settings or selecting a different codec will not enable the encoder. Use the supported G1 + Thor host described in this guide.
+
+Triage CloudXR compatibility reports first to the [NVIDIA/IsaacTeleop issue tracker](https://github.com/NVIDIA/IsaacTeleop/issues), because `isaacteleop[cloudxr]` packages and launches the runtime. Include the `isaacteleop` and CloudXR versions, full GPU model and PCI device ID, and the CloudXR logs. GPU allow-list and encoder enablement belong to the CloudXR runtime and cannot be fixed in `GR00T-WholeBodyControl`.
+
 ### `RuntimeError: Failed to get OpenXR system: -35`
 
 In this setup, that error usually means the XR client is not connected yet. Re-check:
@@ -185,4 +193,3 @@ The streamer logs `[IsaacTeleopReader] No DeviceIO data for 5.0s, flagging disco
 1. The headset is still connected to CloudXR (Step 3).
 2. The Pico body trackers are paired and calibrated (see [VR Teleop Setup → Motion Tracker Setup](../getting_started/vr_teleop_setup.md)).
 3. The first time the schema runs, watch for `[IsaacTeleopReader] Unrecognised body_data schema: type=...` — if you see it, the upstream `FullBodyTrackerPico.get_body_pose().data` shape changed and `_body_data_to_24x7()` in `gear_sonic/utils/teleop/input_readers.py` needs an extra branch for the new layout.
-
