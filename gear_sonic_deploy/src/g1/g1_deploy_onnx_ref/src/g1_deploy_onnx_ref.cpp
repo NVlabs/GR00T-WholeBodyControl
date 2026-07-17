@@ -4102,7 +4102,7 @@ int main(int argc, char const* argv[]) {
     std::cout << "  policy_file: path to ONNX policy file" << std::endl;
     std::cout << "  motion_data_path: path to motion data directory (e.g., reference/bones_072925_test/)" << std::endl;
     std::cout << "\nOptions:" << std::endl;
-    std::cout << "  --planner-file <path>: specify planner file (optional)" << std::endl;
+    std::cout << "  --planner-file <path>: specify a non-empty planner file (omit to disable planner)" << std::endl;
     std::cout << "  --input-type <keyboard|gamepad|gamepad_manager|manager|zmq|zmq_manager";
 #if HAS_ROS2
     std::cout << "|ros2";
@@ -4203,14 +4203,16 @@ int main(int argc, char const* argv[]) {
         exit(1);
       }
     } else if (std::string(argv[i]) == "--planner-file") {
-      if (i + 1 < argc) {
-        plannerFile = argv[i + 1];
-        std::cout << "[INFO] Using planner file: " << plannerFile << std::endl;
-        i++; // Skip the next argument since it's the planner path
-      } else {
-        std::cerr << "Error: --planner-file requires a path argument" << std::endl;
+      // Reject empty values and following options before they can be mistaken for
+      // a planner path. Some command wrappers discard quoted empty arguments.
+      if (i + 1 >= argc || argv[i + 1][0] == '\0' ||
+          std::strncmp(argv[i + 1], "--", 2) == 0) {
+        std::cerr << "Error: --planner-file requires a non-empty path argument" << std::endl;
         exit(1);
       }
+      plannerFile = argv[i + 1];
+      std::cout << "[INFO] Using planner file: " << plannerFile << std::endl;
+      i++; // Skip the next argument since it's the planner path
     } else if (std::string(argv[i]) == "--target-motion-logfile") {
       if (i + 1 < argc) {
         targetMotionLogfile = argv[i + 1];
