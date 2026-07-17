@@ -41,8 +41,6 @@
         <site name="grip_site_cylinder" pos="0 0 0" quat="-0.5 -0.5 -0.5 0.5" size="0.005 0.5"
           rgba="0 1 0 0.3" type="cylinder" group="1" />
       </body>
-      <geom pos="0.0415 0.003 0" quat="1 0 0 0" type="mesh" rgba="0.1 0.1 0.1 1"
-        mesh="left_hand_palm_link" />
       <body name="left_hand_thumb_0_link" pos="0.067 0.003 0">
         <inertial pos="-0.000884246 -0.00863407 0.000944293"
           quat="0.462991 0.643965 -0.460173 0.398986" mass="0.0862366"
