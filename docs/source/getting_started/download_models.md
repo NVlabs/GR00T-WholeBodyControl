@@ -176,7 +176,7 @@ and optional data exporter.
 If you prefer the Hugging Face CLI:
 
 ```bash
-pip install huggingface_hub[cli]
+python -m pip install -U "huggingface_hub[cli]"
 
 # Policy only
 hf download nvidia/GEAR-SONIC \
