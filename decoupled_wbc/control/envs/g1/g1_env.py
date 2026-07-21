@@ -44,7 +44,7 @@ class G1Env(HumanoidEnv):
 
         # Gravity compensation settings
         self.enable_gravity_compensation = config.get("enable_gravity_compensation", False)
-        self.gravity_compensation_joints = config.get("gravity_compensation_joints", ["arms"])
+        self.gravity_compensation_joints = config.get("gravity_compensation_joints") or ["arms"]
 
         if self.enable_gravity_compensation:
             print(
@@ -221,12 +221,19 @@ class G1Env(HumanoidEnv):
 
         # Map action from joint order to actuator order
         body_actuator_q = self.robot_model.get_body_actuated_joints(action["q"])
+        body_tau = np.zeros_like(body_actuator_q)
+        if self.enable_gravity_compensation and self.last_obs is not None:
+            gravity_torques = self.robot_model.compute_gravity_compensation_torques(
+                self.last_obs["q"],
+                joint_groups=self.gravity_compensation_joints,
+            )
+            body_tau = self.robot_model.get_body_actuated_joints(gravity_torques)
 
         self.body().queue_action(
             {
                 "body_q": body_actuator_q,
                 "body_dq": np.zeros_like(body_actuator_q),
-                "body_tau": np.zeros_like(body_actuator_q),
+                "body_tau": body_tau,
             }
         )
 
