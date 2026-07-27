@@ -558,9 +558,40 @@ class YawAccumulator:
         return self.heading
 
 
-def compute_from_body_poses(parent_indices: list, device, body_poses_np: np.ndarray):
+def load_skeleton_correction(skeleton_source: str):
+    """Return a length-24 list of scipy Rotations, or None for the native Pico path.
+
+    Quest body pose arrives already converted to the ByteDance 24-joint layout by
+    the CloudXR client SDK, but with different per-joint orientation conventions.
+    See utils/teleop/quest_skeleton_correction.py for how the offsets were
+    measured and which joints remain unreliable.
+    """
+    if skeleton_source in (None, "pico"):
+        return None
+    if skeleton_source == "quest":
+        from gear_sonic.utils.teleop.quest_skeleton_correction import (
+            LOW_CONFIDENCE_JOINTS,
+            QUEST_TO_PICO_LOCAL,
+        )
+
+        print(
+            "[skeleton] Applying Quest->Pico orientation correction. "
+            f"Joints {LOW_CONFIDENCE_JOINTS} are only partially corrected "
+            "(shoulder/wrist offsets are pose-dependent)."
+        )
+        return [sRot.from_quat(q) for q in QUEST_TO_PICO_LOCAL]
+    raise ValueError(f"unknown --skeleton-source {skeleton_source!r} (expected pico|quest)")
+
+
+def compute_from_body_poses(
+    parent_indices: list, device, body_poses_np: np.ndarray, skeleton_correction=None
+):
     """
     Compute local joints and body orientation from provided body_poses_np.
+
+    ``skeleton_correction`` is an optional length-24 sequence of scipy Rotations
+    applied in parent-relative space to bring a non-Pico skeleton onto the Pico
+    orientation convention (see utils/teleop/quest_skeleton_correction.py).
     """
     positions = body_poses_np[:, :3]
     global_quats = body_poses_np[:, [6, 3, 4, 5]]
@@ -576,6 +607,12 @@ def compute_from_body_poses(parent_indices: list, device, body_poses_np: np.ndar
         else:
             local_rot = global_rots[parent_indices[i]].inv() * global_rots[i]
             local_rots.append(local_rot)
+
+    # Rebase onto the Pico convention. Applied here, after the local rotations
+    # exist and before they become the SMPL pose, because that is the space the
+    # offsets were measured in.
+    if skeleton_correction is not None:
+        local_rots = [skeleton_correction[i].inv() * local_rots[i] for i in range(24)]
 
     pose_aa = np.array([rot.as_rotvec() for rot in local_rots])
 
@@ -1249,6 +1286,7 @@ class PoseStreamer:
         record_dir: str,
         record_format: str,
         log_prefix: str = "PoseLoop",
+        skeleton_source: str = "pico",
     ):
         self.socket = socket
         self.reader = reader
@@ -1270,6 +1308,7 @@ class PoseStreamer:
         self.record_idx = 0
 
         self.left_hand_ik_solver, self.right_hand_ik_solver = init_hand_ik_solvers()
+        self.skeleton_correction = load_skeleton_correction(skeleton_source)
         self.parent_indices = [
             -1,
             0,
@@ -1346,7 +1385,10 @@ class PoseStreamer:
             return
 
         latest_data = compute_from_body_poses(
-            self.parent_indices, self.device, sample["body_poses_np"]
+            self.parent_indices,
+            self.device,
+            sample["body_poses_np"],
+            skeleton_correction=self.skeleton_correction,
         )
         left_menu_button, left_trigger, right_trigger, left_grip, right_grip = get_controller_inputs(
             self.reader
@@ -1912,6 +1954,7 @@ def run_pico_manager(
     enable_waist_tracking: bool = False,
     enable_smpl_vis: bool = False,
     input_source: str = "xrt",
+    skeleton_source: str = "pico",
 ):
     """
     Manager: creates shared PUB socket and runs pose/planner streamers based on current mode.
@@ -1953,6 +1996,7 @@ def run_pico_manager(
         record_dir=record_dir,
         record_format=record_format,
         log_prefix="PoseLoop",
+        skeleton_source=skeleton_source,
     )
     planner_streamer = PlannerStreamer(
         socket=socket,
@@ -2251,6 +2295,18 @@ if __name__ == "__main__":
             "'isaac-teleop' for in-process IsaacTeleop / CloudXR DeviceIO"
         ),
     )
+    parser.add_argument(
+        "--skeleton-source",
+        type=str,
+        default="pico",
+        choices=["pico", "quest"],
+        help=(
+            "Headset providing body tracking. 'quest' applies a per-joint "
+            "orientation correction (see utils/teleop/quest_skeleton_correction.py); "
+            "the Quest skeleton reaches us in BD joint order but with different "
+            "orientation conventions. Manager mode only."
+        ),
+    )
     args = parser.parse_args()
 
     # Standalone VR3Pt test modes (exit after finishing)
@@ -2292,6 +2348,7 @@ if __name__ == "__main__":
             enable_waist_tracking=args.waist_tracking,
             enable_smpl_vis=args.vis_smpl,
             input_source=args.input_source,
+            skeleton_source=args.skeleton_source,
         )
     else:
         # Run legacy single-thread pose streaming
