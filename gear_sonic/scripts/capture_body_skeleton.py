@@ -268,12 +268,97 @@ def main():
     ap.add_argument("--out", default=None, help="output .npz (default /tmp/skeleton_<label>.npz)")
     ap.add_argument("--compare", nargs=2, metavar=("A.npz", "B.npz"),
                     help="compare two recordings instead of recording")
+    ap.add_argument("--rest-pose", nargs=2, metavar=("A.npz", "B.npz"),
+                    help="rest-pose offset analysis of two STATIC captures")
     args = ap.parse_args()
 
+    if args.rest_pose:
+        rest_pose(*args.rest_pose)
+        return 0
     if args.compare:
         compare(*args.compare)
         return 0
     return record(args)
+
+
+
+# ---------------------------------------------------------------------------
+# Rest-pose offset analysis (--rest-pose A.npz B.npz)
+#
+# Valid ONLY for static captures. Verifies staticness first, then reports the
+# per-joint mean-orientation offset of B relative to A, and tests whether a
+# single rotation explains each anatomical group.
+# ---------------------------------------------------------------------------
+
+AXIAL = [0, 3, 6, 9, 12, 15]
+LEFT_LIMB = [1, 4, 7, 10, 13, 16, 18, 20, 22]
+RIGHT_LIMB = [2, 5, 8, 11, 14, 17, 19, 21, 23]
+
+
+def _mean_rot(q):
+    from scipy.spatial.transform import Rotation as R
+    q = q / np.linalg.norm(q, axis=-1, keepdims=True)
+    q = q * np.sign(q[:, 3:4] + 1e-12)          # hemisphere-align before averaging
+    m = q.mean(axis=0)
+    return R.from_quat(m / np.linalg.norm(m))
+
+
+def _fit_group(offsets, idxs):
+    from scipy.spatial.transform import Rotation as R
+    M = np.mean([offsets[j].as_matrix() for j in idxs], axis=0)
+    U, _, Vt = np.linalg.svd(M)                  # nearest proper rotation
+    return R.from_matrix(U @ Vt)
+
+
+def rest_pose(path_a, path_b):
+    a, b = np.load(path_a, allow_pickle=True), np.load(path_b, allow_pickle=True)
+    la = str(a["label"]) if "label" in a else "A"
+    lb = str(b["label"]) if "label" in b else "B"
+
+    print("STATICNESS CHECK (this analysis is only valid for held poses)")
+    ok = True
+    for tag, d in ((la, a), (lb, b)):
+        sd = np.array([np.std(_quat_angle_deg(d["quat"][:, j, :],
+                                              d["quat"][:, j, :].mean(axis=0)))
+                       for j in range(NUM_JOINTS)])
+        flag = "OK" if sd.max() < 5.0 else "TOO MUCH MOTION"
+        if sd.max() >= 5.0:
+            ok = False
+        print(f"  {tag:<14} median {np.median(sd):5.2f} deg  max {sd.max():5.2f} deg   {flag}")
+    if not ok:
+        print("\nWARNING: a capture is not static. Mean orientations reflect the motion\n"
+              "performed, not the rest pose, and the offsets below are not meaningful.")
+    print()
+
+    offsets = {}
+    print(f"PER-JOINT REST-POSE OFFSET ({lb} relative to {la})")
+    print(f"{'idx':>3} {'joint':<16} {'angle':>7}  axis(x,y,z)")
+    print("-" * 56)
+    for j in range(NUM_JOINTS):
+        off = _mean_rot(b["quat"][:, j, :]) * _mean_rot(a["quat"][:, j, :]).inv()
+        offsets[j] = off
+        rv = off.as_rotvec()
+        ang = np.degrees(np.linalg.norm(rv))
+        ax = rv / (np.linalg.norm(rv) + 1e-12)
+        print(f"{j:>3} {JOINT_NAMES[j]:<16} {ang:>6.1f}  "
+              f"({ax[0]:+.2f},{ax[1]:+.2f},{ax[2]:+.2f})")
+
+    print("-" * 56)
+    print("\nGROUP FIT — can ONE rotation explain each anatomical group?")
+    for name, idxs in (("axial/spine", AXIAL), ("left limbs", LEFT_LIMB),
+                       ("right limbs", RIGHT_LIMB)):
+        Rg = _fit_group(offsets, idxs)
+        res = [np.degrees(np.linalg.norm((Rg.inv() * offsets[j]).as_rotvec())) for j in idxs]
+        verdict = "consistent" if np.median(res) < 15 else "NOT a shared rotation"
+        print(f"  {name:<12} fitted {np.degrees(np.linalg.norm(Rg.as_rotvec())):6.1f} deg   "
+              f"median residual {np.median(res):5.1f} deg   {verdict}")
+
+    print("\nNOTE: a single static pose cannot distinguish a constant rest-pose offset\n"
+          "from a pose-dependent error. Capture a SECOND distinct static pose and\n"
+          "re-run: if the per-joint offsets match, they are constant and a fixed\n"
+          "correction table will work. If they differ, the mapping is pose-dependent\n"
+          "and no constant correction can fix it.")
+    return offsets
 
 
 if __name__ == "__main__":
