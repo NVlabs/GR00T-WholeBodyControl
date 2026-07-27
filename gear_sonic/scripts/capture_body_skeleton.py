@@ -142,6 +142,126 @@ def _quat_angle_deg(q, ref):
     return np.degrees(2.0 * np.arccos(dot))
 
 
+# ---------------------------------------------------------------------------
+# Batch pose battery.
+#
+# Every pose here is chosen to be REPRODUCIBLE minutes apart on a different
+# headset -- that is the binding constraint, not coverage. An earlier round of
+# this analysis was wasted because "arms down" is not a well-defined pose and
+# the two captures did not match. Each entry therefore has an unambiguous
+# endpoint (straight, 90 degrees, against a surface) rather than a vague one.
+#
+# Between them they place every joint group in at least two clearly different
+# configurations, which is what separates a constant rest-pose offset from a
+# pose-dependent one.
+# ---------------------------------------------------------------------------
+POSE_BATTERY = [
+    ("tpose", "Arms straight out to the sides at shoulder height, palms DOWN.",
+     "baseline; matches the existing correction table"),
+    ("arms_forward", "Arms straight FORWARD at shoulder height, palms DOWN.",
+     "shoulder flexion 90 deg, elbows straight"),
+    ("arms_forward_palms_up", "Same as before -- arms straight forward -- but palms UP.",
+     "isolates wrist/forearm roll: only the wrists change from the previous pose"),
+    ("goalpost", "Upper arms out to the sides horizontal, forearms straight UP, palms forward.",
+     "elbow 90 deg with shoulder abducted; separates shoulder from elbow"),
+    ("arms_overhead", "Arms straight UP overhead, palms facing each other.",
+     "shoulder flexion ~180 deg, the far end of shoulder range"),
+    ("bend_forward", "Hinge at the hips ~45 deg, back flat, arms hanging straight down.",
+     "spine flexion + hip flexion; never exercised before"),
+    ("lean_right", "Stand straight, lean sideways to your RIGHT, arms relaxed at sides.",
+     "lateral spine bend; breaks the left/right symmetry of the other poses"),
+    ("sitting", "Sit on a chair, feet flat on the floor, hands resting on knees.",
+     "hip and knee flexion ~90 deg -- the only pose that bends the legs"),
+]
+
+
+def batch(args):
+    """Walk through POSE_BATTERY in one session, saving one file per pose."""
+    from gear_sonic.utils.teleop.isaac_teleop_client import IsaacTeleopClient
+
+    dev = args.batch
+    print("=" * 72)
+    print(f"  POSE BATTERY — device label {dev!r}   ({len(POSE_BATTERY)} poses)")
+    print("=" * 72)
+    print("Ground rules (these matter more than the poses themselves):")
+    print("  * Face the SAME direction for every pose. Pick a spot on the wall and")
+    print("    keep facing it. A body turn between captures corrupts the analysis.")
+    print("  * Stand on the same spot. Mark the floor if you can.")
+    print("  * HOLD STILL during each capture -- it warns you if you did not.")
+    print("  * Run this identically on both headsets.\n")
+
+    client = IsaacTeleopClient()
+    print("Starting IsaacTeleop streaming (connect the headset if not already)...")
+    client.start_streaming()
+    print("Waiting for body tracking...")
+    t0 = time.monotonic()
+    while True:
+        got = _extract_joints(client.get_full_body_data())
+        if got is not None and got[2].any():
+            break
+        if time.monotonic() - t0 > args.timeout:
+            print(f"ERROR: no body data after {args.timeout}s. Is body tracking active?")
+            return 1
+        time.sleep(0.2)
+    print("Body tracking live.\n")
+
+    written = []
+    for n, (name, how, why) in enumerate(POSE_BATTERY, start=1):
+        print("-" * 72)
+        print(f"  POSE {n}/{len(POSE_BATTERY)}: {name}")
+        print(f"  {how}")
+        print(f"  (why: {why})")
+        print("-" * 72)
+        try:
+            input("  Get into position, then press ENTER to capture (Ctrl-C to stop)... ")
+        except (KeyboardInterrupt, EOFError):
+            print("\nAborted by user.")
+            break
+
+        for k in range(3, 0, -1):
+            print(f"    capturing in {k}...", end="\r", flush=True)
+            time.sleep(1.0)
+        print(f"    HOLD STILL — recording {args.duration:.0f}s ...        ")
+
+        P, Q, V, T = [], [], [], []
+        period = 1.0 / args.poll_hz
+        t_end = time.monotonic() + args.duration
+        while time.monotonic() < t_end:
+            got = _extract_joints(client.get_full_body_data())
+            if got is not None:
+                p, q, v = got
+                P.append(p); Q.append(q); V.append(v); T.append(time.monotonic())
+            time.sleep(period)
+
+        if not P:
+            print("    ERROR: no samples captured for this pose; skipping.")
+            continue
+
+        P, Q, V = np.array(P), np.array(Q), np.array(V)
+        label = f"{dev}_{n:02d}_{name}"
+        out = os.path.join(args.out_dir, f"skeleton_{label}.npz")
+        np.savez_compressed(out, pos=P, quat=Q, valid=V, t=np.array(T), label=label)
+
+        # immediate staticness feedback so a bad take can be redone on the spot
+        sd = np.array([np.std(_quat_angle_deg(Q[:, j, :], Q[:, j, :].mean(axis=0)))
+                       for j in range(NUM_JOINTS)])
+        verdict = "OK" if sd.max() < 5.0 else "TOO MUCH MOTION — consider redoing this pose"
+        print(f"    saved {len(P)} samples -> {out}")
+        print(f"    staticness: median {np.median(sd):.2f} deg, max {sd.max():.2f} deg   {verdict}\n")
+        written.append(out)
+
+    client.close()
+    print("=" * 72)
+    print(f"  Done — {len(written)}/{len(POSE_BATTERY)} poses captured for {dev!r}")
+    for w in written:
+        print(f"    {w}")
+    print("\n  Now repeat this identically on the other headset, e.g.:")
+    other = "quest" if dev == "pico" else "pico"
+    print(f"    --batch {other}")
+    print("=" * 72)
+    return 0
+
+
 def record(args):
     from gear_sonic.utils.teleop.isaac_teleop_client import IsaacTeleopClient
 
@@ -270,8 +390,13 @@ def main():
                     help="compare two recordings instead of recording")
     ap.add_argument("--rest-pose", nargs=2, metavar=("A.npz", "B.npz"),
                     help="rest-pose offset analysis of two STATIC captures")
+    ap.add_argument("--batch", metavar="DEVICE",
+                    help="guided capture of the full pose battery, e.g. --batch quest")
+    ap.add_argument("--out-dir", default="/tmp", help="output directory for --batch")
     args = ap.parse_args()
 
+    if args.batch:
+        return batch(args)
     if args.rest_pose:
         rest_pose(*args.rest_pose)
         return 0
