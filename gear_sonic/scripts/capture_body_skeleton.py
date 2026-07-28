@@ -220,7 +220,64 @@ POSE_BATTERY_SHOULDER = [
      "same upper-arm placement, shoulder rolled outward (external rotation)"),
 ]
 
-BATTERIES = {"main": POSE_BATTERY, "shoulder": POSE_BATTERY_SHOULDER}
+# ---------------------------------------------------------------------------
+# Torso + legs battery.
+#
+# Correcting a joint properly needs a two-sided fit, local_quest = A * local_pico
+# * B: A is the parent-frame rotation and decides which axis a motion comes out
+# about, B is the child-frame relabelling. Separating them requires the joint to
+# rotate about at least TWO independent axes across the captures. A single axis
+# leaves A and B degenerate -- the fit still matches every static pose while
+# reproducing motion about the wrong axis.
+#
+# Measured axis diversity from the first two batteries (0 = all motion about one
+# axis, 1 = fully independent): SPINE1 0.08, SPINE2 0.15, SPINE3 0.13, PELVIS
+# 0.61 over only 21 deg, hips/ankles/feet ~0. The arms scored 0.5-0.95, which is
+# why they solve and the torso does not.
+#
+# Symptoms that traces to: operator waist flexion arriving as robot lateral bend
+# (spine axis mapping off by ~86 deg), and a persistent leg crouch.
+#
+# So this battery deliberately rotates the torso about all three axes, turns the
+# whole body to several headings (which also conditions the pelvis, the one
+# thing every previous battery held fixed by instruction), and puts the legs
+# through real range.
+#
+# NOTE: unlike the earlier batteries, here you SHOULD change facing -- poses 9-11
+# exist precisely to sample different body headings.
+# ---------------------------------------------------------------------------
+POSE_BATTERY_TORSO = [
+    ("neutral", "Stand upright and relaxed, arms at your sides, facing forward.",
+     "reference for every other pose in this battery"),
+    ("bend_fwd_deep", "Hinge forward at the waist as far as is comfortable, arms hanging.",
+     "spine flexion, large"),
+    ("lean_back", "Lean BACKWARD from the waist, shoulders behind your hips.",
+     "spine extension -- the opposite sign of flexion, never captured before"),
+    ("lean_left_deep", "Bend sideways to your LEFT, right arm reaching down your side.",
+     "lateral spine bend, left"),
+    ("lean_right_deep", "Bend sideways to your RIGHT, left arm reaching down your side.",
+     "lateral bend right; with the previous pose this gives the second spine axis"),
+    ("twist_left", "Feet planted facing forward, twist your SHOULDERS to the left.",
+     "spine axial twist -- the third spine axis, and never captured before"),
+    ("twist_right", "Feet planted facing forward, twist your SHOULDERS to the right.",
+     "spine axial twist, opposite sign"),
+    ("squat", "Squat down, knees bent, back reasonably straight, arms forward for balance.",
+     "hip and knee flexion together, deeper than sitting"),
+    ("face_left_90", "Turn your whole body 90 degrees to the LEFT and stand neutral.",
+     "body heading #2 -- conditions the pelvis, which every earlier battery held fixed"),
+    ("face_right_90", "Turn your whole body 90 degrees to the RIGHT and stand neutral.",
+     "body heading #3"),
+    ("face_back_180", "Turn to face AWAY from your starting direction and stand neutral.",
+     "body heading #4; four headings pin the pelvis world frame"),
+    ("stride", "Stand with one foot a full stride forward, weight even, upright.",
+     "hip flexion/extension with opposite signs left vs right"),
+]
+
+BATTERIES = {
+    "main": POSE_BATTERY,
+    "shoulder": POSE_BATTERY_SHOULDER,
+    "torso": POSE_BATTERY_TORSO,
+}
 
 
 def _beep():
@@ -322,8 +379,12 @@ def batch(args):
     print(f"  POSE BATTERY {args.battery!r} — device label {dev!r}   ({len(poses)} poses)")
     print("=" * 72)
     print("Ground rules (these matter more than the poses themselves):")
-    print("  * Face the SAME direction for every pose. Pick a spot on the wall and")
-    print("    keep facing it. A body turn between captures corrupts the analysis.")
+    if args.battery == "torso":
+        print("  * This battery INTENTIONALLY changes facing -- poses 9-11 turn the body")
+        print("    on purpose, to condition the pelvis. Return to the same spot each time.")
+    else:
+        print("  * Face the SAME direction for every pose. Pick a spot on the wall and")
+        print("    keep facing it. A body turn between captures corrupts the analysis.")
     print("  * Stand on the same spot. Mark the floor if you can.")
     print("  * HOLD STILL during each capture -- it warns you if you did not.")
     print("  * Run this identically on both headsets.")
