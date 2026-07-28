@@ -558,8 +558,71 @@ class YawAccumulator:
         return self.heading
 
 
+class SkeletonCorrection:
+    """Maps a non-Pico skeleton's joint orientations onto the Pico convention.
+
+    Most joints take a fixed per-joint offset. The shoulders take a
+    pose-dependent one blended from captured samples by arm direction, because a
+    constant offset leaves them 50-69 deg out while blending reaches ~21-29 deg
+    (see utils/teleop/quest_shoulder_adaptive.py for why, and what was ruled
+    out).
+    """
+
+    def __init__(self, constant, adaptive=None, feature_bone=None,
+                 sigma_deg=20.0, max_angle_deg=75.0):
+        self.constant = constant
+        self.adaptive = adaptive or {}
+        self.feature_bone = feature_bone or {}
+        self.sigma = float(sigma_deg)
+        self.max_angle = float(max_angle_deg)
+        self._fallbacks = 0
+
+    def _blend(self, joint, arm_dir):
+        """Gaussian-weighted mean of the sampled offsets for ``joint``.
+
+        Returns None when the query is outside the captured range, so the caller
+        falls back to the constant offset rather than extrapolating.
+        """
+        dirs, quats = self.adaptive[joint]
+        cos = np.clip(dirs @ arm_dir, -1.0, 1.0)
+        ang = np.degrees(np.arccos(cos))
+        if ang.min() > self.max_angle:
+            return None
+        w = np.exp(-0.5 * (ang / self.sigma) ** 2)
+        s = w.sum()
+        if not np.isfinite(s) or s < 1e-9:
+            return None
+        # Chordal mean of rotations, projected back onto SO(3).
+        m = np.tensordot(w / s, sRot.from_quat(quats).as_matrix(), axes=(0, 0))
+        u, _, vt = np.linalg.svd(m)
+        r = u @ vt
+        if np.linalg.det(r) < 0:
+            u[:, -1] *= -1
+            r = u @ vt
+        return sRot.from_matrix(r)
+
+    def apply(self, local_rots, positions, root_rot):
+        """Return ``local_rots`` rebased onto the Pico convention."""
+        out = list(local_rots)
+        for i in range(len(out)):
+            corr = self.constant[i]
+            if i in self.adaptive:
+                child = self.feature_bone.get(i)
+                if child is not None:
+                    v = positions[child] - positions[i]
+                    n = np.linalg.norm(v)
+                    if n > 1e-6:
+                        blended = self._blend(i, root_rot.inv().apply(v / n))
+                        if blended is not None:
+                            corr = blended
+                        else:
+                            self._fallbacks += 1
+            out[i] = corr.inv() * out[i]
+        return out
+
+
 def load_skeleton_correction(skeleton_source: str):
-    """Return a length-24 list of scipy Rotations, or None for the native Pico path.
+    """Return a SkeletonCorrection, or None for the native Pico path.
 
     Quest body pose arrives already converted to the ByteDance 24-joint layout by
     the CloudXR client SDK, but with different per-joint orientation conventions.
@@ -569,17 +632,36 @@ def load_skeleton_correction(skeleton_source: str):
     if skeleton_source in (None, "pico"):
         return None
     if skeleton_source == "quest":
+        from gear_sonic.utils.teleop.quest_shoulder_adaptive import (
+            ADAPTIVE_JOINTS,
+            FEATURE_BONE,
+            MAX_ANGLE_DEG,
+            SIGMA_DEG,
+        )
         from gear_sonic.utils.teleop.quest_skeleton_correction import (
             LOW_CONFIDENCE_JOINTS,
             QUEST_TO_PICO_LOCAL,
         )
 
+        adaptive = {
+            j: (
+                np.array([s[0] for s in samples], dtype=np.float64),
+                np.array([s[1] for s in samples], dtype=np.float64),
+            )
+            for j, samples in ADAPTIVE_JOINTS.items()
+        }
         print(
             "[skeleton] Applying Quest->Pico orientation correction. "
-            f"Joints {LOW_CONFIDENCE_JOINTS} are only partially corrected "
-            "(shoulder/wrist offsets are pose-dependent)."
+            f"Shoulders {tuple(adaptive)} use pose-dependent blending; "
+            f"joints {LOW_CONFIDENCE_JOINTS} remain only partially corrected."
         )
-        return [sRot.from_quat(q) for q in QUEST_TO_PICO_LOCAL]
+        return SkeletonCorrection(
+            constant=[sRot.from_quat(q) for q in QUEST_TO_PICO_LOCAL],
+            adaptive=adaptive,
+            feature_bone=FEATURE_BONE,
+            sigma_deg=SIGMA_DEG,
+            max_angle_deg=MAX_ANGLE_DEG,
+        )
     raise ValueError(f"unknown --skeleton-source {skeleton_source!r} (expected pico|quest)")
 
 
@@ -589,16 +671,17 @@ def compute_from_body_poses(
     """
     Compute local joints and body orientation from provided body_poses_np.
 
-    ``skeleton_correction`` is an optional length-24 sequence of scipy Rotations
-    applied in parent-relative space to bring a non-Pico skeleton onto the Pico
-    orientation convention (see utils/teleop/quest_skeleton_correction.py).
+    ``skeleton_correction`` is an optional SkeletonCorrection that rebases a
+    non-Pico skeleton onto the Pico orientation convention in parent-relative
+    space (see utils/teleop/quest_skeleton_correction.py). A plain length-24
+    sequence of scipy Rotations is also accepted.
     """
     positions = body_poses_np[:, :3]
     global_quats = body_poses_np[:, [6, 3, 4, 5]]
 
     # Convert to local rotations
-    global_rots = sRot.from_quat(global_quats, scalar_first=True)
-    global_rots = global_rots * sRot.from_euler("y", 180, degrees=True)
+    raw_global_rots = sRot.from_quat(global_quats, scalar_first=True)
+    global_rots = raw_global_rots * sRot.from_euler("y", 180, degrees=True)
 
     local_rots = []
     for i in range(24):
@@ -612,7 +695,14 @@ def compute_from_body_poses(
     # exist and before they become the SMPL pose, because that is the space the
     # offsets were measured in.
     if skeleton_correction is not None:
-        local_rots = [skeleton_correction[i].inv() * local_rots[i] for i in range(24)]
+        if hasattr(skeleton_correction, "apply"):
+            # The shoulder correction depends on where the arm is pointing, so
+            # it needs the positions and the root rotation, not just the index.
+            # Pass the RAW root: the arm-direction feature was sampled in the
+            # raw pelvis frame, before the Ry180 convention flip.
+            local_rots = skeleton_correction.apply(local_rots, positions, raw_global_rots[0])
+        else:
+            local_rots = [skeleton_correction[i].inv() * local_rots[i] for i in range(24)]
 
     pose_aa = np.array([rot.as_rotvec() for rot in local_rots])
 
