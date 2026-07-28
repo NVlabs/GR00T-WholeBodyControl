@@ -175,6 +175,95 @@ POSE_BATTERY = [
 ]
 
 
+def _beep():
+    """Terminal bell. Audible cue matters because the operator is wearing a
+    headset and cannot read the terminal."""
+    sys.stdout.write("\a")
+    sys.stdout.flush()
+
+
+def _countdown(seconds):
+    for k in range(int(seconds), 0, -1):
+        print(f"    capturing in {k}...   ", end="\r", flush=True)
+        _beep()
+        time.sleep(1.0)
+
+
+def _trigger_pulled(client, thresh=0.7):
+    """True if either trigger is past ``thresh``. Never raises."""
+    try:
+        return (client.get_key_value_by_name("right_trigger") > thresh
+                or client.get_key_value_by_name("left_trigger") > thresh)
+    except Exception:
+        return False
+
+
+def _triggers_released(client, thresh=0.3):
+    try:
+        return (client.get_key_value_by_name("right_trigger") < thresh
+                and client.get_key_value_by_name("left_trigger") < thresh)
+    except Exception:
+        return True
+
+
+def _stdin_ready():
+    """Non-blocking check for a pending line on stdin (POSIX only).
+
+    Requires a tty: a closed or redirected stdin selects as readable
+    immediately at EOF, which would silently auto-advance every pose.
+    """
+    try:
+        if not sys.stdin.isatty():
+            return False
+        import select
+        return bool(select.select([sys.stdin], [], [], 0.0)[0])
+    except Exception:
+        return False
+
+
+def _wait_for_go(client, args):
+    """Block until the operator signals ready. Returns False to abort.
+
+    Accepts whichever comes first: a controller trigger pull, or ENTER. The
+    trigger path exists because the operator is in a headset holding
+    controllers and cannot reach the keyboard while holding a pose.
+
+    In --auto mode nothing is required: the run is fully hands-free and each
+    pose simply gets ``--pose-delay`` seconds to assume.
+    """
+    if args.auto:
+        print(f"  AUTO: {args.pose_delay:.0f}s to get into position...")
+        for k in range(int(args.pose_delay), 0, -1):
+            if k <= 5 or k % 5 == 0:
+                print(f"    {k:2d}s to assume pose...   ", end="\r", flush=True)
+                if k <= 3:
+                    _beep()
+            time.sleep(1.0)
+        print(" " * 40, end="\r")
+        return True
+
+    print("  Get into position, then PULL EITHER TRIGGER (or press ENTER).")
+    print("  Ctrl-C to stop.")
+    _beep()
+
+    # Require a release first so a trigger still held from the previous pose
+    # does not instantly advance this one.
+    t0 = time.monotonic()
+    while not _triggers_released(client):
+        if time.monotonic() - t0 > 5.0:
+            break
+        time.sleep(0.05)
+
+    while True:
+        if _trigger_pulled(client):
+            print("    trigger detected.                    ")
+            return True
+        if _stdin_ready():
+            sys.stdin.readline()
+            return True
+        time.sleep(0.05)
+
+
 def batch(args):
     """Walk through POSE_BATTERY in one session, saving one file per pose."""
     from gear_sonic.utils.teleop.isaac_teleop_client import IsaacTeleopClient
@@ -188,7 +277,13 @@ def batch(args):
     print("    keep facing it. A body turn between captures corrupts the analysis.")
     print("  * Stand on the same spot. Mark the floor if you can.")
     print("  * HOLD STILL during each capture -- it warns you if you did not.")
-    print("  * Run this identically on both headsets.\n")
+    print("  * Run this identically on both headsets.")
+    if args.auto:
+        print(f"\n  AUTO MODE: hands-free. {args.pose_delay:.0f}s to assume each pose,")
+        print("  then a 3-beep countdown and the capture starts. No input needed.\n")
+    else:
+        print("\n  To start each capture: PULL EITHER TRIGGER (or press ENTER).")
+        print("  Beeps mark the countdown and the start of recording.\n")
 
     client = IsaacTeleopClient()
     print("Starting IsaacTeleop streaming (connect the headset if not already)...")
@@ -213,15 +308,16 @@ def batch(args):
         print(f"  (why: {why})")
         print("-" * 72)
         try:
-            input("  Get into position, then press ENTER to capture (Ctrl-C to stop)... ")
+            if not _wait_for_go(client, args):
+                print("\nAborted by user.")
+                break
         except (KeyboardInterrupt, EOFError):
             print("\nAborted by user.")
             break
 
-        for k in range(3, 0, -1):
-            print(f"    capturing in {k}...", end="\r", flush=True)
-            time.sleep(1.0)
+        _countdown(args.lead_in)
         print(f"    HOLD STILL — recording {args.duration:.0f}s ...        ")
+        _beep()
 
         P, Q, V, T = [], [], [], []
         period = 1.0 / args.poll_hz
@@ -393,6 +489,13 @@ def main():
     ap.add_argument("--batch", metavar="DEVICE",
                     help="guided capture of the full pose battery, e.g. --batch quest")
     ap.add_argument("--out-dir", default="/tmp", help="output directory for --batch")
+    ap.add_argument("--auto", action="store_true",
+                    help="hands-free: no trigger or ENTER needed, each pose gets "
+                         "--pose-delay seconds to assume")
+    ap.add_argument("--pose-delay", type=float, default=15.0,
+                    help="seconds to assume each pose in --auto mode (default 15)")
+    ap.add_argument("--lead-in", type=float, default=3.0,
+                    help="countdown seconds after the go signal (default 3)")
     args = ap.parse_args()
 
     if args.batch:
