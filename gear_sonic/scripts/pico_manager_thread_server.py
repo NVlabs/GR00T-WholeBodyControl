@@ -650,10 +650,29 @@ def load_skeleton_correction(skeleton_source: str):
             )
             for j, samples in ADAPTIVE_JOINTS.items()
         }
+        # Safety check on the root. The root correction left-multiplies the body
+        # orientation, so it also remaps which axis an operator rotation turns
+        # into: a correction that is not (near) identity about each world axis
+        # sends operator yaw to robot pitch and operator pitch to robot roll,
+        # which destabilises the robot within ~30 deg of body rotation. A fit
+        # taken at a single body orientation produces exactly that, so refuse to
+        # run with one rather than rediscover it on hardware.
+        root = sRot.from_quat(QUEST_TO_PICO_LOCAL[0])
+        for axis, name in (((0, 1, 0), "yaw"), ((1, 0, 0), "pitch"), ((0, 0, 1), "roll")):
+            mapped = root.inv().apply(axis)
+            if float(np.dot(mapped, axis)) < 0.9:
+                raise ValueError(
+                    f"root skeleton correction remaps operator {name} onto a different "
+                    f"robot axis ({np.round(mapped, 2).tolist()} instead of {list(axis)}). "
+                    "This is unsafe -- see the 'Root correction' section of "
+                    "quest_skeleton_correction.py. Refusing to start."
+                )
+
         print(
             "[skeleton] Applying Quest->Pico orientation correction. "
             f"Shoulders {tuple(adaptive)} use pose-dependent blending; "
-            f"joints {LOW_CONFIDENCE_JOINTS} remain only partially corrected."
+            f"joints {LOW_CONFIDENCE_JOINTS} remain only partially corrected. "
+            "Root correction is identity (axis mapping verified)."
         )
         return SkeletonCorrection(
             constant=[sRot.from_quat(q) for q in QUEST_TO_PICO_LOCAL],

@@ -50,13 +50,30 @@ LEFT_SHOULDER, RIGHT_SHOULDER, RIGHT_HAND remain pose-dependent: their measured 
 by more than 30 deg between poses, so a single constant correction cannot fix
 them. Legs, spine and head are well corrected and are what matter for balance.
 
-The root correction includes yaw. During capture the two headsets reported
-consistently different pelvis facing (Pico ~6 deg, Quest ~88 deg, each stable to
-within ~10 deg across all 8 poses), so the ~80 deg difference is a device frame
-convention rather than how the operator stood. Removing yaw made absolute error
-much worse (722 mm vs 190 mm). If a future session shows a different offset,
-re-derive it -- and note the teleop heading calibration (A+B+X+Y) can absorb a
-residual yaw error in practice.
+Root correction -- IDENTITY, and why
+-----------------------------------
+The pelvis correction is deliberately identity. A value WAS measured (117 deg),
+and it reduced absolute error, but it is unsafe: it cyclically permutes the
+rotation axes, so operator yaw becomes robot pitch and operator pitch becomes
+robot roll. Observed on the robot as leaning forward when the operator turned
+left, and dropping a shoulder when the operator leaned forward -- destabilising
+within about 30 deg of body rotation.
+
+The cause is that every capture was taken facing the same direction. The two
+devices differ by both a world-frame rotation A and a body-frame rotation B,
+``G_quest = A * G_pico * B``. Only A should be corrected, since A is what maps
+rotation axes; from a single body orientation the fit returns A composed with a
+conjugated B, which still minimises static pose error while getting the axis
+mapping wrong. Separating A from B requires captures at several body
+orientations (an AX = XB / hand-eye problem) and that data does not exist yet.
+
+Dropping it is free for body pose: 126 mm root-relative with or without. It only
+affected absolute heading, which the teleop heading calibration (A+B+X+Y)
+establishes anyway.
+
+Do not restore a fitted root correction without captures at multiple body yaws
+and pitches, and without re-checking the axis mapping: for each world axis a,
+``corr.inv().apply(a)`` must return a itself, not a permuted axis.
 
 Bone lengths also differ between the two skeletons (Quest reports a generic
 left-right-symmetric rig: 456.6 mm thighs and 456.5 mm shins on both sides,
@@ -68,7 +85,11 @@ orientation path.
 # (x, y, z, w) per joint, index-aligned with BodyJointPico / XR_BD_body_tracking.
 # Already conjugated into compute_from_body_poses()'s local frame -- see above.
 QUEST_TO_PICO_LOCAL = (
-    (+0.531511133, -0.499491897, +0.440970321, -0.523019059),  #  0 PELVIS          root: full offset incl. yaw (see module docstring)
+    # PELVIS: deliberately IDENTITY. See "Root correction" in the docstring --
+    # the measured value (+0.531511133, -0.499491897, +0.440970321, -0.523019059)
+    # is a 117 deg rotation that cyclically permutes the rotation axes and is
+    # actively dangerous. Costs nothing to drop: 126 mm root-relative either way.
+    (+0.000000000, +0.000000000, +0.000000000, +1.000000000),  #  0 PELVIS          identity (see docstring)
     (-0.079295146, -0.002681245, -0.993418055, -0.082617546),  #  1 LEFT_HIP        fair (LOO 23 deg)
     (-0.004139763, -0.025636928, -0.045382868, +0.998632067),  #  2 RIGHT_HIP       fair (LOO 21 deg)
     (-0.100928027, -0.011654117, -0.012059629, +0.994752371),  #  3 SPINE1          good (LOO 10 deg)
