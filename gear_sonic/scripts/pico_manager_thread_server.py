@@ -569,8 +569,16 @@ class SkeletonCorrection:
     """
 
     def __init__(self, constant, adaptive=None, feature_bone=None,
-                 sigma_deg=20.0, max_angle_deg=75.0):
+                 sigma_deg=20.0, max_angle_deg=75.0,
+                 root_left=None, root_right=None):
         self.constant = constant
+        # The root is corrected two-sided: root_left is the world-frame rotation
+        # (it decides which robot axis an operator rotation drives) and
+        # root_right relabels the pelvis's own axes (it decides whether the body
+        # reads upright). One rotation cannot do both -- see
+        # quest_skeleton_correction.py, "Root correction".
+        self.root_left = root_left
+        self.root_right = root_right
         self.adaptive = adaptive or {}
         self.feature_bone = feature_bone or {}
         self.sigma = float(sigma_deg)
@@ -605,6 +613,9 @@ class SkeletonCorrection:
         """Return ``local_rots`` rebased onto the Pico convention."""
         out = list(local_rots)
         for i in range(len(out)):
+            if i == 0 and self.root_left is not None and self.root_right is not None:
+                out[0] = self.root_left.inv() * out[0] * self.root_right
+                continue
             corr = self.constant[i]
             if i in self.adaptive:
                 child = self.feature_bone.get(i)
@@ -641,6 +652,8 @@ def load_skeleton_correction(skeleton_source: str):
         from gear_sonic.utils.teleop.quest_skeleton_correction import (
             LOW_CONFIDENCE_JOINTS,
             QUEST_TO_PICO_LOCAL,
+            ROOT_LEFT,
+            ROOT_RIGHT,
         )
 
         adaptive = {
@@ -657,7 +670,7 @@ def load_skeleton_correction(skeleton_source: str):
         # which destabilises the robot within ~30 deg of body rotation. A fit
         # taken at a single body orientation produces exactly that, so refuse to
         # run with one rather than rediscover it on hardware.
-        root = sRot.from_quat(QUEST_TO_PICO_LOCAL[0])
+        root = sRot.from_quat(ROOT_LEFT)
         for axis, name in (((0, 1, 0), "yaw"), ((1, 0, 0), "pitch"), ((0, 0, 1), "roll")):
             mapped = root.inv().apply(axis)
             if float(np.dot(mapped, axis)) < 0.9:
@@ -672,7 +685,7 @@ def load_skeleton_correction(skeleton_source: str):
             "[skeleton] Applying Quest->Pico orientation correction. "
             f"Shoulders {tuple(adaptive)} use pose-dependent blending; "
             f"joints {LOW_CONFIDENCE_JOINTS} remain only partially corrected. "
-            "Root correction is identity (axis mapping verified)."
+            "Root corrected two-sided (axis mapping verified)."
         )
         return SkeletonCorrection(
             constant=[sRot.from_quat(q) for q in QUEST_TO_PICO_LOCAL],
@@ -680,6 +693,8 @@ def load_skeleton_correction(skeleton_source: str):
             feature_bone=FEATURE_BONE,
             sigma_deg=SIGMA_DEG,
             max_angle_deg=MAX_ANGLE_DEG,
+            root_left=sRot.from_quat(ROOT_LEFT),
+            root_right=sRot.from_quat(ROOT_RIGHT),
         )
     raise ValueError(f"unknown --skeleton-source {skeleton_source!r} (expected pico|quest)")
 

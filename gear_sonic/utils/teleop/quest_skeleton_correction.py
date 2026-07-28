@@ -50,30 +50,54 @@ LEFT_SHOULDER, RIGHT_SHOULDER, RIGHT_HAND remain pose-dependent: their measured 
 by more than 30 deg between poses, so a single constant correction cannot fix
 them. Legs, spine and head are well corrected and are what matter for balance.
 
-Root correction -- IDENTITY, and why
------------------------------------
-The pelvis correction is deliberately identity. A value WAS measured (117 deg),
-and it reduced absolute error, but it is unsafe: it cyclically permutes the
-rotation axes, so operator yaw becomes robot pitch and operator pitch becomes
-robot roll. Observed on the robot as leaning forward when the operator turned
-left, and dropping a shoulder when the operator leaned forward -- destabilising
-within about 30 deg of body rotation.
+Root correction -- two-sided, and why
+------------------------------------
+The pelvis needs BOTH a left and a right multiply, and conflating them into one
+rotation is not merely inaccurate, it is dangerous. The devices differ by a
+world-frame rotation A and a body-frame rotation B::
 
-The cause is that every capture was taken facing the same direction. The two
-devices differ by both a world-frame rotation A and a body-frame rotation B,
-``G_quest = A * G_pico * B``. Only A should be corrected, since A is what maps
-rotation axes; from a single body orientation the fit returns A composed with a
-conjugated B, which still minimises static pose error while getting the axis
-mapping wrong. Separating A from B requires captures at several body
-orientations (an AX = XB / hand-eye problem) and that data does not exist yet.
+    G_quest = A * G_pico * B
 
-Dropping it is free for body pose: 126 mm root-relative with or without. It only
-affected absolute heading, which the teleop heading calibration (A+B+X+Y)
-establishes anyway.
+A is a change of world frame: it decides which robot axis an operator rotation
+drives. B is a relabelling of the pelvis's own axes: it decides whether the body
+reads as upright. They do different jobs and a single rotation cannot do both.
 
-Do not restore a fitted root correction without captures at multiple body yaws
-and pitches, and without re-checking the axis mapping: for each world axis a,
-``corr.inv().apply(a)`` must return a itself, not a permuted axis.
+Two earlier attempts each broke one of them:
+
+* One fitted 117 deg rotation on the left. It kept the body roughly upright but
+  cyclically permuted the axes, so operator yaw became robot pitch and operator
+  pitch became robot roll -- the robot leaned forward when the operator turned
+  left, and dropped a shoulder when the operator leaned forward, toppling within
+  ~30 deg of body rotation.
+* Identity. That restored the axis mapping but left B uncorrected, so SMPL was
+  told the body was tilted ~90 deg while the operator stood upright, and the
+  legs collapsed on connect.
+
+Measured pelvis frames explain it: Pico's pelvis local +Y points world-up (6 deg
+off vertical), while Quest's local +X points world-DOWN (177 deg). The two
+conventions genuinely differ by a large rotation, and that part belongs on the
+right.
+
+Solving for A and B jointly across all 14 poses, with A constrained to a pure
+rotation about the vertical (both devices agree on gravity, so their world
+frames can only differ in heading), gives A = -3.1 deg of yaw and B = 122.7 deg.
+Fit residual: median 9.6 deg, max 21.5 deg. Corrected global_orient then tracks
+the Pico reference closely -- e.g. bend_forward -165.0 vs -165.6 deg.
+
+Because A came out near identity, the axis mapping is safe by construction:
+operator yaw drives robot yaw, pitch drives pitch, roll drives roll. The startup
+guard in load_skeleton_correction() re-checks this on every launch.
+
+Applied as::
+
+    corrected_root = ROOT_LEFT.inv() * local_rots[0] * ROOT_RIGHT
+
+ROOT_RIGHT already folds in the Ry180 conjugation, so it is
+``Ry180^-1 * B^-1 * Ry180``.
+
+If a future refit changes these, re-check the axis mapping before running: for
+each world axis a, ``ROOT_LEFT.inv().apply(a)`` must return a, not a permuted
+axis. A fit that violates that will destabilise the robot.
 
 Bone lengths also differ between the two skeletons (Quest reports a generic
 left-right-symmetric rig: 456.6 mm thighs and 456.5 mm shins on both sides,
@@ -85,11 +109,10 @@ orientation path.
 # (x, y, z, w) per joint, index-aligned with BodyJointPico / XR_BD_body_tracking.
 # Already conjugated into compute_from_body_poses()'s local frame -- see above.
 QUEST_TO_PICO_LOCAL = (
-    # PELVIS: deliberately IDENTITY. See "Root correction" in the docstring --
-    # the measured value (+0.531511133, -0.499491897, +0.440970321, -0.523019059)
-    # is a 117 deg rotation that cyclically permutes the rotation axes and is
-    # actively dangerous. Costs nothing to drop: 126 mm root-relative either way.
-    (+0.000000000, +0.000000000, +0.000000000, +1.000000000),  #  0 PELVIS          identity (see docstring)
+    # PELVIS: unused. The root is corrected two-sided via ROOT_LEFT/ROOT_RIGHT
+    # below, because a single rotation cannot fix both the world frame (which
+    # sets the axis mapping) and the pelvis frame (which sets uprightness).
+    (+0.000000000, +0.000000000, +0.000000000, +1.000000000),  #  0 PELVIS          unused -- see ROOT_LEFT/ROOT_RIGHT
     (-0.079295146, -0.002681245, -0.993418055, -0.082617546),  #  1 LEFT_HIP        fair (LOO 23 deg)
     (-0.004139763, -0.025636928, -0.045382868, +0.998632067),  #  2 RIGHT_HIP       fair (LOO 21 deg)
     (-0.100928027, -0.011654117, -0.012059629, +0.994752371),  #  3 SPINE1          good (LOO 10 deg)
@@ -118,3 +141,12 @@ QUEST_TO_PICO_LOCAL = (
 # Joints whose offset varies by >30 deg across poses; a constant correction
 # cannot fully fix them. Treat their output as unreliable.
 LOW_CONFIDENCE_JOINTS = (16, 17, 23)
+
+
+# Root correction, applied as ROOT_LEFT.inv() * local_rots[0] * ROOT_RIGHT.
+# ROOT_LEFT is the world-frame rotation A (heading only -- it sets which robot
+# axis an operator rotation drives, and must stay near identity for safety).
+# ROOT_RIGHT is Ry180^-1 * B^-1 * Ry180, the pelvis axis relabelling that makes
+# an upright operator read as upright.
+ROOT_LEFT = (+0.000000000, -0.027133778, +0.000000000, +0.999631811)
+ROOT_RIGHT = (+0.513799000, +0.507965655, +0.498217133, -0.479334089)
