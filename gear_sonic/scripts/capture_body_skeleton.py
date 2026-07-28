@@ -175,6 +175,54 @@ POSE_BATTERY = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Shoulder battery.
+#
+# Fitting the main battery left LEFT_SHOULDER and RIGHT_SHOULDER pose-dependent
+# (leave-one-out residual 43 and 73 deg) while every other joint corrected well.
+# Two candidate explanations were tested against the existing data and both
+# failed: the collar+shoulder composite is no more stable than the shoulder
+# alone, and the offset does not track arm elevation. So the shoulder offset is
+# neither a redistribution artefact nor a simple function of arm pose.
+#
+# That leaves the question this battery answers: is the shoulder offset
+# REPEATABLE? With one capture per pose we cannot tell a structured
+# pose-dependent offset (modellable with a richer fit) from an unrepeatable one
+# (nothing will fix it; derive arm swing from positions instead).
+#
+# Poses 1-3 are exact repeats of main-battery poses, captured in a fresh
+# session. Comparing the offset for the same pose across two sessions measures
+# repeatability directly.
+#
+# Poses 4-6 hold the upper arm in one place and vary ONLY shoulder axial roll.
+# Elevation and azimuth are held fixed, so any offset change between them is
+# attributable to roll -- the component positions constrain least and the most
+# likely place for the SDK's conversion to go wrong.
+# ---------------------------------------------------------------------------
+POSE_BATTERY_SHOULDER = [
+    ("tpose_r2", "Arms straight out to the sides at shoulder height, palms DOWN.",
+     "exact repeat of main battery pose 1 -- tests repeatability"),
+    ("arms_forward_r2", "Arms straight FORWARD at shoulder height, palms DOWN.",
+     "exact repeat of main battery pose 2 -- tests repeatability"),
+    ("goalpost_r2", "Upper arms out to the sides horizontal, forearms straight UP, palms forward.",
+     "exact repeat of main battery pose 4 -- tests repeatability"),
+    ("elbow90_forward",
+     "Upper arms hanging at your SIDES, elbows bent 90 deg, forearms pointing "
+     "straight FORWARD, palms facing each other.",
+     "shoulder roll neutral; upper arm vertical"),
+    ("elbow90_inward",
+     "Same stance -- upper arms at sides, elbows bent 90 -- but rotate the "
+     "forearms INWARD across your belly until the hands nearly touch.",
+     "same upper-arm placement, shoulder rolled inward (internal rotation)"),
+    ("elbow90_outward",
+     "Same stance again, but rotate the forearms OUTWARD as far as is "
+     "comfortable, opening the arms wide.",
+     "same upper-arm placement, shoulder rolled outward (external rotation)"),
+]
+
+BATTERIES = {"main": POSE_BATTERY, "shoulder": POSE_BATTERY_SHOULDER}
+
+
 def _beep():
     """Terminal bell. Audible cue matters because the operator is wearing a
     headset and cannot read the terminal."""
@@ -269,8 +317,9 @@ def batch(args):
     from gear_sonic.utils.teleop.isaac_teleop_client import IsaacTeleopClient
 
     dev = args.batch
+    poses = BATTERIES[args.battery]
     print("=" * 72)
-    print(f"  POSE BATTERY — device label {dev!r}   ({len(POSE_BATTERY)} poses)")
+    print(f"  POSE BATTERY {args.battery!r} — device label {dev!r}   ({len(poses)} poses)")
     print("=" * 72)
     print("Ground rules (these matter more than the poses themselves):")
     print("  * Face the SAME direction for every pose. Pick a spot on the wall and")
@@ -301,9 +350,9 @@ def batch(args):
     print("Body tracking live.\n")
 
     written = []
-    for n, (name, how, why) in enumerate(POSE_BATTERY, start=1):
+    for n, (name, how, why) in enumerate(poses, start=1):
         print("-" * 72)
-        print(f"  POSE {n}/{len(POSE_BATTERY)}: {name}")
+        print(f"  POSE {n}/{len(poses)}: {name}")
         print(f"  {how}")
         print(f"  (why: {why})")
         print("-" * 72)
@@ -348,12 +397,12 @@ def batch(args):
 
     client.close()
     print("=" * 72)
-    print(f"  Done — {len(written)}/{len(POSE_BATTERY)} poses captured for {dev!r}")
+    print(f"  Done — {len(written)}/{len(poses)} poses captured for {dev!r}")
     for w in written:
         print(f"    {w}")
     print("\n  Now repeat this identically on the other headset, e.g.:")
     other = "quest" if dev == "pico" else "pico"
-    print(f"    --batch {other}")
+    print(f"    --batch {other} --battery {args.battery}")
     print("=" * 72)
     return 0
 
@@ -489,6 +538,8 @@ def main():
     ap.add_argument("--batch", metavar="DEVICE",
                     help="guided capture of the full pose battery, e.g. --batch quest")
     ap.add_argument("--out-dir", default="/tmp", help="output directory for --batch")
+    ap.add_argument("--battery", default="main", choices=sorted(BATTERIES),
+                    help="which pose battery to run with --batch (default: main)")
     ap.add_argument("--auto", action="store_true",
                     help="hands-free: no trigger or ENTER needed, each pose gets "
                          "--pose-delay seconds to assume")
