@@ -221,3 +221,6 @@ models/
 # Downloaded from HuggingFace (hf download)
 sample_data/
 sonic_release/
+
+# Generated FoundationPose camera captures and results
+pose_estimation/g1_head/
