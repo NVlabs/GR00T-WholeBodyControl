@@ -603,7 +603,8 @@ def load_wrist_bias(skeleton_source: str):
         print(
             f"[skeleton] wrist bias for {skeleton_source!r} (roll, pitch, yaw deg): "
             f"L [{d(bias[0])}]  R [{d(bias[1])}] "
-            "(aligns neutral with the Pico reference; bias only, not range)"
+            "(neutral alignment; roll is zeroed rather than Pico-matched -- see "
+            "quest_skeleton_correction.py)"
         )
     return bias
 

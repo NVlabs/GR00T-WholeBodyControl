@@ -184,12 +184,26 @@ INFERRED_LEG_JOINTS = (1, 2, 4, 5, 7, 8, 10, 11)
 # They did not:
 #
 #     channel     Pico     Quest    bias applied
-#     L roll     -33.6     -24.5        -9.37
+#     L roll     -33.6     -24.5       +24.24   (zeroed, not matched)
 #     L pitch     +7.2      +7.1       +11.44
 #     L yaw      +15.2     +44.1       -29.88
-#     R roll     +22.3     +19.7        +2.74
+#     R roll     +22.3     +19.7       -19.47   (zeroed, not matched)
 #     R pitch     +9.4      +9.4       +16.87
 #     R yaw      -19.9     -48.2       +28.13
+#
+# ROLL is the exception: it is driven to ZERO rather than matched to the Pico.
+# The Pico commands -33.6 / +22.2 deg of wrist roll at a neutral wrist, which
+# renders as visibly rolled palms, and it is asymmetric -- the left sits 11.4 deg
+# further round than the right. An operator sees exactly that: both palms rolled
+# up, the left more. Matching the Pico faithfully reproduced the flaw, so roll
+# alone departs from the reference. Because a constant bias shifts the operating
+# point without compressing travel, this costs nothing in responsiveness: roll
+# span across the wrist sweep is 91 / 86 deg either way.
+#
+# Caveat: zero commanded roll is a HYPOTHESIS about where the robot's neutral
+# lies, not a measurement. There is no ground truth here for "thumbs facing each
+# other" in joint terms. If a trial still shows residual roll, adjust these two
+# numbers by the observed amount -- the rest of the table does not depend on them.
 #
 # YAW carried the visible error, not pitch. An earlier pitch-only bias was
 # already exact (delta -0.0 and +0.1 deg) yet the robot's hands still sat
@@ -212,6 +226,6 @@ INFERRED_LEG_JOINTS = (1, 2, 4, 5, 7, 8, 10, 11)
 WRIST_BIAS_RAD = {
     # (roll, pitch, yaw) per side
     "pico": ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0)),   # intentionally untouched
-    "quest": ((-0.163531, +0.199678, -0.521456),
-              (+0.047809, +0.294511, +0.490959)),
+    "quest": ((+0.423036, +0.199678, -0.521456),
+              (-0.339744, +0.294511, +0.490959)),
 }
