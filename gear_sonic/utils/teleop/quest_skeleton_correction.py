@@ -176,30 +176,42 @@ INFERRED_LEG_JOINTS = (1, 2, 4, 5, 7, 8, 10, 11)
 
 
 # ---------------------------------------------------------------------------
-# Wrist pitch bias, radians, added to the commanded G1 wrist-pitch joint.
+# Wrist bias, radians, added to the commanded G1 wrist joints as
+# (roll, pitch, yaw) per side.
 #
-# Anchored on `01_wrist_neutral` from the wrist battery -- forearms forward,
-# elbows 90, wrists straight and relaxed. That is a genuine neutral wrist,
-# unlike the earlier anchor (`04_elbow90_forward`), which was captured before
-# any battery flexed the wrist and so pinned the bias against a pose whose wrist
-# value was itself unverified.
+# Measured at `01_wrist_neutral` -- forearms forward, elbows 90, wrists straight
+# and relaxed -- where all three channels should read the same on both headsets.
+# They did not:
 #
-#     side    Pico      Quest     bias applied
-#     left    +7.16     -4.22       +11.37
-#     right   +9.36     -7.35       +16.72
+#     channel     Pico     Quest    bias applied
+#     L roll     -33.6     -24.5        -9.37
+#     L pitch     +7.2      +7.1       +11.44
+#     L yaw      +15.2     +44.1       -29.88
+#     R roll     +22.3     +19.7        +2.74
+#     R pitch     +9.4      +9.4       +16.87
+#     R yaw      -19.9     -48.2       +28.13
 #
-# The bias cancels the delta so the Quest lands where the Pico already sits.
-# Residual after correction is 0.000 deg on both sides.
+# YAW carried the visible error, not pitch. An earlier pitch-only bias was
+# already exact (delta -0.0 and +0.1 deg) yet the robot's hands still sat
+# visibly extended at neutral, because roughly 29 deg of error per side was
+# arriving through the yaw channel. That is consistent with the routing noted
+# under "Wrist range" below: operator wrist flexion largely lands in the yaw
+# channel rather than pitch.
+#
+# The pitch entries here are unchanged in effect from the previous pitch-only
+# table; roll and yaw are new.
 #
 # Pico is zero by intent, not oversight. Its teleop has been tuned by people
 # over a long time, and its non-zero neutral may be correct for the robot's
 # mechanical neutral rather than an error; this data cannot distinguish those.
 # The Pico path is bit-identical to before.
 #
-# This corrects BIAS only. See the "Wrist range" note in the module docstring
-# for why the usable range is separately limited, and why that limit is not
-# something this table can fix.
-WRIST_PITCH_BIAS_RAD = {
-    "pico": (0.0, 0.0),                    # left, right -- intentionally untouched
-    "quest": (+0.198522, +0.291787),       # +11.37 deg, +16.72 deg
+# This is a BIAS at neutral. It does not change how much the wrist travels --
+# see "Wrist range" for why the usable range is separately limited, and why
+# that limit lives in shared retargeting code rather than here.
+WRIST_BIAS_RAD = {
+    # (roll, pitch, yaw) per side
+    "pico": ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0)),   # intentionally untouched
+    "quest": ((-0.163531, +0.199678, -0.521456),
+              (+0.047809, +0.294511, +0.490959)),
 }
