@@ -273,10 +273,52 @@ POSE_BATTERY_TORSO = [
      "hip flexion/extension with opposite signs left vs right"),
 ]
 
+# ---------------------------------------------------------------------------
+# Wrist battery.
+#
+# None of the other batteries flexes the wrist. Across all 26 poses captured so
+# far, the commanded G1 wrist pitch spans only 17-27 deg on an axis with roughly
+# 180 deg of travel -- every pose happens to hold the wrist near neutral, and the
+# one wrist-specific pair (palms down / palms up) exercises ROLL, not flexion.
+#
+# That is enough to measure a bias, since the rest pose is captured, but not a
+# gain: fitting a scale factor from data that never leaves the middle of the
+# range would be fitting noise. These poses go to the endpoints deliberately.
+#
+# The forearm is held fixed throughout so the wrist is the only thing moving --
+# otherwise elbow motion leaks into the measurement, and the retargeting already
+# folds elbow swing into the wrist channels.
+# ---------------------------------------------------------------------------
+POSE_BATTERY_WRIST = [
+    ("wrist_neutral",
+     "Upper arms at your sides, elbows bent 90, forearms pointing FORWARD, "
+     "palms facing each other, wrists straight and relaxed.",
+     "the rest pose an operator expects to be neutral; anchors the bias"),
+    ("wrist_flex_max",
+     "Same stance. Bend BOTH wrists forward as far as they go -- palms curling "
+     "toward the forearms. Keep the forearms still.",
+     "flexion endpoint"),
+    ("wrist_extend_max",
+     "Same stance. Bend BOTH wrists backward as far as they go -- backs of the "
+     "hands toward the forearms. Keep the forearms still.",
+     "extension endpoint; with the previous pose this gives the full span"),
+    ("wrist_flex_half",
+     "Same stance, wrists bent forward about HALF of maximum.",
+     "midpoint on the flexion side; tests whether the mapping is linear"),
+    ("wrist_extend_half",
+     "Same stance, wrists bent backward about HALF of maximum.",
+     "midpoint on the extension side"),
+    ("wrist_deviate",
+     "Same stance, wrists straight but angled outward (thumbs away from each "
+     "other) as far as is comfortable.",
+     "radial/ulnar deviation -- separates the flexion axis from the other two"),
+]
+
 BATTERIES = {
     "main": POSE_BATTERY,
     "shoulder": POSE_BATTERY_SHOULDER,
     "torso": POSE_BATTERY_TORSO,
+    "wrist": POSE_BATTERY_WRIST,
 }
 
 

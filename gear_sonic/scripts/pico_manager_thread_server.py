@@ -588,6 +588,25 @@ class SkeletonCorrection:
         ]
 
 
+def load_wrist_pitch_bias(skeleton_source: str) -> tuple[float, float]:
+    """Return (left, right) wrist-pitch bias in radians for ``skeleton_source``.
+
+    Added to the commanded G1 wrist-pitch joint. See WRIST_PITCH_BIAS_RAD in
+    utils/teleop/quest_skeleton_correction.py for how the values were measured
+    and why Pico is deliberately zero.
+    """
+    from gear_sonic.utils.teleop.quest_skeleton_correction import WRIST_PITCH_BIAS_RAD
+
+    bias = WRIST_PITCH_BIAS_RAD.get(skeleton_source or "pico", (0.0, 0.0))
+    if any(bias):
+        print(
+            f"[skeleton] wrist pitch bias for {skeleton_source!r}: "
+            f"L {np.degrees(bias[0]):+.1f} deg, R {np.degrees(bias[1]):+.1f} deg "
+            "(aligns rest pose with the Pico reference; corrects bias only, not range)"
+        )
+    return bias
+
+
 def load_skeleton_correction(skeleton_source: str):
     """Return a SkeletonCorrection, or None for the native Pico path.
 
@@ -1370,6 +1389,7 @@ class PoseStreamer:
 
         self.left_hand_ik_solver, self.right_hand_ik_solver = init_hand_ik_solvers()
         self.skeleton_correction = load_skeleton_correction(skeleton_source)
+        self.wrist_pitch_bias = load_wrist_pitch_bias(skeleton_source)
         self.parent_indices = [
             -1,
             0,
@@ -1571,11 +1591,14 @@ class PoseStreamer:
         g1_r_wrist_yaw = r_elbow_swing_euler[:, 2] + r_wrist_euler[:, 2]
 
         joint_pos[G1_L_WRIST_ROLL_IDX] = g1_l_wrist_roll[0]
-        joint_pos[G1_L_WRIST_PITCH_IDX] = -g1_l_wrist_pitch[0]
+        # Bias is per-headset and additive on the commanded joint; it aligns a
+        # non-Pico source with the Pico's tuned rest pose. Zero for Pico.
+        l_bias, r_bias = self.wrist_pitch_bias
+        joint_pos[G1_L_WRIST_PITCH_IDX] = -g1_l_wrist_pitch[0] + l_bias
         joint_pos[G1_L_WRIST_YAW_IDX] = g1_l_wrist_yaw[0]
 
         joint_pos[G1_R_WRIST_ROLL_IDX] = g1_r_wrist_roll[0]
-        joint_pos[G1_R_WRIST_PITCH_IDX] = g1_r_wrist_pitch[0]
+        joint_pos[G1_R_WRIST_PITCH_IDX] = g1_r_wrist_pitch[0] + r_bias
         joint_pos[G1_R_WRIST_YAW_IDX] = g1_r_wrist_yaw[0]
 
         # Process SMPL pose to get calibrated 3-point VR pose and update visualization

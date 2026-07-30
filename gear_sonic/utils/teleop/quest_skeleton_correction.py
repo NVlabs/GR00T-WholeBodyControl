@@ -153,3 +153,33 @@ STATIC_ONLY_JOINTS = (6, 7, 8, 9, 10, 11, 13, 14, 22)
 
 # Quest infers legs from vision; degrades on deep flexion (see docstring).
 INFERRED_LEG_JOINTS = (1, 2, 4, 5, 7, 8, 10, 11)
+
+
+# ---------------------------------------------------------------------------
+# Wrist pitch bias, radians, added to the commanded G1 wrist-pitch joint.
+#
+# At the rest pose captured as `04_elbow90_forward` -- forearms forward, palms
+# facing each other, which is where an operator expects a neutral wrist -- the
+# commanded wrist pitch is not neutral on either headset:
+#
+#     side    Pico      Quest     delta
+#     left    -11.7     -14.3      -2.6
+#     right   -10.1     -16.4      -6.3
+#
+# The bias below cancels only the DELTA, so the Quest lands where the Pico
+# already sits. It deliberately does not drive either device to zero.
+#
+# Pico is left at zero on purpose. Its teleop has been tuned by people over a
+# long time, and its non-zero rest value may well be correct for the robot's
+# mechanical neutral rather than an error. Changing it would invalidate that
+# tuning on the basis of an assumption this data cannot test.
+#
+# This corrects BIAS only. It cannot address range or gain: across all 26
+# captured poses the commanded wrist pitch spans just 17-27 deg on an axis with
+# roughly 180 deg of travel, because no pose in any battery flexes the wrist.
+# If the usable range still feels asymmetric after this, that is the gain
+# question and it needs wrist-specific captures to answer.
+WRIST_PITCH_BIAS_RAD = {
+    "pico": (0.0, 0.0),                    # left, right -- intentionally untouched
+    "quest": (+0.045379, +0.109956),       # +2.6 deg, +6.3 deg
+}
