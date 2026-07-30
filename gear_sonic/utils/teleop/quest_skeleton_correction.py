@@ -82,6 +82,26 @@ after correction is 6.9 deg median overall but 12.4 deg on leg-bending poses,
 with RIGHT_HIP worst at 27 deg during a deep squat. Adequate for standing and
 moderate motion; treat deep leg flexion as approximate.
 
+Wrist range -- a separate, shared limitation
+-------------------------------------------
+The wrist battery showed that the commanded G1 wrist PITCH barely responds to
+wrist flexion, on BOTH headsets. A full flex-to-extend sweep rotates the raw
+wrist joint by 132 deg (Pico) and 104 deg (Quest), but the commanded pitch moves
+only ~25 deg, and it is not even monotonic on the Pico.
+
+The cause is in the retargeting, not in this table. In the arm configuration an
+operator uses for this (forearms forward, elbows at 90), the flexion shows up
+almost entirely in the Z euler component of the SMPL wrist rotation --
+Pico left wrist Z runs -58 -> +3 -> +73 across the sweep, a 131 deg span, while
+Y spans only 19 deg. ``pico_manager_thread_server.py`` takes Y as wrist pitch and
+routes Z to wrist YAW, so operator flexion drives the robot's yaw channel and
+pitch sees almost nothing.
+
+That affects the Pico path identically and is a decision about shared, long-tuned
+retargeting code, so it is deliberately not changed here. Fixing it means
+choosing the wrist axis per arm configuration rather than assuming a fixed euler
+component, since the euler decomposition is configuration-dependent.
+
 Bone lengths also differ (Quest reports a generic left-right-symmetric rig:
 456.6 mm thighs and 456.5 mm shins, versus the Pico's measured 312/336 mm). This
 correction does not address that; it affects position-derived paths such as the
@@ -114,8 +134,8 @@ QUEST_TO_PICO_LEFT = (
     (+0.524406506, +0.313247779, +0.418056809, +0.672385418),  # 17 RIGHT_SHOULDER  axis 13d
     (-0.596378466, +0.201590155, -0.000568601, +0.776977355),  # 18 LEFT_ELBOW      axis 30d
     (+0.794222492, +0.180394750, +0.001498366, +0.580229370),  # 19 RIGHT_ELBOW     axis 29d
-    (+0.742367672, -0.070341054, -0.017498777, -0.666060184),  # 20 LEFT_WRIST      axis 14d
-    (+0.542692508, -0.009660575, -0.128577186, +0.829975555),  # 21 RIGHT_WRIST     axis 14d
+    (-0.673952121, +0.167754280, -0.061302910, +0.716860512),  # 20 LEFT_WRIST      refit on wrist battery
+    (+0.680723217, -0.096405995, -0.189724830, +0.700946699),  # 21 RIGHT_WRIST     refit on wrist battery
     (-0.000000000, +0.000000000, +0.000000000, +1.000000000),  # 22 LEFT_HAND       no motion
     (-0.990442079, -0.068628293, +0.102554220, +0.061622049),  # 23 RIGHT_HAND      no motion  [one-sided]
 )
@@ -141,8 +161,8 @@ QUEST_TO_PICO_RIGHT = (
     (-0.848561982, -0.096878563, -0.239914256, -0.461517341),  # 17 RIGHT_SHOULDER  axis 13d
     (-0.577485645, +0.245245978, -0.004380891, +0.778681930),  # 18 LEFT_ELBOW      axis 30d
     (-0.755959322, -0.172070047, +0.052891017, -0.629380603),  # 19 RIGHT_ELBOW     axis 29d
-    (-0.991547347, -0.049393051, +0.066475985, -0.099875564),  # 20 LEFT_WRIST      axis 14d
-    (-0.283646282, +0.012514153, +0.023354725, +0.958562851),  # 21 RIGHT_WRIST     axis 14d
+    (-0.997600287, -0.031760763, -0.059256840, -0.016539312),  # 20 LEFT_WRIST      refit on wrist battery
+    (-0.080226020, -0.080786116, +0.029673977, +0.993054301),  # 21 RIGHT_WRIST     refit on wrist battery
     (+0.000000001, +0.000000001, -0.000000000, +1.000000000),  # 22 LEFT_HAND       no motion
     (+0.000000000, +0.000000000, +0.000000000, +1.000000000),  # 23 RIGHT_HAND      no motion  [one-sided]
 )
@@ -158,28 +178,28 @@ INFERRED_LEG_JOINTS = (1, 2, 4, 5, 7, 8, 10, 11)
 # ---------------------------------------------------------------------------
 # Wrist pitch bias, radians, added to the commanded G1 wrist-pitch joint.
 #
-# At the rest pose captured as `04_elbow90_forward` -- forearms forward, palms
-# facing each other, which is where an operator expects a neutral wrist -- the
-# commanded wrist pitch is not neutral on either headset:
+# Anchored on `01_wrist_neutral` from the wrist battery -- forearms forward,
+# elbows 90, wrists straight and relaxed. That is a genuine neutral wrist,
+# unlike the earlier anchor (`04_elbow90_forward`), which was captured before
+# any battery flexed the wrist and so pinned the bias against a pose whose wrist
+# value was itself unverified.
 #
-#     side    Pico      Quest     delta
-#     left    -11.7     -14.3      -2.6
-#     right   -10.1     -16.4      -6.3
+#     side    Pico      Quest     bias applied
+#     left    +7.16     -4.22       +11.37
+#     right   +9.36     -7.35       +16.72
 #
-# The bias below cancels only the DELTA, so the Quest lands where the Pico
-# already sits. It deliberately does not drive either device to zero.
+# The bias cancels the delta so the Quest lands where the Pico already sits.
+# Residual after correction is 0.000 deg on both sides.
 #
-# Pico is left at zero on purpose. Its teleop has been tuned by people over a
-# long time, and its non-zero rest value may well be correct for the robot's
-# mechanical neutral rather than an error. Changing it would invalidate that
-# tuning on the basis of an assumption this data cannot test.
+# Pico is zero by intent, not oversight. Its teleop has been tuned by people
+# over a long time, and its non-zero neutral may be correct for the robot's
+# mechanical neutral rather than an error; this data cannot distinguish those.
+# The Pico path is bit-identical to before.
 #
-# This corrects BIAS only. It cannot address range or gain: across all 26
-# captured poses the commanded wrist pitch spans just 17-27 deg on an axis with
-# roughly 180 deg of travel, because no pose in any battery flexes the wrist.
-# If the usable range still feels asymmetric after this, that is the gain
-# question and it needs wrist-specific captures to answer.
+# This corrects BIAS only. See the "Wrist range" note in the module docstring
+# for why the usable range is separately limited, and why that limit is not
+# something this table can fix.
 WRIST_PITCH_BIAS_RAD = {
     "pico": (0.0, 0.0),                    # left, right -- intentionally untouched
-    "quest": (+0.045379, +0.109956),       # +2.6 deg, +6.3 deg
+    "quest": (+0.198522, +0.291787),       # +11.37 deg, +16.72 deg
 }
