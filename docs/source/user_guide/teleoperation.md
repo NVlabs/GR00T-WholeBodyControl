@@ -4,7 +4,8 @@ This guide covers best practices during whole-body teleoperation.
 
 ```{admonition} Prerequisites
 :class: note
-Complete the [Quick Start](../getting_started/quickstart), [PICO Setup](../getting_started/vr_teleop_setup), and [Teleop Setup](../tutorials/vr_wholebody_teleop)
+Complete the [Quick Start](../getting_started/quickstart), [PICO Setup](../getting_started/vr_teleop_setup), and [Teleop Setup](../tutorials/vr_wholebody_teleop).
+For real robot: ethernet cable connected and static IP assigned — run `python gear_sonic_deploy/scripts/setup_network.py` before starting deployment.
 ```
 
 ## Overview

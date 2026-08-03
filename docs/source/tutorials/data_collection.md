@@ -17,6 +17,7 @@ The tested and supported camera setup uses **Luxonis OAK cameras** (OAK-D, OAK-1
 1. **Completed the [Quick Start](../getting_started/quickstart.md)** — you can run the sim2sim loop (includes [installing the deployment](../getting_started/installation_deploy.md) and [downloading model checkpoints](../getting_started/download_models.md)).
 2. **Completed the [VR Teleop Setup](../getting_started/vr_teleop_setup.md)** — PICO hardware is calibrated and `.venv_teleop` is ready.
 3. **Camera server running on the robot** — see [Camera Server Setup](#camera-server-setup-on-robot) below. For simulation, the MuJoCo sim loop publishes camera images automatically — no camera server needed.
+4. **Real robot only — network interface configured** — ethernet cable connected between host and G1, static IP assigned via `python gear_sonic_deploy/scripts/setup_network.py`. The workstation must reach the robot at `192.168.123.164` before running the camera viewer or data exporter.
 ```
 
 ---
