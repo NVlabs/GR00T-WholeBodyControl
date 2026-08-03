@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """
-Setup a network interface for communication with the Unitree G1 robot.
+Assign a static IP to the wired ethernet port connected to the Unitree G1 robot.
 
-Assigns a static IP to the selected ethernet interface so the host machine
-can communicate with the robot over the 192.168.123.x subnet.
+The G1 communicates exclusively over a dedicated wired ethernet link on the
+192.168.123.0/24 subnet (robot at .164, host at .222). This connection carries
+both DDS motor control traffic (500 Hz, latency-critical) and the camera stream.
+WiFi cannot substitute for this link.
+
+This script assigns the static IP via NetworkManager so the assignment is
+NM-aware and persists for the session without being reverted by the NM daemon.
 
 Requirements: Ubuntu 20.04 / 22.04 / 24.04, NetworkManager (nmcli), sudo privileges.
 ufw is optional — if present, a scoped allow rule is added for the robot
-subnet rather than the entire interface.
+subnet (192.168.123.0/24) rather than the entire interface.
 
 Usage:
     python3 setup_network.py                  # interactive robot + interface selection
