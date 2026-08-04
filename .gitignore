@@ -207,6 +207,8 @@ teleop_vids/
 *.code-workspace
 # Motion/training data (large local datasets, not tracked in git)
 data/
+!planner_wbc/data/
+!planner_wbc/data/**
 bones_seed_smpl/
 sonic_release/
 # Training output logs
@@ -220,6 +222,8 @@ models/
 sample_data/
 sonic_release/
 
-# Local planner and pose-estimation worktrees/artifacts
-/gear_sonic_planner/
-/pose_estimation/
+# Generated FoundationPose camera captures and results
+pose_estimation/g1_head/
+
+# Local GEAR-SONIC planner development copy
+gear_sonic_planner/
