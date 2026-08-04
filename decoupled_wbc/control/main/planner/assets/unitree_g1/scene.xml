@@ -1,0 +1,22 @@
+<mujoco model="g1_fixed_upperbody_scene">
+  <include file="g1_with_hands_up.xml"/>
+
+  <statistic center="0.3 0 .8" extent="1" meansize="0.08"/>
+
+  <visual>
+    <global offwidth="1280" offheight="720" azimuth="140" elevation="-20"/>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.1 0.1 0.1" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
+    <texture name="grid" type="2d" builtin="checker" rgb1=".2 .3 .4" rgb2=".1 0.15 0.2" width="512" height="512" mark="cross" markrgb=".8 .8 .8"/>
+    <material name="grid" texture="grid" texrepeat="1 1" texuniform="true" reflectance="0.2"/>
+  </asset>
+
+  <worldbody>
+    <light pos="0 0 3" directional="true"/>
+    <geom name="floor" size="0 0 0.05" type="plane" material="grid"/>
+  </worldbody>
+</mujoco>
