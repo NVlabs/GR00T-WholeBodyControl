@@ -224,3 +224,6 @@ sonic_release/
 
 # Generated FoundationPose camera captures and results
 pose_estimation/g1_head/
+
+# Local GEAR-SONIC planner development copy
+gear_sonic_planner/
