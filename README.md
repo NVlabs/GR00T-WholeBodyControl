@@ -31,7 +31,8 @@ This is the codebase for the **GR00T Whole-Body Control (WBC)** projects. It hos
 
 ## News
 
-- **[2026-06-16]** **Low-latency SONIC release** — added a low-latency G1 controller variant on [Hugging Face](https://huggingface.co/nvidia/GEAR-SONIC/tree/main/low_latency) under `low_latency/`. See the [Download Models](https://nvlabs.github.io/GR00T-WholeBodyControl/getting_started/download_models.html#low-latency-sonic-variant) and [VLA Inference](https://nvlabs.github.io/GR00T-WholeBodyControl/tutorials/vla_inference.html#low-latency-sonic-wbc) docs for usage.
+- **[06/16]** **Isaac Teleop Setup (CloudXR / DeviceIO, in-process)** — added bring-up docs for the in-process CloudXR path via `isaacteleop[cloudxr]`, with no separate publisher container. See [Isaac Teleop Setup](https://nvlabs.github.io/GR00T-WholeBodyControl/tutorials/isaac_teleop_publisher_setup.html).
+- **[2026-06-16]** **Low-latency teleoperation checkpoint** — released a SONIC checkpoint with 4-frame SMPL reference lookahead for more responsive whole-body teleoperation. See the [Model Card](#model-card), [Download Models](https://nvlabs.github.io/GR00T-WholeBodyControl/getting_started/download_models.html#low-latency-teleoperation-checkpoint), and [VLA Inference](https://nvlabs.github.io/GR00T-WholeBodyControl/tutorials/vla_inference.html#low-latency-teleoperation-checkpoint).
 - **[2026-05-07]** 🤖 **End-to-end VLA workflow on G1** — collect teleop data, fine-tune Isaac-GR00T N1.7, and deploy with SONIC whole-body control. See [Data Collection](https://nvlabs.github.io/GR00T-WholeBodyControl/tutorials/data_collection.html), [VLA Workflow](https://nvlabs.github.io/GR00T-WholeBodyControl/tutorials/vla_workflow.html), and [VLA Inference](https://nvlabs.github.io/GR00T-WholeBodyControl/tutorials/vla_inference.html).
 - **[2026-04-27]** 🧩 **MotionBricks preview** — interactive G1 demo, pretrained checkpoints (VQVAE · pose · root), synthetic training code, and motion-representation docs. See [`motionbricks/`](motionbricks/) and the [project page](https://nvlabs.github.io/motionbricks/).
 - **[2026-04-14]** 🌐 **[Live web demo](https://nvlabs.github.io/GEAR-SONIC/demo.html)** — try SONIC interactively in your browser. Features [Kimodo](https://github.com/nv-tlabs/kimodo) text-to-motion generation.
@@ -45,6 +46,7 @@ This is the codebase for the **GR00T Whole-Body Control (WBC)** projects. It hos
 
 - [News](#news)
 - [GEAR-SONIC](#gear-sonic)
+- [Model Card](#model-card)
 - [VR Whole-Body Teleoperation](#vr-whole-body-teleoperation)
 - [Kinematic Planner](#kinematic-planner)
 - [SONIC Training](#sonic-training)
@@ -77,9 +79,50 @@ SONIC is a humanoid behavior foundation model that gives robots a core set of mo
 
 In this repo, we release SONIC's training code, deployment framework, model checkpoints, and teleoperation stack for data collection.
 
-The low-latency SONIC variant is available on Hugging Face under [`low_latency/`](https://huggingface.co/nvidia/GEAR-SONIC/tree/main/low_latency). It keeps the default top-level deployment policy unchanged. Download it with `python download_from_hf.py --low-latency`.
+## Model Card
 
-For C++ deployment:
+SONIC provides two released Unitree G1 checkpoints. Choose the model based on whether you want the original general-purpose controller or reduced reference lookahead for teleoperation.
+
+### Available Models
+
+| Model | Hugging Face location | SMPL reference input | Intended use and comments |
+|---|---|---|---|
+| **Default SONIC (original release)** | Top-level `model_encoder.onnx`, `model_decoder.onnx`, and `observation_config.yaml`; training checkpoint at `sonic_release/last.pt` | 10 future frames at 20 ms spacing, approximately 200 ms of reference lookahead | Default general-purpose SONIC controller for motion tracking, planning, teleoperation, and compatibility with existing deployments. G1 and teleoperation future-reference observations use `step5`. |
+| **Low-latency teleoperation** | [`low_latency/`](https://huggingface.co/nvidia/GEAR-SONIC/tree/main/low_latency) | 4 future frames at 20 ms spacing, approximately 80 ms of reference lookahead | Intended for more responsive whole-body teleoperation and VLA execution. G1 and teleoperation future-reference observations use `step1`. Use its encoder, decoder, and observation config together. |
+
+Both models use the SONIC universal-token controller, produce 64-dimensional latent motion tokens, run the controller at 50 Hz, and support SMPL pose, G1 motion reference, and VR 3-point inputs. Deployment uses C++ and TensorRT; the PyTorch checkpoints support Isaac Lab evaluation and continued training.
+
+The lookahead values describe the reference horizon presented to the controller. They are **not** measurements of total end-to-end teleoperation latency, which also includes sensing, networking, preprocessing, and inference. Model weights are covered by the [NVIDIA Open Model License](LICENSE).
+
+### Released Files
+
+| Model | Deployment files | PyTorch and configuration files |
+|---|---|---|
+| Default SONIC | `model_encoder.onnx`, `model_decoder.onnx`, `observation_config.yaml` | `sonic_release/last.pt`, `sonic_release/config.yaml` |
+| Low-latency teleoperation | `low_latency/model_encoder.onnx`, `low_latency/model_decoder.onnx`, `low_latency/observation_config.yaml` | `low_latency/last.pt`, `low_latency/config.yaml`, `low_latency/model_config.yaml` |
+
+### Usage
+
+Download the default model and planner:
+
+```bash
+python download_from_hf.py
+```
+
+Download the low-latency teleoperation model and planner:
+
+```bash
+python download_from_hf.py --low-latency
+```
+
+Run the default C++ deployment stack:
+
+```bash
+cd gear_sonic_deploy
+./deploy.sh --input-type zmq_manager real
+```
+
+Run the low-latency C++ deployment stack:
 
 ```bash
 cd gear_sonic_deploy
@@ -90,7 +133,15 @@ cd gear_sonic_deploy
     real
 ```
 
-For the Python VLA launcher:
+Run the default Python VLA launcher, which orchestrates the C++ controller and Python inference client:
+
+```bash
+python gear_sonic/scripts/launch_inference.py \
+    --camera-host 192.168.123.164 \
+    --prompt "pick up the cup"
+```
+
+For the low-latency model, add the matching deployment files:
 
 ```bash
 python gear_sonic/scripts/launch_inference.py \
@@ -100,10 +151,18 @@ python gear_sonic/scripts/launch_inference.py \
     --prompt "pick up the cup"
 ```
 
+See [Downloading Model Checkpoints](docs/source/getting_started/download_models.md#low-latency-teleoperation-checkpoint) for Python checkpoint evaluation and additional deployment options. Test in simulation before using the checkpoint on a physical robot.
+
 
 ## VR Whole-Body Teleoperation
 
 SONIC supports real-time whole-body teleoperation via PICO VR headset, enabling natural human-to-robot motion transfer for data collection and interactive control.
+
+<div align="center">
+  <img src="docs/source/_static/sonic_low_latency_demo.gif" width="640" alt="SONIC Low Latency whole-body teleoperation and ground pickup">
+</div>
+
+<p align="center"><em><strong>SONIC Low Latency:</strong> 3-point VR teleoperation with whole-body tracking and a successful ground pickup.</em></p>
 
 This repo can also drive the headset over Isaac Teleop / CloudXR by launching `gear_sonic/scripts/pico_manager_thread_server.py --input-source isaac-teleop`. The streamer hosts the CloudXR runtime in-process via `isaacteleop[cloudxr]` — no separate publisher container required. That path is currently documented and supported only for **G1 with a Thor backpack**. The Isaac Teleop bring-up steps are documented in [`docs/source/tutorials/isaac_teleop_publisher_setup.md`](docs/source/tutorials/isaac_teleop_publisher_setup.md).
 

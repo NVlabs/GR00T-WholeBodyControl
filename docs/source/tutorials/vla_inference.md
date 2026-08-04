@@ -74,10 +74,15 @@ See [Data Collection](data_collection.md) for camera server setup.
 
 The `gear_sonic_deploy` binary must be built. See the main README.
 
-### Low-Latency SONIC WBC
+### Low-Latency Teleoperation Checkpoint
 
-For the low-latency SONIC controller, download the `low_latency/` deployment
-variant from Hugging Face:
+The `low_latency/` checkpoint is configured for responsive whole-body
+teleoperation. Its SMPL encoder uses 4 future reference frames at 50 Hz
+(approximately 80 ms of reference lookahead), compared with 10 frames
+(approximately 200 ms) in the default release. This is reference lookahead,
+not total end-to-end system latency.
+
+Download the deployment files from Hugging Face:
 
 ```bash
 python download_from_hf.py --low-latency

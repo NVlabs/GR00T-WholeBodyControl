@@ -20,7 +20,7 @@ From the repo root:
 # Deployment (ONNX models + planner → gear_sonic_deploy/)
 python download_from_hf.py
 
-# Low-latency deployment variant (ONNX models + planner → gear_sonic_deploy/)
+# Low-latency teleoperation checkpoint (ONNX models + planner → gear_sonic_deploy/)
 python download_from_hf.py --low-latency
 
 # Training (checkpoint + SMPL data → sonic_release/ + data/smpl_filtered/)
@@ -46,7 +46,7 @@ This downloads the **latest** policy encoder + decoder + kinematic planner into
 | Flag | Description |
 |------|-------------|
 | `--training` | Download training checkpoint + SMPL motion data (~30 GB) |
-| `--low-latency` | Download the low-latency SONIC variant. For deployment, ONNX files go to `gear_sonic_deploy/policy/low_latency/`; with `--training`, the PyTorch checkpoint and configs go to `low_latency/`. |
+| `--low-latency` | Download the low-latency teleoperation checkpoint. For deployment, ONNX files go to `gear_sonic_deploy/policy/low_latency/`; with `--training`, the PyTorch checkpoint and configs go to `low_latency/`. |
 | `--sample` | Download sample motion data only (~4 MB) |
 | `--no-planner` | Skip the kinematic planner download |
 | `--no-smpl` | With `--training`, skip SMPL data (checkpoint only) |
@@ -62,7 +62,7 @@ python download_from_hf.py
 # Policy only
 python download_from_hf.py --no-planner
 
-# Low-latency policy only
+# Low-latency teleoperation policy only
 python download_from_hf.py --low-latency --no-planner
 
 # Download into a custom directory
@@ -71,12 +71,18 @@ python download_from_hf.py --output-dir /data/gear-sonic
 
 ---
 
-## Low-Latency SONIC Variant
+## Low-Latency Teleoperation Checkpoint
 
-The low-latency SONIC checkpoint is published under `low_latency/` in
-[`nvidia/GEAR-SONIC`](https://huggingface.co/nvidia/GEAR-SONIC). It does not
-replace the default top-level deployment policy. Use it when you want the
-reduced-lookahead controller exported from the low-latency SONIC training run.
+The checkpoint published under `low_latency/` in
+[`nvidia/GEAR-SONIC`](https://huggingface.co/nvidia/GEAR-SONIC) is configured
+for responsive whole-body teleoperation. Its SMPL encoder uses **4 future
+reference frames**, compared with **10 frames** in the default release. At
+50 Hz (20 ms per frame), this reduces SMPL reference lookahead from
+approximately **200 ms to 80 ms**.
+
+This is the controller's reference lookahead, not a measurement of total
+end-to-end system latency. The checkpoint does not replace the default
+top-level deployment policy.
 
 Download the deployment ONNX files:
 

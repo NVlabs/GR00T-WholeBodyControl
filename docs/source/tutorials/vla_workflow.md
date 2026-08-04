@@ -7,12 +7,12 @@ VLA policy on the Unitree G1 with SONIC whole-body control:
 2. **Fine-tune** the Isaac-GR00T N1.7 model on your collected data
 3. **Deploy** the finetuned policy for autonomous inference
 
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│  1. Collect     │     │  2. Fine-tune   │     │  3. Deploy      │
-│  (VR Teleop +   │ ──► │  (Isaac-GR00T   │ ──► │  (PolicyServer  │
-│   Data Export)  │     │   N1.7)         │     │   + SONIC)      │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
+```text
++-----------------+     +-----------------+     +-----------------+
+| 1. Collect      |     | 2. Fine-tune    |     | 3. Deploy       |
+| VR teleop +     | --> | Isaac-GR00T     | --> | PolicyServer +  |
+| data export     |     | N1.7            |     | SONIC           |
++-----------------+     +-----------------+     +-----------------+
 ```
 
 For examples of whole-body manipulation tasks accomplished with this workflow, see the
@@ -24,12 +24,12 @@ Instead of predicting raw joint angles, the VLA predicts **SONIC latent motion
 tokens** — a compact 64-dimensional representation learned by the SONIC whole-body
 controller. SONIC then decodes these latents into full-body joint commands at 50 Hz.
 
-```
-┌─────────────┐    latent tokens     ┌─────────────┐    joint commands    ┌───────┐
-│  VLA Model  │ ──────────────────►  │   SONIC     │ ──────────────────►  │ Robot │
-│ (2.5 Hz)    │   (64-dim × 40)      │  Decoder    │    (50 Hz)           │       │
-│             │                       │  (C++)      │                      │       │
-└─────────────┘                       └─────────────┘                      └───────┘
+```text
++-------------+   latent tokens   +-------------+   joint commands   +-------+
+| VLA Model   | ----------------> | SONIC       | -----------------> | Robot |
+| 2.5 Hz      |   64-dim x 40     | Decoder     |   50 Hz            |       |
+|             |                   | C++         |                    |       |
++-------------+                   +-------------+                    +-------+
 ```
 
 This means the VLA only needs to reason about *what* to do — SONIC handles the
@@ -60,16 +60,16 @@ python gear_sonic/scripts/launch_data_collection.py \
 
 ```text
 outputs/2026-04-03-14-30-00-G1-robot01/
-├── data/
-│   └── train-00000.parquet
-├── videos/
-│   └── observation.images.ego_view/
-│       └── episode_000000.mp4
-└── meta/
-    ├── info.json
-    ├── modality.json
-    ├── episodes.jsonl
-    └── tasks.jsonl
++-- data/
+|   +-- train-00000.parquet
++-- videos/
+|   +-- observation.images.ego_view/
+|       +-- episode_000000.mp4
++-- meta/
+    +-- info.json
+    +-- modality.json
+    +-- episodes.jsonl
+    +-- tasks.jsonl
 ```
 
 ```{tip}
@@ -155,12 +155,12 @@ Checkpoints are saved to `--output-dir`:
 
 ```text
 /path/to/output/
-├── checkpoint-5000/
-├── checkpoint-10000/
-├── checkpoint-15000/
-├── checkpoint-20000/
-├── config.json
-└── processor_config.json
++-- checkpoint-5000/
++-- checkpoint-10000/
++-- checkpoint-15000/
++-- checkpoint-20000/
++-- config.json
++-- processor_config.json
 ```
 
 Use the final checkpoint (or the best-performing one based on your evaluation) for

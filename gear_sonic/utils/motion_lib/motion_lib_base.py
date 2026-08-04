@@ -1593,8 +1593,6 @@ class MotionLibBase:
             _motion_object_root_pos,
             _motion_object_root_quat,
         )
-        gc.collect()
-        torch.cuda.empty_cache()
 
         if "mujoco_to_isaaclab_body" in self.m_cfg.keys():  # noqa: SIM118
             self.dof_pos = self.dof_pos[:, self.m_cfg.mujoco_to_isaaclab_dof]
@@ -1624,6 +1622,10 @@ class MotionLibBase:
             self.body_lin_vel_w_full = self.body_lin_vel_w
             self.body_ang_vel_w_full = self.body_ang_vel_w
             self.num_bodies_full = self.body_pos_w.shape[2]
+
+        # Run cleanup after slicing so temporary fragments do not live through the next cycle.
+        gc.collect()
+        torch.cuda.empty_cache()
 
     def foot_detect(self, positions, vel_thres, height_thresh):
         fid_l = self.m_cfg.get("left_foot_body_idx", [6])

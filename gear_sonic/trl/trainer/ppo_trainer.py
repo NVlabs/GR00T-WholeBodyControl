@@ -305,16 +305,17 @@ def process_ep_infos(ep_infos, device):
     """
     infos = {}
     for key in ep_infos[0]:
-        infotensor = torch.tensor([], device=device)
+        # Buffer tensors in Python and concatenate once to avoid filling allocator buckets with mismatched sizes.
+        values = []
         for ep_info in ep_infos:
-            # handle scalar and zero dimensional tensor infos
-            if not isinstance(ep_info[key], torch.Tensor):
-                ep_info[key] = torch.Tensor([ep_info[key]])
-            if len(ep_info[key].shape) == 0:
-                ep_info[key] = ep_info[key].unsqueeze(0)
-            infotensor = torch.cat((infotensor, ep_info[key].to(device)))
-        value = torch.mean(infotensor)
-        infos[key] = value
+            v = ep_info[key]
+            if not isinstance(v, torch.Tensor):
+                v = torch.tensor([v], device=device)
+            else:
+                if v.dim() == 0: v = v.unsqueeze(0)
+                if v.device != device: v = v.to(device)
+            values.append(v)
+        infos[key] = torch.cat(values).mean()
     return infos
 
 
@@ -1910,8 +1911,10 @@ class TRLPPOTrainer(PPOTrainer):  # noqa: F405
             self.lr_scheduler.step()
 
             del metrics, rollout_data
-            gc.collect()
-            torch.cuda.empty_cache()
+            # Skip pre-iteration GC here; motion loading performs fallback cleanup,
+            # which avoids extra synchronization overhead and improves training speed.
+            # gc.collect()
+            # torch.cuda.empty_cache()
 
             self.control = self.callback_handler.on_step_end(args, self.state, self.control)
 
@@ -2024,8 +2027,17 @@ class TRLPPOTrainer(PPOTrainer):  # noqa: F405
                     "train", start_time, num_tokens=self.state.num_input_tokens_seen
                 )
 
-        output = {**logs, **{"step": self.state.global_step}}  # noqa: PIE800
-        self.state.log_history.append(output)
+        # Sanitize all caller logs at this boundary: rank 0 stores only detached CPU/Python values.
+        if self.state.is_world_process_zero:
+            output = {}
+            for key, value in logs.items():
+                if isinstance(value, torch.Tensor):
+                    value = value.detach().cpu().item()
+                elif isinstance(value, np.ndarray):
+                    value = float(value)
+                output[key] = value
+            output["step"] = self.state.global_step
+            self.state.log_history.append(output)
 
         self.control = self.callback_handler.on_log(self.args, self.state, self.control, logs)
 

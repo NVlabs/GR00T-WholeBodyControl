@@ -1,0 +1,23 @@
+<mujoco model="mustard_bottle">
+  <compiler angle="radian" />
+
+  <asset>
+    <mesh name="mustard_bottle_visual_mesh" file="mustard_bottle/textured.obj" />
+    <mesh name="mustard_bottle_collision_mesh_0" file="mustard_bottle/textured_coacd_0.stl" />
+    <mesh name="mustard_bottle_collision_mesh_1" file="mustard_bottle/textured_coacd_1.stl" />
+    <mesh name="mustard_bottle_collision_mesh_2" file="mustard_bottle/textured_coacd_2.stl" />
+    <texture name="mustard_bottle_texture" type="2d" file="mustard_bottle/texture_map.png" />
+    <material name="mustard_bottle_material" texture="mustard_bottle_texture" />
+  </asset>
+
+  <worldbody>
+    <body name="mustard_bottle" pos="0.3 0 0.78" euler="0 0 0">
+      <!-- <freejoint name="mustard_bottle_joint" /> -->
+      <geom name="mustard_bottle_visual_geom" type="mesh" mesh="mustard_bottle_visual_mesh" material="mustard_bottle_material" pos="0.0 0.0 0.0" euler="0 0 0" contype="0" conaffinity="0" group="0" />
+      <geom name="mustard_bottle_collision_geom_0" type="mesh" mesh="mustard_bottle_collision_mesh_0" pos="0.0 0.0 0.0" euler="0 0 0" contype="1" conaffinity="1" group="3" />
+      <geom name="mustard_bottle_collision_geom_1" type="mesh" mesh="mustard_bottle_collision_mesh_1" pos="0.0 0.0 0.0" euler="0 0 0" contype="1" conaffinity="1" group="3" />
+      <geom name="mustard_bottle_collision_geom_2" type="mesh" mesh="mustard_bottle_collision_mesh_2" pos="0.0 0.0 0.0" euler="0 0 0" contype="1" conaffinity="1" group="3" />
+      <inertial pos="0 0 0" euler="0 0 0" mass="0.603" diaginertia="0.001 0.001 0.001" />
+    </body>
+  </worldbody>
+</mujoco>
