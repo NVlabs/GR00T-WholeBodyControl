@@ -94,6 +94,12 @@ class PicoStreamer(BaseStreamer):
     def _get_pico_data(self):
         pico_data = {}
 
+        # Optional SDK calls that are not required by the current teleop policy
+        # can be disabled to reduce control-loop latency.
+        collect_hand = os.getenv("SIMPLE_PICO_COLLECT_HAND_TRACKING", "0") == "1"
+        collect_motion = os.getenv("SIMPLE_PICO_COLLECT_MOTION_TRACKERS", "0") == "1"
+        collect_body = os.getenv("SIMPLE_PICO_COLLECT_BODY_TRACKING", "0") == "1"
+
         # Get the pose of the left and right controllers and the headset
         pico_data["left_pose"] = self.xr_client.get_pose_by_name("left_controller")
         pico_data["right_pose"] = self.xr_client.get_pose_by_name("right_controller")
@@ -120,19 +126,27 @@ class PicoStreamer(BaseStreamer):
         # Get the timestamp of the left and right controllers
         pico_data["timestamp"] = self.xr_client.get_timestamp_ns()
 
-        # Get the hand tracking state of the left and right controllers
-        pico_data["left_hand_tracking_state"] = self.xr_client.get_hand_tracking_state("left")
-        pico_data["right_hand_tracking_state"] = self.xr_client.get_hand_tracking_state("right")
+        # Get optional hand tracking state of the left and right controllers
+        if collect_hand:
+            pico_data["left_hand_tracking_state"] = self.xr_client.get_hand_tracking_state("left")
+            pico_data["right_hand_tracking_state"] = self.xr_client.get_hand_tracking_state("right")
+        else:
+            pico_data["left_hand_tracking_state"] = None
+            pico_data["right_hand_tracking_state"] = None
 
         # Get the joystick state of the left and right controllers
         pico_data["left_joystick"] = self.xr_client.get_joystick_state("left")
         pico_data["right_joystick"] = self.xr_client.get_joystick_state("right")
 
-        # Get the motion tracker data
-        pico_data["motion_tracker_data"] = self.xr_client.get_motion_tracker_data()
+        # Get optional motion tracker data
+        pico_data["motion_tracker_data"] = (
+            self.xr_client.get_motion_tracker_data() if collect_motion else {}
+        )
 
-        # Get the body tracking data
-        pico_data["body_tracking_data"] = self.xr_client.get_body_tracking_data()
+        # Get optional body tracking data
+        pico_data["body_tracking_data"] = (
+            self.xr_client.get_body_tracking_data() if collect_body else None
+        )
 
         return pico_data
 
