@@ -75,6 +75,7 @@ class PicoStreamer(BaseStreamer):
         self._last_input_debug_ts = 0.0
         self._activation_hold_start_ts = None
         self._last_activation_emit_ts = 0.0
+        self._latest_pico_data = None
 
     def start_streaming(self):
         pass
@@ -84,6 +85,7 @@ class PicoStreamer(BaseStreamer):
 
     def get(self) -> StreamerOutput:
         pico_data = self._get_pico_data()
+        self._latest_pico_data = pico_data
 
         raw_data = self._generate_unified_raw_data(pico_data)
         return raw_data
@@ -187,12 +189,25 @@ class PicoStreamer(BaseStreamer):
             os.getenv("SIMPLE_PICO_ACTIVATION_COOLDOWN_SECS", "0.8")
         )
         now = time.monotonic()
-        activation_modifier = (
-            pico_data["left_menu_button"]
-            or pico_data["right_menu_button"]
-            or pico_data["left_axis_click"]
-        )
-        # Optional fallback for devices where menu buttons are intercepted by the headset OS.
+        # Activation defaults to left-menu + trigger (legacy behavior).
+        # Optional modes can be enabled for headsets that intercept menu buttons.
+        activation_mode = os.getenv(
+            "SIMPLE_PICO_ACTIVATION_MODE", "left_menu_right_trigger"
+        ).strip().lower()
+        if activation_mode == "any_menu_or_left_axis":
+            activation_modifier = (
+                pico_data["left_menu_button"]
+                or pico_data["right_menu_button"]
+                or pico_data["left_axis_click"]
+            )
+        elif activation_mode == "left_or_right_menu":
+            activation_modifier = (
+                pico_data["left_menu_button"] or pico_data["right_menu_button"]
+            )
+        else:
+            activation_modifier = pico_data["left_menu_button"]
+
+        # Backward-compat fallback override.
         if os.getenv("SIMPLE_PICO_ACTIVATE_ON_RIGHT_TRIGGER", "0") == "1":
             activation_modifier = True
 
