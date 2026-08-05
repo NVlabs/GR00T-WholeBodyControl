@@ -329,13 +329,22 @@ class Gr00tDataExporter(LeRobotDataset):
         for key in self.video_writers:
             self.video_writers[key].stop()
 
+    def cancel_video_writers(self):
+        if not hasattr(self, "video_writers"):
+            raise RuntimeError(
+                "Can't cancel video writers because they haven't been initialized. Call create() first."
+            )
+        for key in self.video_writers:
+            self.video_writers[key].cancel()
+
     def skip_and_start_new_episode(
         self,
     ) -> None:
         """
         Skip the current episode and start a new one.
         """
-        self.stop_video_writers()
+        # Discard path should not block on encoder flush; drop buffered frames.
+        self.cancel_video_writers()
         self.episode_buffer = self.create_episode_buffer()
         self.video_writers = self.create_video_writer()
 

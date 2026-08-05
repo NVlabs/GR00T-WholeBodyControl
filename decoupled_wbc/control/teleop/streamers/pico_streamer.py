@@ -170,11 +170,27 @@ class PicoStreamer(BaseStreamer):
         lin_vel_y = self._apply_dead_zone(strafe_input, DEAD_ZONE) * MAX_LINEAR_VEL
         ang_vel_z = self._apply_dead_zone(yaw_input, DEAD_ZONE) * MAX_ANGULAR_VEL
 
-        # Get base height command
-        height_increment = 0.01  # Small step per call when button is pressed
-        if pico_data["Y"]:
+        # Get base height command.
+        # To avoid instability during manipulation, optionally block height
+        # changes while selected grasp channels are active.
+        height_increment = float(os.getenv("SIMPLE_PICO_HEIGHT_INCREMENT", "0.002"))
+        grasp_threshold = float(os.getenv("SIMPLE_PICO_HEIGHT_GUARD_GRASP_THRESHOLD", "0.20"))
+        block_while_grasp = os.getenv("SIMPLE_PICO_HEIGHT_BLOCK_WHILE_GRASP", "0") == "1"
+        block_with_trigger = os.getenv("SIMPLE_PICO_HEIGHT_BLOCK_WITH_TRIGGER", "0") == "1"
+        block_with_grip = os.getenv("SIMPLE_PICO_HEIGHT_BLOCK_WITH_GRIP", "1") == "1"
+        trigger_active = (
+            pico_data["left_trigger"] > grasp_threshold
+            or pico_data["right_trigger"] > grasp_threshold
+        )
+        grip_active = (
+            pico_data["left_grip"] > grasp_threshold
+            or pico_data["right_grip"] > grasp_threshold
+        )
+        grasping_now = (block_with_trigger and trigger_active) or (block_with_grip and grip_active)
+
+        if pico_data["Y"] and not (block_while_grasp and grasping_now):
             self.current_base_height += height_increment
-        elif pico_data["X"]:
+        elif pico_data["X"] and not (block_while_grasp and grasping_now):
             self.current_base_height -= height_increment
         self.current_base_height = np.clip(self.current_base_height, 0.2, 0.74)
 
