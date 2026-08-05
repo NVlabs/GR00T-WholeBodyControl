@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0.0
+Type=Application
+Name=XRoboToolkit-PC-Service
+GenericName=XRoboToolkit-PC-Service
+Exec=/opt/apps/roboticsservice/run3D.sh
+Icon=roboticsservice
+Terminal=false
+Categories=Office;

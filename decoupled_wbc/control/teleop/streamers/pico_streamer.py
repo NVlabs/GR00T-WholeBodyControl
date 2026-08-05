@@ -1,3 +1,5 @@
+import os
+from pathlib import Path
 import subprocess
 import time
 
@@ -24,9 +26,35 @@ class PicoStreamer(BaseStreamer):
         self.reset_status()
 
     def run_pico_service(self):
-        # Run the pico service
+        # Prefer an explicit override, then a workspace-local extracted runtime,
+        # and finally the system install under /opt.
+        candidate_scripts = []
+
+        service_script = os.getenv("XROBOT_TOOLKIT_SERVICE_SCRIPT")
+        if service_script:
+            candidate_scripts.append(Path(service_script).expanduser())
+
+        gr00t_root = Path(__file__).resolve().parents[4]
+        candidate_scripts.append(
+            gr00t_root
+            / "external_dependencies"
+            / "xrobotoolkit_runtime"
+            / "extracted"
+            / "opt"
+            / "apps"
+            / "roboticsservice"
+            / "runService.sh"
+        )
+        candidate_scripts.append(Path("/opt/apps/roboticsservice/runService.sh"))
+
+        run_service_script = next((path for path in candidate_scripts if path.exists()), None)
+        if run_service_script is None:
+            checked = ", ".join(str(path) for path in candidate_scripts)
+            raise FileNotFoundError(f"XRoboToolkit service script not found. Checked: {checked}")
+
         self.pico_service_pid = subprocess.Popen(
-            ["bash", "/opt/apps/roboticsservice/runService.sh"]
+            ["bash", str(run_service_script)],
+            cwd=str(run_service_script.parent),
         )
         print(f"Pico service running with pid {self.pico_service_pid.pid}")
 
@@ -44,6 +72,9 @@ class PicoStreamer(BaseStreamer):
         self.toggle_activation_last = False
         self.toggle_data_collection_last = False
         self.toggle_data_abort_last = False
+        self._last_input_debug_ts = 0.0
+        self._activation_hold_start_ts = None
+        self._last_activation_emit_ts = 0.0
 
     def start_streaming(self):
         pass
@@ -136,10 +167,27 @@ class PicoStreamer(BaseStreamer):
         right_fingers = self._generate_finger_data(pico_data, "right")
 
         # Get activation commands
-        toggle_policy_action_tmp = pico_data["left_menu_button"] and (
-            pico_data["left_trigger"] > 0.5
+        trigger_threshold = float(os.getenv("SIMPLE_PICO_TRIGGER_THRESHOLD", "0.2"))
+        activation_hold_secs = float(os.getenv("SIMPLE_PICO_ACTIVATION_HOLD_SECS", "0.35"))
+        activation_cooldown_secs = float(
+            os.getenv("SIMPLE_PICO_ACTIVATION_COOLDOWN_SECS", "0.8")
         )
-        toggle_activation_tmp = pico_data["left_menu_button"] and (pico_data["right_trigger"] > 0.5)
+        now = time.monotonic()
+        activation_modifier = (
+            pico_data["left_menu_button"]
+            or pico_data["right_menu_button"]
+            or pico_data["left_axis_click"]
+        )
+        # Optional fallback for devices where menu buttons are intercepted by the headset OS.
+        if os.getenv("SIMPLE_PICO_ACTIVATE_ON_RIGHT_TRIGGER", "0") == "1":
+            activation_modifier = True
+
+        toggle_policy_action_tmp = activation_modifier and (
+            pico_data["left_trigger"] > trigger_threshold
+        )
+        toggle_activation_tmp = activation_modifier and (
+            pico_data["right_trigger"] > trigger_threshold
+        )
 
         if self.toggle_policy_action_last != toggle_policy_action_tmp:
             toggle_policy_action = toggle_policy_action_tmp
@@ -147,11 +195,47 @@ class PicoStreamer(BaseStreamer):
             toggle_policy_action = False
         self.toggle_policy_action_last = toggle_policy_action_tmp
 
-        if self.toggle_activation_last != toggle_activation_tmp:
-            toggle_activation = toggle_activation_tmp
+        edge_toggle_activation = self.toggle_activation_last != toggle_activation_tmp and toggle_activation_tmp
+
+        # Long-hold fallback for low-frequency loops where short button edges are easy to miss.
+        if toggle_activation_tmp:
+            if self._activation_hold_start_ts is None:
+                self._activation_hold_start_ts = now
         else:
-            toggle_activation = False
+            self._activation_hold_start_ts = None
+
+        hold_ready = (
+            self._activation_hold_start_ts is not None
+            and (now - self._activation_hold_start_ts) >= activation_hold_secs
+        )
+        hold_toggle_activation = False
+        if hold_ready and (now - self._last_activation_emit_ts) >= activation_cooldown_secs:
+            hold_toggle_activation = True
+            self._last_activation_emit_ts = now
+
+        toggle_activation = edge_toggle_activation or hold_toggle_activation
         self.toggle_activation_last = toggle_activation_tmp
+
+        # Optional verbose input diagnostics for activation troubleshooting.
+        # Enable with: export SIMPLE_PICO_DEBUG_INPUT=1
+        if os.getenv("SIMPLE_PICO_DEBUG_INPUT", "0") == "1":
+            if (now - self._last_input_debug_ts) > 0.5:
+                self._last_input_debug_ts = now
+                print(
+                    "[PicoStreamer][debug] "
+                    f"LMenu={pico_data['left_menu_button']} RMenu={pico_data['right_menu_button']} "
+                    f"LAxis={pico_data['left_axis_click']} RTrig={pico_data['right_trigger']:.3f} "
+                    f"LTrig={pico_data['left_trigger']:.3f} modifier={activation_modifier} "
+                    f"thr={trigger_threshold:.2f} toggle_tmp={toggle_activation_tmp} "
+                    f"edge={edge_toggle_activation} hold={hold_toggle_activation}"
+                )
+
+        if toggle_activation:
+            print(
+                "[PicoStreamer] toggle_activation edge: "
+                f"left_menu={pico_data['left_menu_button']} right_menu={pico_data['right_menu_button']} "
+                f"left_axis_click={pico_data['left_axis_click']} right_trigger={pico_data['right_trigger']:.3f}"
+            )
 
         # Get data collection commands
         toggle_data_collection_tmp = pico_data["A"]

@@ -1,24 +1,55 @@
 """Factory for creating and launching MuJoCo simulators with Unitree SDK channel setup."""
 
 import time
+from threading import Lock
 from typing import Any, Dict
 
 from unitree_sdk2py.core.channel import ChannelFactoryInitialize
 
 from gear_sonic.utils.mujoco_sim.base_sim import BaseSimulator
 
+_CHANNEL_INIT_LOCK = Lock()
+_CHANNEL_INITIALIZED = False
 
-def init_channel(config: Dict[str, Any]) -> None:
+
+def init_channel(config: Dict[str, Any] | None = None) -> None:
     """
     Initialize the communication channel for simulator/robot communication.
 
+    This is intentionally guarded so the same process does not reinitialize
+    CycloneDDS repeatedly when the simulator and the environment both try to
+    create a channel.
+
     Args:
-        config: Configuration dictionary containing DOMAIN_ID and optionally INTERFACE
+        config: Configuration dictionary containing DOMAIN_ID and optionally INTERFACE.
+            If not provided, fall back to the default loopback-safe config.
     """
-    if config.get("INTERFACE", None):
-        ChannelFactoryInitialize(config["DOMAIN_ID"], config["INTERFACE"])
-    else:
-        ChannelFactoryInitialize(config["DOMAIN_ID"])
+    global _CHANNEL_INITIALIZED
+
+    if _CHANNEL_INITIALIZED:
+        return
+
+    with _CHANNEL_INIT_LOCK:
+        if _CHANNEL_INITIALIZED:
+            return
+
+        domain_id = 0
+        interface = None
+
+        if config is not None:
+            if isinstance(config, dict):
+                domain_id = config.get("DOMAIN_ID", 0)
+                interface = config.get("INTERFACE", None)
+            else:
+                domain_id = getattr(config, "DOMAIN_ID", 0)
+                interface = getattr(config, "INTERFACE", None)
+
+        if interface:
+            ChannelFactoryInitialize(domain_id, interface)
+        else:
+            ChannelFactoryInitialize(domain_id)
+
+        _CHANNEL_INITIALIZED = True
 
 
 class SimulatorFactory:

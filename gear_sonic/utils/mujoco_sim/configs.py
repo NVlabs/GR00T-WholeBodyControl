@@ -72,6 +72,7 @@ def override_wbc_config(
         "SIMULATE_DT": 1 / float(config.sim_frequency),
         "ENABLE_OFFSCREEN": config.enable_offscreen,
         "ENABLE_ONSCREEN": config.enable_onscreen,
+        "ENABLE_PICO_TELEOP": config.enable_pico_teleop,
         "model_path": config.wbc_model_path,
         "enable_waist": config.enable_waist,
         "with_hands": config.with_hands,
@@ -157,6 +158,9 @@ class BaseConfig(ArgsConfigTemplate):
 
     enable_onscreen: bool = True
     """Whether to enable onscreen rendering."""
+
+    enable_pico_teleop: bool = False
+    """Enable a lightweight PICO headset pose bridge for local sim smoke tests."""
 
     enable_teleop_evaluator: bool = False
     """Whether to enable teleop evaluator."""

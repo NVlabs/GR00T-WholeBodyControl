@@ -32,12 +32,33 @@ if(NOT TensorRT_FIND_COMPONENTS)
 endif()
 set(TensorRT_LIBRARIES)
 
+set(_trt_include_hints
+  "${TensorRT_ROOT}"
+  "${TensorRT_ROOT}/include"
+  "$ENV{TensorRT_ROOT}"
+  "$ENV{TENSORRT_ROOT}"
+  "$ENV{TensorRT_ROOT}/include"
+  "$ENV{TENSORRT_ROOT}/include"
+  "$ENV{HOME}/TensorRT"
+  "$ENV{HOME}/TensorRT/include"
+  "/home/user/TensorRT"
+  "/home/user/TensorRT/include"
+  "/usr/local/TensorRT"
+  "/usr/local/TensorRT/include"
+  "/opt/TensorRT"
+  "/opt/TensorRT/include"
+  "/usr/local/tensorrt"
+  "/usr/local/tensorrt/include"
+  "/opt/tensorrt"
+  "/opt/tensorrt/include"
+)
+message(STATUS "TensorRT include search paths: ${_trt_include_hints}")
+
 # find the include directory of TensorRT
 find_path(
   TensorRT_INCLUDE_DIR
   NAMES NvInfer.h
-  PATHS ${TensorRT_ROOT} ENV TensorRT_ROOT
-  PATH_SUFFIXES include
+  HINTS ${_trt_include_hints}
 )
 
 string(FIND ${TensorRT_INCLUDE_DIR} "NOTFOUND" _include_dir_notfound)
@@ -66,10 +87,42 @@ endif()
 function(_find_trt_component component)
 
   # Find library for component (ie nvinfer, nvparsers, etc...)
+  set(_trt_library_hints
+    "${TensorRT_ROOT}"
+    "${TensorRT_ROOT}/lib"
+    "${TensorRT_ROOT}/lib64"
+    "$ENV{TensorRT_ROOT}"
+    "$ENV{TENSORRT_ROOT}"
+    "$ENV{TensorRT_ROOT}/lib"
+    "$ENV{TENSORRT_ROOT}/lib"
+    "$ENV{TensorRT_ROOT}/lib64"
+    "$ENV{TENSORRT_ROOT}/lib64"
+    "$ENV{HOME}/TensorRT"
+    "$ENV{HOME}/TensorRT/lib"
+    "$ENV{HOME}/TensorRT/lib64"
+    "/home/user/TensorRT"
+    "/home/user/TensorRT/lib"
+    "/home/user/TensorRT/lib64"
+    "/usr/local/TensorRT"
+    "/usr/local/TensorRT/lib"
+    "/usr/local/TensorRT/lib64"
+    "/opt/TensorRT"
+    "/opt/TensorRT/lib"
+    "/opt/TensorRT/lib64"
+    "/usr/local/tensorrt"
+    "/usr/local/tensorrt/lib"
+    "/usr/local/tensorrt/lib64"
+    "/opt/tensorrt"
+    "/opt/tensorrt/lib"
+    "/opt/tensorrt/lib64"
+  )
+  message(STATUS "TensorRT library search paths: ${_trt_library_hints}")
+
   find_library(
     TensorRT_${component}_LIBRARY
     NAMES ${component}
-    PATHS ${TensorRT_ROOT} ${TENSORRT_LIBRARY_DIR} ENV TensorRT_ROOT
+    HINTS ${_trt_library_hints}
+    PATH_SUFFIXES lib lib64
   )
 
   string(FIND ${TensorRT_${component}_LIBRARY} "NOTFOUND" _library_not_found)

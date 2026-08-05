@@ -1,5 +1,5 @@
 <mujoco model="g1_29dof_with_hand_rev_1_0">
-    <compiler angle="radian" meshdir="meshes"/>
+    <compiler angle="radian" meshdir="../../../../../real/assets/g1/meshes"/>
     <default>
         <default class="torso_motor">
           <joint damping="0.05" armature="0.01" frictionloss="0.2"/>

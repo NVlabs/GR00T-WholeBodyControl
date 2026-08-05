@@ -9,6 +9,7 @@ import os
 import pathlib
 from pathlib import Path
 import pickle
+import sys
 import tempfile
 from threading import Lock, Thread
 import time
@@ -19,7 +20,6 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 from scipy.spatial.transform import Rotation
-from unitree_sdk2py.core.channel import ChannelFactoryInitialize
 
 from gear_sonic.utils.mujoco_sim.metric_utils import check_contact, check_height
 from gear_sonic.utils.mujoco_sim.sim_utils import get_subtree_body_names
@@ -27,6 +27,94 @@ from gear_sonic.utils.mujoco_sim.unitree_sdk2py_bridge import ElasticBand, Unitr
 from gear_sonic.utils.mujoco_sim.robot import Robot
 
 GEAR_SONIC_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+
+
+class PicoTeleopBridge:
+    def __init__(self, config: Dict[str, any]):
+        self.enabled = bool(config.get("ENABLE_PICO_TELEOP", False))
+        self.teleop = None
+        self._last_error = None
+
+        if not self.enabled:
+            return
+
+        try:
+            repo_root = Path(__file__).resolve().parents[5]
+            real_path = repo_root / "real"
+            if str(real_path) not in sys.path:
+                sys.path.insert(0, str(real_path))
+
+            from teleop.vr_pico import PicoTeleop
+
+            self.teleop = PicoTeleop()
+            print("[SONIC sim] PICO teleop bridge enabled")
+        except Exception as exc:
+            self._last_error = str(exc)
+            print(f"[SONIC sim] PICO teleop bridge unavailable: {exc}")
+
+    def apply_to_sim(self, env: "DefaultEnv") -> bool:
+        if not self.enabled or self.teleop is None:
+            return False
+        try:
+            if not getattr(env, "use_floating_root_link", False):
+                return False
+
+            head_mat, _, _, _, _ = self.teleop.step(full_head=True)
+            if head_mat is None:
+                return False
+
+            if not isinstance(head_mat, np.ndarray):
+                return False
+            if head_mat.shape != (4, 4):
+                return False
+            if not np.isfinite(head_mat).all():
+                return False
+
+            pos = head_mat[:3, 3].copy()
+            if not np.isfinite(pos).all():
+                return False
+
+            rot = head_mat[:3, :3]
+            if not np.isfinite(rot).all():
+                return False
+
+            quat_wxyz = None
+            try:
+                quat_xyzw = Rotation.from_matrix(rot).as_quat()
+                quat_wxyz = np.array([quat_xyzw[3], quat_xyzw[0], quat_xyzw[1], quat_xyzw[2]])
+            except Exception:
+                quat_wxyz = None
+
+            if quat_wxyz is None:
+                quat_wxyz = np.array([1.0, 0.0, 0.0, 0.0], dtype=float)
+                mj_data = getattr(env, "mj_data", None)
+                if mj_data is not None and hasattr(mj_data, "qpos") and len(mj_data.qpos) >= 7:
+                    current_quat = np.asarray(mj_data.qpos[3:7], dtype=float).copy()
+                    if current_quat.size == 4 and np.isfinite(current_quat).all():
+                        norm = np.linalg.norm(current_quat)
+                        if norm > 0.0:
+                            quat_wxyz = current_quat / norm
+
+            mj_data = getattr(env, "mj_data", None)
+            if mj_data is None or not hasattr(mj_data, "qpos") or not hasattr(mj_data, "qvel"):
+                return False
+            if len(mj_data.qpos) < 7 or len(mj_data.qvel) < 6:
+                return False
+
+            mj_data.qpos[:7] = np.concatenate([pos, quat_wxyz])
+            mj_data.qvel[:6] = np.zeros(6)
+
+            mj_model = getattr(env, "mj_model", None)
+            if mj_model is not None:
+                try:
+                    mujoco.mj_forward(mj_model, mj_data)
+                except Exception:
+                    pass
+            return True
+        except Exception as exc:
+            self._last_error = str(exc)
+            print(f"[SONIC sim] PICO teleop bridge error: {exc}")
+            return False
 
 
 class DefaultEnv:
@@ -60,6 +148,7 @@ class DefaultEnv:
         self.reward_lock = Lock()
         self.unitree_bridge = None
         self.onscreen = onscreen
+        self.pico_bridge = PicoTeleopBridge(self.config)
 
         self.init_scene()
         self.last_reward = 0
@@ -243,9 +332,46 @@ class DefaultEnv:
         assert len(self.left_hand_index) == self.robot.NUM_HAND_JOINTS
         assert len(self.right_hand_index) == self.robot.NUM_HAND_JOINTS
 
-        self.body_joint_index = np.array(self.body_joint_index)
-        self.left_hand_index = np.array(self.left_hand_index)
-        self.right_hand_index = np.array(self.right_hand_index)
+        self.body_joint_index = np.array(self.body_joint_index, dtype=int)
+        self.left_hand_index = np.array(self.left_hand_index, dtype=int)
+        self.right_hand_index = np.array(self.right_hand_index, dtype=int)
+        self.body_dof_index = np.array(
+            [self.mj_model.jnt_dofadr[joint_id] for joint_id in self.body_joint_index],
+            dtype=int,
+        )
+        self.left_hand_dof_index = np.array(
+            [self.mj_model.jnt_dofadr[joint_id] for joint_id in self.left_hand_index],
+            dtype=int,
+        )
+        self.right_hand_dof_index = np.array(
+            [self.mj_model.jnt_dofadr[joint_id] for joint_id in self.right_hand_index],
+            dtype=int,
+        )
+        self.body_qpos_index = np.array(
+            [self.mj_model.jnt_qposadr[joint_id] for joint_id in self.body_joint_index],
+            dtype=int,
+        )
+        self.left_hand_qpos_index = np.array(
+            [self.mj_model.jnt_qposadr[joint_id] for joint_id in self.left_hand_index],
+            dtype=int,
+        )
+        self.right_hand_qpos_index = np.array(
+            [self.mj_model.jnt_qposadr[joint_id] for joint_id in self.right_hand_index],
+            dtype=int,
+        )
+
+        self._initialize_default_joint_state()
+
+    def _initialize_default_joint_state(self):
+        default_joint_angles = np.asarray(self.robot.DEFAULT_MOTOR_ANGLES[: self.num_body_dof], dtype=float)
+        if len(default_joint_angles) != len(self.body_joint_index):
+            default_joint_angles = np.resize(default_joint_angles, len(self.body_joint_index))
+
+        for qpos_idx, angle in zip(self.body_qpos_index, default_joint_angles):
+            self.mj_data.qpos[qpos_idx] = angle
+        for qvel_idx in self.body_dof_index:
+            self.mj_data.qvel[qvel_idx] = 0.0
+        mujoco.mj_forward(self.mj_model, self.mj_data)
 
     def init_renderers(self):
         self.renderers = {}
@@ -255,16 +381,35 @@ class DefaultEnv:
             )
             self.renderers[camera_name] = renderer
 
+    def _get_body_target_q(self) -> np.ndarray:
+        neutral_pose = np.zeros(self.num_body_dof, dtype=float)
+        if self.unitree_bridge is None:
+            return neutral_pose
+
+        if getattr(self.unitree_bridge, "low_cmd_received", False):
+            return np.array(
+                [self.unitree_bridge.low_cmd.motor_cmd[i].q for i in range(self.unitree_bridge.num_body_motor)],
+                dtype=float,
+            )
+
+        return neutral_pose
+
     def compute_body_torques(self) -> np.ndarray:
         # PD control: tau = tau_ff + kp * (q_des - q) + kd * (dq_des - dq)
         body_torques = np.zeros(self.num_body_dof)
+        body_target_q = self._get_body_target_q()
+        body_current_q = self.mj_data.qpos[self.body_qpos_index]
+        body_current_dq = self.mj_data.qvel[self.body_dof_index]
+        body_kp = np.asarray(self.robot.MOTOR_KP[: self.num_body_dof], dtype=float)
+        body_kd = np.asarray(self.robot.MOTOR_KD[: self.num_body_dof], dtype=float)
+
         if self.unitree_bridge is not None and self.unitree_bridge.low_cmd:
             for i in range(self.unitree_bridge.num_body_motor):
                 if self.unitree_bridge.use_sensor:
                     body_torques[i] = (
                         self.unitree_bridge.low_cmd.motor_cmd[i].tau
                         + self.unitree_bridge.low_cmd.motor_cmd[i].kp
-                        * (self.unitree_bridge.low_cmd.motor_cmd[i].q - self.mj_data.sensordata[i])
+                        * (body_target_q[i] - self.mj_data.sensordata[i])
                         + self.unitree_bridge.low_cmd.motor_cmd[i].kd
                         * (
                             self.unitree_bridge.low_cmd.motor_cmd[i].dq
@@ -274,17 +419,12 @@ class DefaultEnv:
                 else:
                     body_torques[i] = (
                         self.unitree_bridge.low_cmd.motor_cmd[i].tau
-                        + self.unitree_bridge.low_cmd.motor_cmd[i].kp
-                        * (
-                            self.unitree_bridge.low_cmd.motor_cmd[i].q
-                            - self.mj_data.qpos[self.body_joint_index[i] + self.qpos_offset - 1]
-                        )
-                        + self.unitree_bridge.low_cmd.motor_cmd[i].kd
-                        * (
-                            self.unitree_bridge.low_cmd.motor_cmd[i].dq
-                            - self.mj_data.qvel[self.body_joint_index[i] + self.qvel_offset - 1]
-                        )
+                        + body_kp[i] * (body_target_q[i] - body_current_q[i])
+                        - body_kd[i] * body_current_dq[i]
                     )
+        else:
+            body_torques = body_kp * (body_target_q - body_current_q) - body_kd * body_current_dq
+
         return body_torques
 
     def get_head_pose(self) -> np.ndarray:
@@ -307,12 +447,12 @@ class DefaultEnv:
                     + self.unitree_bridge.left_hand_cmd.motor_cmd[i].kp
                     * (
                         self.unitree_bridge.left_hand_cmd.motor_cmd[i].q
-                        - self.mj_data.qpos[self.left_hand_index[i] + self.qpos_offset - 1]
+                        - self.mj_data.qpos[self.left_hand_qpos_index[i]]
                     )
                     + self.unitree_bridge.left_hand_cmd.motor_cmd[i].kd
                     * (
                         self.unitree_bridge.left_hand_cmd.motor_cmd[i].dq
-                        - self.mj_data.qvel[self.left_hand_index[i] + self.qvel_offset - 1]
+                        - self.mj_data.qvel[self.left_hand_dof_index[i]]
                     )
                 )
                 right_hand_torques[i] = (
@@ -320,12 +460,12 @@ class DefaultEnv:
                     + self.unitree_bridge.right_hand_cmd.motor_cmd[i].kp
                     * (
                         self.unitree_bridge.right_hand_cmd.motor_cmd[i].q
-                        - self.mj_data.qpos[self.right_hand_index[i] + self.qpos_offset - 1]
+                        - self.mj_data.qpos[self.right_hand_qpos_index[i]]
                     )
                     + self.unitree_bridge.right_hand_cmd.motor_cmd[i].kd
                     * (
                         self.unitree_bridge.right_hand_cmd.motor_cmd[i].dq
-                        - self.mj_data.qvel[self.right_hand_index[i] + self.qvel_offset - 1]
+                        - self.mj_data.qvel[self.right_hand_dof_index[i]]
                     )
                 )
         return np.concatenate((left_hand_torques, right_hand_torques))
@@ -370,23 +510,24 @@ class DefaultEnv:
         )
         obs["secondary_imu_vel"] = pose[7:13]
 
-        obs["body_q"] = self.mj_data.qpos[self.body_joint_index + 7 - 1]
-        obs["body_dq"] = self.mj_data.qvel[self.body_joint_index + 6 - 1]
-        obs["body_ddq"] = self.mj_data.qacc[self.body_joint_index + 6 - 1]
-        obs["body_tau_est"] = self.mj_data.actuator_force[self.body_joint_index - 1]
+        obs["body_q"] = self.mj_data.qpos[self.body_qpos_index]
+        obs["body_dq"] = self.mj_data.qvel[self.body_dof_index]
+        obs["body_ddq"] = self.mj_data.qacc[self.body_dof_index]
+        obs["body_tau_est"] = self.mj_data.actuator_force[: self.num_body_dof]
         if self.num_hand_dof > 0:
-            obs["left_hand_q"] = self.mj_data.qpos[self.left_hand_index + self.qpos_offset - 1]
-            obs["left_hand_dq"] = self.mj_data.qvel[self.left_hand_index + self.qvel_offset - 1]
-            obs["left_hand_ddq"] = self.mj_data.qacc[self.left_hand_index + self.qvel_offset - 1]
-            obs["left_hand_tau_est"] = self.mj_data.actuator_force[self.left_hand_index - 1]
-            obs["right_hand_q"] = self.mj_data.qpos[self.right_hand_index + self.qpos_offset - 1]
-            obs["right_hand_dq"] = self.mj_data.qvel[self.right_hand_index + self.qvel_offset - 1]
-            obs["right_hand_ddq"] = self.mj_data.qacc[self.right_hand_index + self.qvel_offset - 1]
-            obs["right_hand_tau_est"] = self.mj_data.actuator_force[self.right_hand_index - 1]
+            obs["left_hand_q"] = self.mj_data.qpos[self.left_hand_qpos_index]
+            obs["left_hand_dq"] = self.mj_data.qvel[self.left_hand_dof_index]
+            obs["left_hand_ddq"] = self.mj_data.qacc[self.left_hand_dof_index]
+            obs["left_hand_tau_est"] = self.mj_data.actuator_force[self.num_body_dof : self.num_body_dof + self.num_hand_dof]
+            obs["right_hand_q"] = self.mj_data.qpos[self.right_hand_qpos_index]
+            obs["right_hand_dq"] = self.mj_data.qvel[self.right_hand_dof_index]
+            obs["right_hand_ddq"] = self.mj_data.qacc[self.right_hand_dof_index]
+            obs["right_hand_tau_est"] = self.mj_data.actuator_force[self.num_body_dof + self.num_hand_dof : self.num_body_dof + 2 * self.num_hand_dof]
         obs["time"] = self.mj_data.time
         return obs
 
     def sim_step(self):
+        self.pico_bridge.apply_to_sim(self)
         self.obs = self.prepare_obs()
         self.unitree_bridge.PublishLowState(self.obs)
         if self.unitree_bridge.joystick:
@@ -414,17 +555,16 @@ class DefaultEnv:
                 self.mj_data.xfrc_applied[self.band_attached_link] = np.zeros(6)
         body_torques = self.compute_body_torques()
         hand_torques = self.compute_hand_torques()
-        # -1: actuator array is 0-based while joint indices from the model are 1-based
-        self.torques[self.body_joint_index - 1] = body_torques
+        self.torques[: self.num_body_dof] = body_torques
         if self.num_hand_dof > 0:
-            self.torques[self.left_hand_index - 1] = hand_torques[: self.num_hand_dof]
-            self.torques[self.right_hand_index - 1] = hand_torques[self.num_hand_dof :]
+            self.torques[self.num_body_dof : self.num_body_dof + self.num_hand_dof] = hand_torques[: self.num_hand_dof]
+            self.torques[self.num_body_dof + self.num_hand_dof : self.num_body_dof + 2 * self.num_hand_dof] = hand_torques[self.num_hand_dof :]
 
         self.torques = np.clip(self.torques, -self.torque_limit, self.torque_limit)
 
-        if self.config["FREE_BASE"]:
-            # Prepend 6 zeros for the floating-base root DOF actuators
-            self.mj_data.ctrl = np.concatenate((np.zeros(6), self.torques))
+        if self.config.get("FREE_BASE", False):
+            self.mj_data.ctrl = np.zeros(self.mj_model.nu, dtype=float)
+            self.mj_data.ctrl[: len(self.torques)] = self.torques
         else:
             self.mj_data.ctrl = self.torques
         mujoco.mj_step(self.mj_model, self.mj_data)
@@ -507,6 +647,9 @@ class DefaultEnv:
 
     def check_fall(self):
         self.fall = False
+        if self.config.get("ENABLE_ELASTIC_BAND", False):
+            return
+
         if self.mj_data.qpos[2] < 0.2:
             self.fall = True
             print(f"Warning: Robot has fallen, height: {self.mj_data.qpos[2]:.3f} m")
@@ -560,10 +703,9 @@ class BaseSimulator:
             )
 
         try:
-            if self.config.get("INTERFACE", None):
-                ChannelFactoryInitialize(self.config["DOMAIN_ID"], self.config["INTERFACE"])
-            else:
-                ChannelFactoryInitialize(self.config["DOMAIN_ID"])
+            from gear_sonic.utils.mujoco_sim.simulator_factory import init_channel
+
+            init_channel(self.config)
         except Exception as e:
             print(f"Note: Channel factory initialization attempt: {e}")
 
@@ -599,6 +741,7 @@ class BaseSimulator:
         """Main simulation loop"""
         sim_cnt = 0
         ts = time.time()
+        print("[SONIC sim] entering simulator main loop...")
 
         try:
             while self._running and (

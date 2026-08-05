@@ -6,6 +6,8 @@ and launches the simulator (optionally with offscreen image publishing).
 
 from typing import Dict
 
+import os
+
 import tyro
 
 from gear_sonic.utils.mujoco_sim.simulator_factory import SimulatorFactory, init_channel
@@ -34,9 +36,18 @@ class SimWrapper:
 
 
 def main(config: ArgsConfig):
+    os.environ.setdefault("MUJOCO_GL", "egl")
+
+    print("[SONIC sim] starting MuJoCo sim loop...")
+    print(f"[SONIC sim] MUJOCO_GL={os.environ.get('MUJOCO_GL', 'default')}")
+
     wbc_config = config.load_wbc_yaml()
     # NOTE: we will override the interface to local if it is not specified
     wbc_config["ENV_NAME"] = config.env_name
+    # Keep the sim loop lightweight for teleop smoke tests and local debugging.
+    wbc_config["ENABLE_ONSCREEN"] = False
+    wbc_config["ENABLE_OFFSCREEN"] = False
+    print(f"[SONIC sim] viewer enabled={wbc_config.get('ENABLE_ONSCREEN', False)}")
 
     if config.enable_image_publish:
         assert (
@@ -44,6 +55,9 @@ def main(config: ArgsConfig):
         ), "enable_offscreen must be True when enable_image_publish is True"
 
     robot_model = instantiate_g1_robot_model()
+
+    print("[SONIC sim] loading WBC config...")
+    print(f"[SONIC sim] domain_id={wbc_config.get('DOMAIN_ID', 0)} interface={wbc_config.get('INTERFACE', 'default')}")
 
     sim_wrapper = SimWrapper(
         robot_model=robot_model,
@@ -53,6 +67,7 @@ def main(config: ArgsConfig):
         offscreen=wbc_config.get("ENABLE_OFFSCREEN", False),
         enable_image_publish=config.enable_image_publish,
     )
+    print("[SONIC sim] launching simulator loop...")
     # Start simulator as independent process
     SimulatorFactory.start_simulator(
         sim_wrapper.sim,
