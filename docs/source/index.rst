@@ -96,6 +96,7 @@ Documentation
    tutorials/manager
    tutorials/isaac_teleop_publisher_setup
    tutorials/vr_wholebody_teleop
+   tutorials/live_camera_teleop
    tutorials/data_collection
    tutorials/vla_workflow
    tutorials/vla_inference
