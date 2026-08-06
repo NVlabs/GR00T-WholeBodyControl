@@ -2,10 +2,12 @@
 # ruff: noqa: T201, DOC
 """Convert SOMA retargeter CSV/PKL data to motion_lib format for SONIC training.
 
-SOMA retargeter outputs G1 29-DOF motion data as CSV files (joint_pos.csv,
+SOMA retargeter outputs robot motion data as CSV files (joint_pos.csv,
 body_pos.csv, body_quat.csv) or as a joblib PKL with the same fields. This
 script converts that data into the motion_lib PKL format expected by SONIC
 training (root_trans_offset, pose_aa, dof, root_rot, fps).
+
+Supports Unitree G1 (29 DOF) and Agibot X2 Ultra (31 DOF) via --robot flag.
 
 Supports five input modes:
   1. Single motion directory with CSVs (joint_pos.csv, body_pos.csv, body_quat.csv)
@@ -15,30 +17,17 @@ Supports five input modes:
   5. Parent directory of session dirs containing Bones-SEED CSVs
 
 Usage:
-    # Single CSV directory
-    python scripts/motion/convert_soma_csv_to_motion_lib.py \
-        --input data/soma_retarget/tired_squat_003__A360 \
-        --output data/soma_test.pkl --fps 50
-
-    # Batch: parent dir with multiple motion subdirs
-    python scripts/motion/convert_soma_csv_to_motion_lib.py \
-        --input data/soma_retarget/all_demo_4seqs \
-        --output data/soma_demo_4seqs.pkl --fps 50
-
-    # Deploy PKL file
-    python scripts/motion/convert_soma_csv_to_motion_lib.py \
-        --input data/soma_retarget/bones_test.pkl \
-        --output data/soma_bones_test.pkl --fps 50
-
-    # Bones-SEED: directory of flat CSVs (single session)
-    python scripts/motion/convert_soma_csv_to_motion_lib.py \
-        --input /path/to/bones_SEED/g1/csv/210531 \
-        --output data/bones_seed_210531.pkl --fps 50
-
-    # Bones-SEED: all sessions (parent dir)
-    python scripts/motion/convert_soma_csv_to_motion_lib.py \
+    # Bones-SEED G1 CSVs (default)
+    python gear_sonic/data_process/convert_soma_csv_to_motion_lib.py \
         --input /path/to/bones_SEED/g1/csv \
-        --output data/bones_seed_all.pkl --fps 50
+        --output data/bones_seed_all.pkl --fps 30 --fps_source 120
+
+    # X2 Ultra CSVs from SOMA Retargeter
+    python gear_sonic/data_process/convert_soma_csv_to_motion_lib.py \
+        --robot x2_ultra \
+        --input /path/to/x2_ultra_csvs/ \
+        --output data/x2_ultra_motions/robot \
+        --fps 30 --fps_source 120 --individual --num_workers 16
 """
 
 import argparse
@@ -49,117 +38,100 @@ import joblib
 import numpy as np
 from scipy.spatial import transform
 
-# IsaacLab ↔ MuJoCo joint reordering (29 DOFs for G1).
-# MJ_TO_IL[mj] = il: for MuJoCo DOF index mj, gives the IsaacLab index il.
-# Source: external_dependencies/SONIC_Web/demo_python.py
-MJ_TO_IL = np.array(
-    [
-        0,
-        3,
-        6,
-        9,
-        13,
-        17,
-        1,
-        4,
-        7,
-        10,
-        14,
-        18,
-        2,
-        5,
-        8,
-        11,
-        15,
-        19,
-        21,
-        23,
-        25,
-        27,
-        12,
-        16,
-        20,
-        22,
-        24,
-        26,
-        28,
-    ],
+
+# ---------------------------------------------------------------------------
+# G1 29-DOF robot constants
+# ---------------------------------------------------------------------------
+
+G1_MJ_TO_IL = np.array(
+    [0, 3, 6, 9, 13, 17, 1, 4, 7, 10, 14, 18, 2, 5, 8, 11, 15, 19,
+     21, 23, 25, 27, 12, 16, 20, 22, 24, 26, 28],
     dtype=np.int32,
 )
 
-# G1 29-DOF axis definitions (from Humanoid_Batch / g1_29dof_rev_1_0.xml).
-# Each DOF rotates around a single axis. Hardcoded to avoid torch dependency.
-NUM_DOF = 29
-NUM_BODIES = 30  # pelvis + 29 actuated links
-DOF_AXIS = np.array(
+G1_NUM_DOF = 29
+G1_NUM_BODIES = 30
+G1_DOF_AXIS = np.array(
     [
-        [0, 1, 0],
-        [1, 0, 0],
-        [0, 0, 1],
-        [0, 1, 0],
-        [0, 1, 0],
-        [1, 0, 0],  # left leg
-        [0, 1, 0],
-        [1, 0, 0],
-        [0, 0, 1],
-        [0, 1, 0],
-        [0, 1, 0],
-        [1, 0, 0],  # right leg
-        [0, 0, 1],
-        [1, 0, 0],
-        [0, 1, 0],  # waist
-        [0, 1, 0],
-        [1, 0, 0],
-        [0, 0, 1],
-        [0, 1, 0],
-        [1, 0, 0],
-        [0, 1, 0],
-        [0, 0, 1],  # left arm
-        [0, 1, 0],
-        [1, 0, 0],
-        [0, 0, 1],
-        [0, 1, 0],
-        [1, 0, 0],
-        [0, 1, 0],
-        [0, 0, 1],  # right arm
+        [0, 1, 0], [1, 0, 0], [0, 0, 1], [0, 1, 0], [0, 1, 0], [1, 0, 0],  # left leg
+        [0, 1, 0], [1, 0, 0], [0, 0, 1], [0, 1, 0], [0, 1, 0], [1, 0, 0],  # right leg
+        [0, 0, 1], [1, 0, 0], [0, 1, 0],                                      # waist
+        [0, 1, 0], [1, 0, 0], [0, 0, 1], [0, 1, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1],  # left arm
+        [0, 1, 0], [1, 0, 0], [0, 0, 1], [0, 1, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1],  # right arm
     ],
     dtype=np.float32,
 )
 
+G1_MJCF_FILE = "g1_29dof_rev_1_0.xml"
 
-# Joint names in Bones-SEED CSV column order (after Frame + 6 root columns).
-# These are in MuJoCo/MJCF actuator order (same as g1_29dof_rev_1_0.xml motors).
-BONES_CSV_JOINT_NAMES = [
-    "left_hip_pitch_joint_dof",
-    "left_hip_roll_joint_dof",
-    "left_hip_yaw_joint_dof",
-    "left_knee_joint_dof",
-    "left_ankle_pitch_joint_dof",
-    "left_ankle_roll_joint_dof",
-    "right_hip_pitch_joint_dof",
-    "right_hip_roll_joint_dof",
-    "right_hip_yaw_joint_dof",
-    "right_knee_joint_dof",
-    "right_ankle_pitch_joint_dof",
-    "right_ankle_roll_joint_dof",
-    "waist_yaw_joint_dof",
-    "waist_roll_joint_dof",
-    "waist_pitch_joint_dof",
-    "left_shoulder_pitch_joint_dof",
-    "left_shoulder_roll_joint_dof",
-    "left_shoulder_yaw_joint_dof",
-    "left_elbow_joint_dof",
-    "left_wrist_roll_joint_dof",
-    "left_wrist_pitch_joint_dof",
-    "left_wrist_yaw_joint_dof",
-    "right_shoulder_pitch_joint_dof",
-    "right_shoulder_roll_joint_dof",
-    "right_shoulder_yaw_joint_dof",
-    "right_elbow_joint_dof",
-    "right_wrist_roll_joint_dof",
-    "right_wrist_pitch_joint_dof",
-    "right_wrist_yaw_joint_dof",
-]
+
+# ---------------------------------------------------------------------------
+# X2 Ultra 31-DOF robot constants
+# Axis order matches CSV column order from AgibotX2Ultra31DOF_CSVConfig and
+# the MuJoCo DOF mapping in gear_sonic/envs/manager_env/robots/x2_ultra.py.
+# ---------------------------------------------------------------------------
+
+X2_MJ_TO_IL = np.array(
+    [0, 3, 6, 9, 14, 19, 1, 4, 7, 10, 15, 20, 2, 5, 8, 11, 16, 21,
+     23, 25, 27, 29, 12, 17, 22, 24, 26, 28, 30, 13, 18],
+    dtype=np.int32,
+)
+
+X2_NUM_DOF = 31
+X2_NUM_BODIES = 32
+X2_DOF_AXIS = np.array(
+    [
+        [0, 1, 0], [1, 0, 0], [0, 0, 1], [0, 1, 0], [0, 1, 0], [1, 0, 0],  # left leg
+        [0, 1, 0], [1, 0, 0], [0, 0, 1], [0, 1, 0], [0, 1, 0], [1, 0, 0],  # right leg
+        [0, 0, 1], [0, 1, 0], [1, 0, 0],                                      # waist
+        [0, 1, 0], [1, 0, 0], [0, 0, 1], [0, 1, 0],                          # left shoulder+elbow
+        [0, 0, 1], [0, 1, 0], [1, 0, 0],                                      # left wrist
+        [0, 1, 0], [1, 0, 0], [0, 0, 1], [0, 1, 0],                          # right shoulder+elbow
+        [0, 0, 1], [0, 1, 0], [1, 0, 0],                                      # right wrist
+        [0, 0, 1], [0, 1, 0],                                                  # head
+    ],
+    dtype=np.float32,
+)
+
+X2_MJCF_FILE = "x2_ultra.xml"
+
+
+# ---------------------------------------------------------------------------
+# Robot config registry
+# ---------------------------------------------------------------------------
+
+ROBOT_CONFIGS = {
+    "g1": {
+        "mj_to_il": G1_MJ_TO_IL,
+        "num_dof": G1_NUM_DOF,
+        "num_bodies": G1_NUM_BODIES,
+        "dof_axis": G1_DOF_AXIS,
+        "mjcf_file": G1_MJCF_FILE,
+    },
+    "x2_ultra": {
+        "mj_to_il": X2_MJ_TO_IL,
+        "num_dof": X2_NUM_DOF,
+        "num_bodies": X2_NUM_BODIES,
+        "dof_axis": X2_DOF_AXIS,
+        "mjcf_file": X2_MJCF_FILE,
+    },
+}
+
+# Active robot config (set in main() from --robot arg)
+MJ_TO_IL = G1_MJ_TO_IL
+NUM_DOF = G1_NUM_DOF
+NUM_BODIES = G1_NUM_BODIES
+DOF_AXIS = G1_DOF_AXIS
+
+
+def set_robot(robot_type: str):
+    """Set module-level robot constants from the config registry."""
+    global MJ_TO_IL, NUM_DOF, NUM_BODIES, DOF_AXIS  # noqa: PLW0603
+    cfg = ROBOT_CONFIGS[robot_type]
+    MJ_TO_IL = cfg["mj_to_il"]
+    NUM_DOF = cfg["num_dof"]
+    NUM_BODIES = cfg["num_bodies"]
+    DOF_AXIS = cfg["dof_axis"]
 
 
 def load_bones_csv(csv_path: str) -> dict:
@@ -326,19 +298,20 @@ def downsample_sequence(entry: dict, fps_source: int, fps_target: int) -> dict:
     }
 
 
-def init_humanoid_fk():
-    """Initialize Humanoid_Batch from the G1 MJCF config.
+def init_humanoid_fk(robot_type: str = "g1"):
+    """Initialize Humanoid_Batch from the robot's MJCF config.
 
     Only needed for non-Bones-SEED inputs (deploy PKL, SOMA CSV dirs).
     Bones-SEED path uses hardcoded DOF_AXIS constants instead.
     """
     import omegaconf
 
+    cfg = ROBOT_CONFIGS[robot_type]
     motion_cfg = omegaconf.OmegaConf.create(
         {
             "asset": {
                 "assetRoot": "gear_sonic/data/assets/robot_description/mjcf/",
-                "assetFileName": "g1_29dof_rev_1_0.xml",
+                "assetFileName": cfg["mjcf_file"],
                 "urdfFileName": "",
             },
             "extend_config": [],
@@ -351,10 +324,11 @@ def init_humanoid_fk():
 
 def process_session_csvs(args_tuple):
     """Process all CSVs in a single session directory. Used by multiprocessing."""
-    session_dir, session_name, out_dir, fps, fps_source = args_tuple
+    session_dir, session_name, out_dir, fps, fps_source, robot_type = args_tuple
     import warnings
 
     warnings.filterwarnings("ignore")
+    set_robot(robot_type)
 
     csv_files = sorted([f for f in os.listdir(session_dir) if f.endswith(".csv")])
 
@@ -391,6 +365,13 @@ def main():
         "--output", required=True, help="Output path (PKL file or directory for individual PKLs)"
     )
     parser.add_argument(
+        "--robot",
+        type=str,
+        default="g1",
+        choices=list(ROBOT_CONFIGS.keys()),
+        help="Target robot type (default: g1)",
+    )
+    parser.add_argument(
         "--fps",
         type=int,
         default=30,
@@ -416,7 +397,8 @@ def main():
     )
     args = parser.parse_args()
 
-    print(f"G1 {NUM_DOF} DOFs, {NUM_BODIES} bodies (hardcoded axes)")
+    set_robot(args.robot)
+    print(f"{args.robot}: {NUM_DOF} DOFs, {NUM_BODIES} bodies")
 
     # Individual PKL mode: skip scanning, go straight to parallel per-session processing
     if args.individual:
@@ -443,10 +425,10 @@ def main():
             for d in subdirs:
                 subdir = os.path.join(args.input, d)
                 if any(f.endswith(".csv") for f in os.listdir(subdir)):
-                    session_dirs.append((subdir, d, args.output, args.fps, args.fps_source))
+                    session_dirs.append((subdir, d, args.output, args.fps, args.fps_source, args.robot))
         elif has_csvs:
             session_name = os.path.basename(args.input.rstrip("/"))
-            session_dirs.append((args.input, session_name, args.output, args.fps, args.fps_source))
+            session_dirs.append((args.input, session_name, args.output, args.fps, args.fps_source, args.robot))
 
         print(f"\nBatch converting {len(session_dirs)} sessions with {args.num_workers} workers")
         print(f"Output: {args.output}")

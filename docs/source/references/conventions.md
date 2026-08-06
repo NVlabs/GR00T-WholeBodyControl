@@ -140,3 +140,32 @@ automatically via `order_converter.py`.
 
 See [Training on New Embodiments](../user_guide/new_embodiments.md) for how to
 define these mappings for a new robot.
+
+### Traversal order details
+
+| Framework | Traversal | Sibling order |
+|-----------|-----------|---------------|
+| MuJoCo | DFS (depth-first) | XML element order |
+| Isaac Lab (URDF importer) | BFS (breadth-first) | **Alphabetical** by joint/link name |
+| PyBullet | DFS | URDF element order |
+
+**The alphabetical sibling sort in Isaac Lab is the most common source of
+mapping bugs.** It means the Isaac Lab joint order does **not** follow the order
+joints appear in the URDF XML. For example, if `torso_link` has children
+`left_shoulder_pitch_link`, `right_shoulder_pitch_link`, and `head_yaw_link`,
+Isaac Lab will order them as `head_yaw_link` (h), `left_shoulder_pitch_link` (l),
+`right_shoulder_pitch_link` (r) — regardless of their XML order.
+
+### How to verify mappings
+
+**Never hand-derive mapping arrays from the URDF XML.** Instead:
+
+1. Load the URDF in Isaac Lab, print `robot.joint_names` to get the actual order.
+2. Load the MJCF in MuJoCo, inspect `model.joint(i).name` for each index.
+3. Build the mapping arrays by matching names between the two lists.
+4. Validate by loading a known motion in both simulators and visually comparing.
+
+If the arrays are wrong, the robot will still move (no runtime error), but joints
+will be scrambled — limbs receive each other's target angles. Legs and waist
+tend to look correct because they are deep in the tree and often agree between
+DFS and BFS; arms and head are typically where mismatches appear.
