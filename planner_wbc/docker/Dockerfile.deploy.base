@@ -1,0 +1,155 @@
+# Multi-architecture Dockerfile for NVIDIA CUDA
+# Supports linux/amd64 and linux/arm64
+FROM nvidia/cuda:12.4.0-runtime-ubuntu22.04
+
+# Build info - ARGs need to be redeclared after FROM to use in RUN commands
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
+RUN echo "Building for $TARGETPLATFORM on $BUILDPLATFORM"
+
+# Avoid prompts from apt
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install minimal system dependencies
+RUN apt-get update && \
+    apt-get install -y \
+    # Basic tools
+    build-essential \
+    curl \
+    gdb \
+    git \
+    git-lfs \
+    net-tools \
+    sudo \
+    wget \
+    iputils-ping \
+    vim \
+    unzip \
+    # System services
+    udev \
+    # Graphics and X11
+    libgl1-mesa-dri \
+    libgl1-mesa-glx \
+    libglu1-mesa \
+    mesa-utils \
+    libxcb-cursor0 \
+    x11-apps \
+    xauth \
+    # EGL and GPU access
+    libegl1 \
+    libegl1-mesa \
+    libegl1-mesa-dev \
+    libgl1-mesa-dev \
+    libgles2-mesa-dev \
+    libglvnd-dev \
+    mesa-common-dev \
+    # XCB and Qt platform dependencies
+    libxcb-icccm4 \
+    libxcb-image0 \
+    libxcb-keysyms1 \
+    libxcb-randr0 \
+    libxcb-render-util0 \
+    libxcb-shape0 \
+    libxcb-xfixes0 \
+    libxcb-xinerama0 \
+    libxcb-xinput0 \
+    libxcb-xkb1 \
+    libxkbcommon-x11-0 \
+    # D-Bus and system dependencies
+    libdbus-1-3 \
+    # Other dependencies
+    libncurses5-dev \
+    libudev-dev \
+    libusb-1.0-0-dev \
+    # Python 3.10 and pip
+    python3.10 \
+    python3.10-venv \
+    python3.10-distutils \
+    python3-pip \
+    expect \
+    # ffmpeg and related libraries
+    ffmpeg \
+    libavcodec-dev \
+    libavformat-dev \
+    libavdevice-dev \
+    libavfilter-dev \
+    libavutil-dev \
+    libswresample-dev \
+    libswscale-dev \
+    # opencv
+    libgtk2.0-dev \
+    # Clean up
+    && rm -rf /var/lib/apt/lists/*
+
+# --- Install ROS 2 Humble (following official instructions) ---
+# Enable required repositories
+RUN apt-get update && apt-get install -y software-properties-common \
+    && add-apt-repository universe \
+    # Add ROS 2 GPG key and repository
+    && apt-get install -y curl gnupg lsb-release \
+    && curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" > /etc/apt/sources.list.d/ros2.list \
+    # Upgrade system to avoid removal of critical packages (see ROS 2 docs)
+    && apt-get update \
+    && apt-get upgrade -y \
+    # Install ROS 2 Humble desktop
+    && apt-get install -y ros-humble-desktop \
+    # (Optional) Install development tools
+    && apt-get install -y ros-dev-tools \
+    # Install Eclipse Cyclone DDS RMW implementation
+    && apt-get install -y ros-humble-rmw-cyclonedds-cpp \
+    # Clean up
+    && rm -rf /var/lib/apt/lists/*
+
+# Source ROS 2 setup in bashrc for all users
+RUN echo 'source /opt/ros/humble/setup.bash' >> /etc/bash.bashrc
+
+# Clone, build, and install CycloneDDS 0.10.x
+RUN git clone --branch releases/0.10.x https://github.com/eclipse-cyclonedds/cyclonedds /opt/cyclonedds && \
+    mkdir -p /opt/cyclonedds/build /opt/cyclonedds/install && \
+    cd /opt/cyclonedds/build && \
+    cmake .. -DCMAKE_INSTALL_PREFIX=../install && \
+    cmake --build . --target install && \
+    # Clean up build files to reduce image size
+    rm -rf /opt/cyclonedds/build
+
+# Set CYCLONEDDS_HOME for all users
+ENV CYCLONEDDS_HOME=/opt/cyclonedds/install
+
+# Install uv
+RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/opt/uv sh
+
+# Add uv to PATH
+ENV PATH="/opt/uv:$PATH"
+ENV UV_PYTHON=/opt/venv/bin/python
+
+# Fix dpkg state and install tmux
+RUN dpkg --configure -a && apt-get update && apt-get install -y tmux && rm -rf /var/lib/apt/lists/*
+
+# Create NVIDIA ICD config for EGL if it doesn't exist
+# Note: This might need platform-specific handling for ARM64
+RUN if [ ! -f /usr/share/glvnd/egl_vendor.d/10_nvidia.json ]; then \
+    mkdir -p /usr/share/glvnd/egl_vendor.d && \
+    printf '{\n    "file_format_version" : "1.0.0",\n    "ICD" : {\n        "library_path" : "libEGL_nvidia.so.0"\n    }\n}' | tee /usr/share/glvnd/egl_vendor.d/10_nvidia.json > /dev/null; \
+    fi
+
+# Platform-specific configurations
+RUN case "$TARGETPLATFORM" in \
+    "linux/arm64") \
+        echo "Configuring for ARM64 platform" && \
+        # Add any ARM64-specific configurations here
+        echo "export GPU_FORCE_64BIT_PTR=1" >> /etc/environment \
+        ;; \
+    "linux/amd64") \
+        echo "Configuring for AMD64 platform" && \
+        # Add any AMD64-specific configurations here
+        echo "AMD64 platform configured" \
+        ;; \
+    *) \
+        echo "Unknown platform: $TARGETPLATFORM" \
+        ;; \
+    esac
+
+# Add labels for better image management
+LABEL org.opencontainers.image.title="Multi-Arch CUDA Runtime with ROS 2 Humble"
+LABEL org.opencontainers.image.description="Multi-architecture Docker image with CUDA runtime and ROS 2 Humble"

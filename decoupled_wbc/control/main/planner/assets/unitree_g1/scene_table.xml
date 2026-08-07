@@ -1,0 +1,50 @@
+<mujoco model="g1 scene">
+  <include file="g1_with_hands_up.xml"/>
+
+  <statistic center="0.3 0 .8" extent="1" meansize="0.08"/>
+
+<visual>
+    <global offwidth="1280" offheight="720" azimuth="180" elevation="-20"/>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.1 0.1 0.1" specular="0 0 0"/>
+  </visual>
+
+  <asset>
+    <texture name="grid" type="2d" builtin="checker" rgb1=".2 .3 .4" rgb2=".1 0.15 0.2" width="512" height="512"
+      mark="cross" markrgb=".8 .8 .8"/>
+    <material name="grid" texture="grid" texrepeat="1 1" texuniform="true"/>
+    <texture type="2d" name="wood" file="assets/wood.png"/>
+    <material name="wood" texture="wood"/>
+  </asset>
+
+  <worldbody>
+    <light pos="0 0 3" directional="true"/>
+    <geom name="table" type="box" size=".6 .5 .25" mass="1" material="wood" pos="0.8 0 .3"/>
+    <body name="com_target" pos="0.5 0 .5" mocap="true">
+      <geom type="sphere" size=".06" contype="0" conaffinity="0" rgba=".6 .3 .3 .2"/>
+      <site type="sphere" size="0.01" rgba="0 0 1 1" group="1"/>
+    </body>
+    <body name="left_palm_target" pos="0.5 0 .5" quat="0 1 0 0" mocap="true">
+      <geom type="box" size=".04 .04 .04" contype="0" conaffinity="0" rgba=".6 .3 .3 .2"/>
+      <site type="sphere" size="0.01" rgba="0 0 1 1" group="1"/>
+    </body>
+    <body name="right_palm_target" pos="0.5 0 .5" quat="0 1 0 0" mocap="true">
+      <geom type="box" size=".04 .04 .04" contype="0" conaffinity="0" rgba=".6 .3 .3 .2"/>
+      <site type="sphere" size="0.01" rgba="0 0 1 1" group="1"/>
+    </body>
+    <body name="left_foot_target" pos="0.5 0 .5" quat="0 1 0 0" mocap="true">
+      <geom type="box" size=".04 .04 .04" contype="0" conaffinity="0" rgba=".6 .3 .3 .2"/>
+      <site type="sphere" size="0.01" rgba="0 0 1 1" group="1"/>
+    </body>
+    <body name="right_foot_target" pos="0.5 0 .5" quat="0 1 0 0" mocap="true">
+      <geom type="box" size=".04 .04 .04" contype="0" conaffinity="0" rgba=".6 .3 .3 .2"/>
+      <site type="sphere" size="0.01" rgba="0 0 1 1" group="1"/>
+    </body>
+    <body name="box" pos="0.4 0 0.65">
+      <freejoint name="box_joint"/>
+      <geom name="box_geom" type="box" size="0.03 0.03 0.08" mass="0.1" rgba="0 0.8 0 1"/>
+    </body>
+
+  </worldbody>
+
+
+</mujoco>
