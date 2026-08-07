@@ -17,12 +17,13 @@ class RingTripodObject(CompositeObject):
     def __init__(
         self,
         name,
+        total_size=(0.05, 0.05, 0.1),
+        density=100.0,
     ):
-
-        ### TODO: make this object more general (with more args and configuration options) later ###
-
         # Set object attributes
         self._name = name
+        self.total_size = total_size
+        self.density = density
         self.tripod_mat_name = "lightwood_mat"
 
         # Other private attributes
@@ -57,13 +58,13 @@ class RingTripodObject(CompositeObject):
             dict: args to be used by CompositeObject to generate geoms
         """
         # Initialize dict of obj args that we'll pass to the CompositeObject constructor
-        total_size = (0.05, 0.05, 0.1)
+        total_size = self.total_size
         base_args = {
             "total_size": total_size,
             "name": self.name,
             "locations_relative_to_center": False,
             "obj_types": "all",
-            "density": 100.0,
+            "density": self.density,
             # NOTE: this lower value of solref allows the thin hole wall to avoid penetration through it
             "solref": (0.02, 1.0),
             "solimp": (0.9, 0.95, 0.001),
