@@ -25,6 +25,7 @@ from planner_wbc.control.utils.keyboard_dispatcher import (
     KeyboardListenerPublisher,
     ROSKeyboardDispatcher,
 )
+from planner_wbc.control.utils.mujoco_viewer_recorder import MujocoViewerRecorder
 from planner_wbc.control.utils.ros_utils import (
     ROSManager,
     ROSMsgPublisher,
@@ -63,6 +64,20 @@ def main(config: ControlLoopConfig):
         config=wbc_config,
         wbc_version=config.wbc_version,
     )
+
+    sim_video_recorder = None
+    if env.sim and config.simulator == "mujoco":
+        sim_env = getattr(env.sim, "sim_env", None)
+        viewer = getattr(sim_env, "viewer", None)
+        if sim_env is not None and viewer is not None:
+            sim_video_recorder = MujocoViewerRecorder(
+                sim_env=sim_env,
+                output_dir=config.sim_video_output_dir,
+                fps=config.sim_video_fps,
+            )
+            sim_video_recorder.attach()
+            print("Press c to start/stop recording the current MuJoCo viewer camera.")
+
     if env.sim and not config.sim_sync_mode:
         env.start_simulator()
 
@@ -86,6 +101,8 @@ def main(config: ControlLoopConfig):
     dispatcher.register(wbc_policy)
     dispatcher.register(keyboard_listener_pub)
     dispatcher.register(keyboard_estop)
+    if sim_video_recorder is not None:
+        dispatcher.register(sim_video_recorder)
     dispatcher.start()
 
     rate = node.create_rate(config.control_frequency)
@@ -161,9 +178,7 @@ def main(config: ControlLoopConfig):
                 # Visualize stability only after simulation release and policy activation.
                 if stability_visualizer is not None:
                     elastic_band = getattr(env.sim.sim_env, "elastic_band", None)
-                    robot_released = bool(
-                        elastic_band is not None and not elastic_band.enable
-                    )
+                    robot_released = bool(elastic_band is not None and not elastic_band.enable)
                     stability_visualizer.update(
                         q=obs["q"],
                         floating_base_pose=obs["floating_base_pose"],
@@ -242,6 +257,8 @@ def main(config: ControlLoopConfig):
         print("Cleaning up...")
         # the order of the following is important
         dispatcher.stop()
+        if sim_video_recorder is not None:
+            sim_video_recorder.close()
         ros_manager.shutdown()
         env.close()
 

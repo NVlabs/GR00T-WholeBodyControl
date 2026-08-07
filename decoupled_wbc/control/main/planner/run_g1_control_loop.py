@@ -52,7 +52,16 @@ def main(config: ControlLoopConfig):
     # Initialize telemetry
     telemetry = Telemetry(window_size=100)
 
-    waist_location = "lower_and_upper_body" if config.enable_waist else "lower_body"
+    if config.direct_waist_control:
+        if config.env_type != "sim":
+            raise ValueError("direct_waist_control is simulation-only")
+        if not config.enable_waist:
+            raise ValueError("direct_waist_control requires enable_waist=True")
+        waist_location = "upper_body"
+    else:
+        waist_location = (
+            "lower_and_upper_body" if config.enable_waist else "lower_body"
+        )
     robot_model = instantiate_g1_robot_model(
         waist_location=waist_location, high_elbow_pose=config.high_elbow_pose
     )
@@ -66,7 +75,9 @@ def main(config: ControlLoopConfig):
     if env.sim and not config.sim_sync_mode:
         env.start_simulator()
 
-    wbc_policy = get_wbc_policy("g1", robot_model, wbc_config, config.upper_body_joint_speed)
+    wbc_policy = get_wbc_policy(
+        "g1", robot_model, wbc_config, init_time=time.monotonic()
+    )
 
     keyboard_listener_pub = KeyboardListenerPublisher()
     keyboard_estop = KeyboardEStop()

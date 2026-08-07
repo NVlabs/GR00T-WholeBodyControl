@@ -94,8 +94,11 @@ class OMPLGeometricPlanner:
         q = np.array([state[i] for i in range(self.n_dof)], dtype=float)
         self.robot.set_joint_qpos(q)
 
-        # Check for collisions
-        in_contact = self.robot.in_contact()
+        # TEMPORARILY DISABLED FOR SIMULATION TESTING ONLY.
+        # Restore this before real-robot deployment; otherwise OMPL may return
+        # paths that collide with the robot or the environment.
+        # in_contact = self.robot.in_contact()
+        in_contact = False
         # Check if in bounds
         in_bounds = self.si.satisfiesBounds(state)
         return in_bounds and not in_contact

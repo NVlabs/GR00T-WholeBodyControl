@@ -208,10 +208,7 @@ class PlannerServer:
         self.logger = logger
         self.state_subscriber = state_subscriber
         self.controller_interface = self.build_controller_interface(config)
-        self.ref_traj = None
-        # self.ref_traj = np.load(
-        #     os.path.join(PLANNER_DIR, "dataset", "reference_col.npy")
-        # )
+        self.ref_traj = self.load_reference_trajectory(config)
 
         xml_path = self.resolve_planning_xml(config)
         model = self.load_planning_model(xml_path)
@@ -240,6 +237,10 @@ class PlannerServer:
 
         self.logger.info(f"Planning XML: {xml_path}")
         self.logger.info(f"OMPL planner: {config.ompl_planner}")
+        self.logger.info(
+            "Reference objective: "
+            + ("enabled" if self.ref_traj is not None else "disabled")
+        )
         self.logger.info(f"Planning joints: {JOINT_NAMES_UP}")
         self.logger.info(
             f"Controller upper-body joints: {self.controller_interface.joint_names}"
@@ -307,8 +308,40 @@ class PlannerServer:
         if solution is None or len(solution) < 2:
             raise RuntimeError(f"OMPL failed to find a path in {elapsed:.3f}s")
 
+        solution = np.asarray(solution, dtype=np.float64)
+        if solution.ndim != 2 or solution.shape[1] != len(JOINT_NAMES_UP):
+            raise RuntimeError(
+                f"OMPL returned an invalid path shape: {solution.shape}"
+            )
+        start_error = float(np.max(np.abs(solution[0] - start)))
+        if goal_type == "right":
+            goal_indices = [
+                idx
+                for idx, name in enumerate(JOINT_NAMES_UP)
+                if name not in JOINT_NAMES_LEFT
+            ]
+        else:
+            goal_indices = list(range(len(JOINT_NAMES_UP)))
+        goal_error = float(
+            np.max(
+                np.abs(
+                    solution[-1, goal_indices] - goal[goal_indices]
+                )
+            )
+        )
+        if (
+            start_error > self.config.endpoint_tolerance
+            or goal_error > self.config.endpoint_tolerance
+        ):
+            raise RuntimeError(
+                "OMPL returned invalid path endpoints: "
+                f"start_error={start_error:.6f}, "
+                f"goal_error={goal_error:.6f}, "
+                f"tolerance={self.config.endpoint_tolerance:.6f}"
+            )
+
         waypoints = densify_waypoints(
-            np.asarray(solution), self.config.max_joint_step
+            solution, self.config.max_joint_step
         )
         self.logger.info(
             f"Plan ready in {elapsed:.3f}s: "
@@ -433,6 +466,75 @@ class PlannerServer:
         return "streaming"
 
     # Helper functions
+    def load_reference_trajectory(
+        self, config: PlannerConfig
+    ) -> Optional[np.ndarray]:
+        if not config.use_reference:
+            return None
+
+        reference_path = Path(config.reference_trajectory_path)
+        if not reference_path.is_absolute():
+            reference_path = PLANNER_DIR / reference_path
+        reference_path = reference_path.resolve()
+        if not reference_path.exists():
+            raise FileNotFoundError(reference_path)
+
+        if reference_path.suffix == ".npz":
+            with np.load(reference_path, allow_pickle=False) as data:
+                required = {"qpos", "joint_names"}
+                missing_keys = sorted(required.difference(data.files))
+                if missing_keys:
+                    raise KeyError(
+                        f"Reference dataset {reference_path} is missing "
+                        f"keys: {missing_keys}"
+                    )
+                reference = data["qpos"].copy()
+                joint_names = [
+                    str(name) for name in data["joint_names"].tolist()
+                ]
+            if reference.ndim != 2 or reference.shape[1] != len(joint_names):
+                raise ValueError(
+                    "Reference qpos width does not match joint_names"
+                )
+            if len(joint_names) != len(set(joint_names)):
+                raise ValueError("Reference joint_names contains duplicates")
+            name_to_index = {
+                name: idx for idx, name in enumerate(joint_names)
+            }
+            missing_joints = [
+                name for name in JOINT_NAMES_UP if name not in name_to_index
+            ]
+            if missing_joints:
+                raise ValueError(
+                    f"Reference is missing planning joints: {missing_joints}"
+                )
+            reference = reference[
+                :, [name_to_index[name] for name in JOINT_NAMES_UP]
+            ]
+        elif reference_path.suffix == ".npy":
+            reference = np.load(reference_path, allow_pickle=False)
+        else:
+            raise ValueError(
+                "Reference trajectory must be a .npy or .npz file"
+            )
+
+        reference = np.asarray(reference, dtype=np.float64)
+        expected_width = len(JOINT_NAMES_UP)
+        if reference.ndim != 2 or reference.shape[1] != expected_width:
+            raise ValueError(
+                f"Expected reference shape (N, {expected_width}), "
+                f"got {reference.shape}"
+            )
+        if reference.shape[0] < 2:
+            raise ValueError("Reference trajectory needs at least two frames")
+        if not np.isfinite(reference).all():
+            raise ValueError("Reference trajectory contains non-finite values")
+
+        self.logger.info(
+            f"Reference trajectory: {reference_path} ({reference.shape[0]} frames)"
+        )
+        return reference
+
     def build_controller_interface(
         self,
         config: PlannerConfig,

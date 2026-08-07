@@ -214,7 +214,11 @@ class BaseConfig(ArgsConfigTemplate):
 class ControlLoopConfig(BaseConfig):
     """Config for running the G1 control loop."""
 
-    pass
+    sim_video_output_dir: str = "outputs/sim_videos"
+    """Directory for videos recorded from the interactive MuJoCo viewer camera."""
+
+    sim_video_fps: float = 30.0
+    """Frame rate for videos toggled with the c key in simulation."""
 
 
 @dataclass
@@ -270,6 +274,7 @@ class ComposedCameraClientConfig:
 
     fps: float = 20.0
     """FPS of the camera viewer"""
+
 
 @dataclass
 class DataExporterConfig(BaseConfig, ComposedCameraClientConfig):

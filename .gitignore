@@ -152,6 +152,7 @@ cython_debug/
 # IDE
 .idea/
 .vscode/
+/chatgpt/
 
 # log
 outputs/
@@ -209,6 +210,9 @@ teleop_vids/
 data/
 !planner_wbc/data/
 !planner_wbc/data/**
+/dataset/
+/planner_wbc/control/dataset/
+/decoupled_wbc/control/main/planner/dataset/
 bones_seed_smpl/
 sonic_release/
 # Training output logs
@@ -227,3 +231,5 @@ pose_estimation/g1_head/
 
 # Local GEAR-SONIC planner development copy
 gear_sonic_planner/
+decoupled_wbc/control/main/planner/SIMILARITY_PLANNER.md
+decoupled_wbc/control/main/planner/run_reference_endpoint_test.sh

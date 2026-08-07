@@ -92,6 +92,7 @@ Use one of these values with `--trajectory-path`:
 control/dataset/pickup.npz
 control/dataset/retar_dualarm_18.npz
 control/dataset/retar_handover38.npz
+control/dataset/windex_l_place14.npz
 ```
 
 Example:
@@ -101,6 +102,10 @@ python planner_wbc/control/main/teleop/run_planner_policy_loop.py \
   --trajectory-path control/dataset/retar_dualarm_18.npz \
   --loop-trajectory
 ```
+
+The retargeted `windex_l_place*.npz` files contain one 17-joint demonstration at 30 FPS.
+Run them with `--planner-frequency 30`. The loader supports both their
+`(1, frames, 17)` object-array encoding and the original named `(frames, 17)` encoding.
 
 ## Stop safely
 
@@ -114,8 +119,12 @@ python planner_wbc/control/main/teleop/run_planner_policy_loop.py \
 ```text
 ]   Activate lower-body policy
 o   Deactivate lower-body policy
+c   Start/stop recording the current movable MuJoCo viewer camera
 z   Set navigation command to zero
 `   Emergency-stop/exit handler
 ```
+
+Simulation videos are saved under `outputs/sim_videos/`. Move the camera in the MuJoCo
+window before or during recording; each recorded frame uses the viewer's current camera pose.
 
 The planner publisher has no keyboard shortcuts; stop it with `Ctrl+C`.

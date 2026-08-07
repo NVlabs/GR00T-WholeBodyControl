@@ -223,7 +223,8 @@ class BaseConfig(ArgsConfigTemplate):
 class ControlLoopConfig(BaseConfig):
     """Config for running the G1 control loop."""
 
-    pass
+    direct_waist_control: bool = False
+    """Simulation-only: assign waist joints exclusively to upper-body control."""
 
 
 @dataclass
@@ -283,10 +284,16 @@ class PlannerConfig:
     initial_transition_time: float = 2.0
     """Time used to smoothly move to the first planned waypoint."""
 
+    use_reference: bool = False
+    """Use the configured trajectory for reference-biased sampling and cost."""
+
+    reference_trajectory_path: str = "dataset/retar_pour_handover_22.npz"
+    """Reference trajectory path relative to the planner package directory."""
+
     ompl_planner: str = "AORRTC"
     """OMPL geometric planner name (e.g. RRTConnect, RRTstar, BITstar, AORRTC)."""
 
-    planning_timeout: float = 1.0
+    planning_timeout: float = 5.0
     """Maximum time in seconds allowed for a single OMPL solve."""
 
     goal_type: Literal["upper_body", "bimanual", "left", "right"] = (
@@ -294,17 +301,20 @@ class PlannerConfig:
     )
     """Which part of the goal configuration OMPL should enforce."""
 
-    smooth_path: bool = True
+    smooth_path: bool = False
     """Whether to B-spline smooth the OMPL solution path."""
 
-    shortcut_path: bool = True
+    shortcut_path: bool = False
     """Whether to shortcut the OMPL solution path before smoothing."""
 
     validity_resolution: float = 0.01
     """OMPL state-validity checking resolution (fraction of extent)."""
 
-    max_joint_step: float = 0.05
+    max_joint_step: float = 0.025
     """Max per-joint delta between consecutive published waypoints (rad)."""
+
+    endpoint_tolerance: float = 1e-4
+    """Maximum endpoint error accepted before a planned path is rejected."""
 
     planning_xml: str = "simulation/g1_up.xml"
     """MuJoCo planning scene XML path relative to the planner package directory."""
@@ -314,9 +324,6 @@ class PlannerConfig:
 
     hold_final_pose: bool = True
     """Keep publishing the final waypoint after the planned trajectory finishes."""
-
-    reference_trajectory_path: Optional[str] = None
-    """Optional .npy reference trajectory for similarity-biased OMPL planning."""
 
     plan_service: str = "PlannerServer/plan"
     """ROS2 service name for plan requests (dict in / dict out)."""

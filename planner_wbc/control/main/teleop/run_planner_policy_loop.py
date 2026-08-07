@@ -16,6 +16,8 @@ from planner_wbc.control.robot_model.instantiation.g1 import instantiate_g1_robo
 from planner_wbc.control.utils.ros_utils import ROSManager, ROSMsgPublisher
 
 PLANNER_NODE_NAME = "PlannerPolicy"
+# The retargeted datasets without an explicit ``joint_names`` field use this
+# established 17-DoF qpos order.
 REQUIRED_UPPER_BODY_DATASET_JOINTS = [
     "waist_yaw_joint",
     "waist_roll_joint",
@@ -66,20 +68,59 @@ def _assert_unique(names: list[str], label: str) -> None:
         raise ValueError(f"{label} contains duplicate names: {duplicates}")
 
 
-def load_trajectory_dataset(trajectory_path: Path) -> tuple[np.ndarray, list[str]]:
+def _load_qpos_array(trajectory_path: Path) -> tuple[np.ndarray, np.ndarray | None]:
+    """Load qpos and optional joint names from either supported NPZ encoding."""
     with np.load(trajectory_path, allow_pickle=False) as data:
-        required_keys = {"qpos", "joint_names"}
-        missing_keys = sorted(required_keys.difference(data.files))
-        if missing_keys:
-            raise KeyError(f"Trajectory dataset is missing required keys: {missing_keys}")
+        if "qpos" not in data.files:
+            raise KeyError("Trajectory dataset is missing required key: 'qpos'")
 
-        qpos = data["qpos"]
-        joint_names = data["joint_names"]
+        joint_names = data["joint_names"] if "joint_names" in data.files else None
+        try:
+            qpos = data["qpos"]
+        except ValueError as exc:
+            # Retargeted windex files encode numeric qpos values in an object
+            # array, which NumPy can only decode with pickle enabled.
+            if "Object arrays cannot be loaded" not in str(exc):
+                raise
+        else:
+            return qpos, joint_names
+
+    with np.load(trajectory_path, allow_pickle=True) as data:
+        return data["qpos"], joint_names
+
+
+def load_trajectory_dataset(trajectory_path: Path) -> tuple[np.ndarray, list[str]]:
+    qpos, raw_joint_names = _load_qpos_array(trajectory_path)
+
+    try:
+        qpos = np.asarray(qpos, dtype=np.float32)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Trajectory qpos must contain only numeric values") from exc
+
+    # New retargeted files store a single demonstration as (1, frames, joints).
+    if qpos.ndim == 3:
+        if qpos.shape[0] != 1:
+            raise ValueError(
+                "Trajectory dataset contains multiple demonstrations; "
+                "select one demonstration before playback"
+            )
+        qpos = qpos[0]
 
     if qpos.ndim != 2:
         raise ValueError(f"Expected qpos.ndim == 2, got {qpos.ndim}")
     if qpos.shape[0] <= 0:
         raise ValueError("Trajectory dataset must contain at least one frame")
+
+    if raw_joint_names is None:
+        if qpos.shape[1] != len(REQUIRED_UPPER_BODY_DATASET_JOINTS):
+            raise KeyError(
+                "Trajectory dataset has no joint_names and its qpos width "
+                f"{qpos.shape[1]} does not match the known 17-joint retargeted format"
+            )
+        joint_names = REQUIRED_UPPER_BODY_DATASET_JOINTS.copy()
+    else:
+        joint_names = [str(name) for name in raw_joint_names.tolist()]
+
     if qpos.shape[1] != len(joint_names):
         raise ValueError(
             f"Trajectory qpos width {qpos.shape[1]} does not match joint_names length {len(joint_names)}"
@@ -87,10 +128,19 @@ def load_trajectory_dataset(trajectory_path: Path) -> tuple[np.ndarray, list[str
     if not np.isfinite(qpos).all():
         raise ValueError("Trajectory qpos contains non-finite values")
 
-    qpos = qpos.astype(np.float32, copy=False)
-    joint_names = [str(name) for name in joint_names.tolist()]
     _assert_unique(joint_names, "Dataset joint_names")
     return qpos, joint_names
+
+
+def load_trajectory_fps(trajectory_path: Path) -> float | None:
+    with np.load(trajectory_path, allow_pickle=False) as data:
+        if "fps" not in data.files:
+            return None
+        fps_values = np.asarray(data["fps"], dtype=np.float64).reshape(-1)
+
+    if fps_values.size != 1 or not np.isfinite(fps_values[0]) or fps_values[0] <= 0:
+        raise ValueError("Trajectory fps must contain exactly one finite value greater than zero")
+    return float(fps_values[0])
 
 
 def _build_controller_interface_from_robot_model(
@@ -115,6 +165,7 @@ def build_trajectory_runtime(config: PlannerConfig, logger) -> TrajectoryRuntime
 
     resolved_path = resolve_trajectory_path(config.trajectory_path)
     qpos, dataset_joint_names = load_trajectory_dataset(resolved_path)
+    dataset_fps = load_trajectory_fps(resolved_path)
     controller_interface = _build_controller_interface_from_robot_model(config)
 
     if len(controller_interface.indices) != len(controller_interface.joint_names):
@@ -150,7 +201,9 @@ def build_trajectory_runtime(config: PlannerConfig, logger) -> TrajectoryRuntime
         )
 
     ignored_dataset_joints = [
-        joint_name for joint_name in dataset_joint_names if joint_name not in controller_name_to_index
+        joint_name
+        for joint_name in dataset_joint_names
+        if joint_name not in controller_name_to_index
     ]
     preserved_default_joints = [
         joint_name
@@ -161,6 +214,13 @@ def build_trajectory_runtime(config: PlannerConfig, logger) -> TrajectoryRuntime
     logger.info(f"Resolved trajectory path: {resolved_path}")
     logger.info(f"qpos shape: {qpos.shape}")
     logger.info(f"Dataset joint order: {dataset_joint_names}")
+    if dataset_fps is not None:
+        logger.info(f"Dataset recording frequency: {dataset_fps}")
+        if not np.isclose(config.planner_frequency, dataset_fps):
+            logger.warning(
+                f"Planner frequency {config.planner_frequency} does not match dataset fps "
+                f"{dataset_fps}; playback speed will differ from the recorded trajectory"
+            )
     logger.info(f"Planner publishing frequency: {config.planner_frequency}")
     logger.info(f"Loop trajectory: {config.loop_trajectory}")
     logger.info(f"Controller upper-body joints: {controller_interface.joint_names}")
@@ -264,7 +324,9 @@ def main(config: PlannerConfig):
                 frame_idx += 1
             else:
                 if not hold_final_pose_printed:
-                    logger.info("Reached the final trajectory frame; holding the final trajectory pose.")
+                    logger.info(
+                        "Reached the final trajectory frame; holding the final trajectory pose."
+                    )
                     hold_final_pose_printed = True
                 frame_idx = runtime.qpos.shape[0] - 1
 
