@@ -16,7 +16,7 @@ subnet (192.168.123.0/24) rather than the entire interface.
 
 Usage:
     python3 setup_network.py                  # interactive robot + interface selection
-    python3 setup_network.py -i enp5s0        # skip interface selection
+    python3 setup_network.py -i enp5s0        # manual interface selection
 """
 
 import argparse
