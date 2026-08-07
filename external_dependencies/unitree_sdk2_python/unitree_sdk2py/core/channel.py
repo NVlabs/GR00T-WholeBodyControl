@@ -196,6 +196,13 @@ class ChannelFactory(Singleton):
         super().__init__()
 
     def Init(self, id: int, networkInterface: str = None, qos: Qos = None):
+        # Idempotent: the factory is a Singleton, and re-creating the Domain for
+        # the same process raises on cyclonedds >= 11 ("Occurred upon
+        # initialisation of a cyclonedds.domain.Domain"). gear_sonic initializes
+        # from both the control loop and the simulator in one process, so a
+        # second Init with an already-live domain must be a no-op.
+        if self.__domain is not None:
+            return True
         config = None
         # choose config
         if networkInterface is None:
