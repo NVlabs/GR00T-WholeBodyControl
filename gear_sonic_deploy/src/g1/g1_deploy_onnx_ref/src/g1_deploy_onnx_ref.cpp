@@ -1707,6 +1707,22 @@ class G1Deploy {
       return {{"token_state", token_dim, [this](std::vector<double>& buf, size_t offset) { return GatherTokenState(buf, offset); }},
               {"encoder_mode", 3, [this](std::vector<double>& buf, size_t offset) { return GatherEncoderMode(buf, offset, 2); }},
               {"encoder_mode_4", 4, [this](std::vector<double>& buf, size_t offset) { return GatherEncoderMode(buf, offset, 3); }},
+              // --- Aliases for sonic_release observation config -------------------
+              // policy/release/observation_config_sonic_release.yaml uses the
+              // current Python-side observation names, while this registry uses
+              // the legacy names. Each entry below is a pure alias to an existing,
+              // already-validated gatherer. Dimensions sum to 1750; with the leading
+              // encoder-index scalar consumed by the ONNX wrapper this yields the
+              // 1751-dim encoder input that sonic_release-derived models expect.
+              {"encoder_index", 4, [this](std::vector<double>& buf, size_t offset) { return GatherEncoderMode(buf, offset, 3); }},
+              {"command_multi_future_nonflat", 580, [this](std::vector<double>& buf, size_t offset) { return GatherMotionJointPositionsMultiFrame(buf, offset, 10, 5) && GatherMotionJointVelocitiesMultiFrame(buf, offset + 290, 10, 5); }},
+              {"motion_anchor_ori_b_mf_nonflat", 60, [this](std::vector<double>& buf, size_t offset) { return GatherMotionAnchorOrientationMutiFrame(buf, offset, 10, 5); }},
+              {"command_multi_future_lower_body", 240, [this](std::vector<double>& buf, size_t offset) { return GatherMotionJointPositionsMultiFrame(buf, offset, 10, 5, lower_body_joint_mujoco_order_in_isaaclab_index) && GatherMotionJointVelocitiesMultiFrame(buf, offset + 120, 10, 5, lower_body_joint_mujoco_order_in_isaaclab_index); }},
+              {"motion_anchor_ori_b", 6, [this](std::vector<double>& buf, size_t offset) { return GatherMotionAnchorOrientationMutiFrame(buf, offset, 1, 1); }},
+              {"smpl_joints_multi_future_local_nonflat", 720, [this](std::vector<double>& buf, size_t offset) { return GatherMotionSmplJointsMultiFrame(buf, offset, 10, 1); }},
+              {"smpl_root_ori_b_multi_future", 60, [this](std::vector<double>& buf, size_t offset) { return GatherMotionAnchorOrientationMutiFrame(buf, offset, 10, 1); }},
+              {"joint_pos_multi_future_wrist_for_smpl", 60, [this](std::vector<double>& buf, size_t offset) { return GatherMotionJointPositionsMultiFrame(buf, offset, 10, 1, wrist_joint_isaaclab_order_in_isaaclab_index); }},
+              // --- end sonic_release aliases --------------------------------------
               {"motion_joint_positions", 29, [this](std::vector<double>& buf, size_t offset) { return GatherMotionJointPositionsMultiFrame(buf, offset, 1, 1); }},
               {"motion_joint_velocities", 29, [this](std::vector<double>& buf, size_t offset) { return GatherMotionJointVelocitiesMultiFrame(buf, offset, 1, 1); }},
               {"motion_anchor_orientation", 6, [this](std::vector<double>& buf, size_t offset) { return GatherMotionAnchorOrientationMutiFrame(buf, offset, 1, 1); }},
