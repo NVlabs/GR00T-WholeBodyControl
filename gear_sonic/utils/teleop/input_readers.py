@@ -356,8 +356,24 @@ class IsaacTeleopReader:
         max_queue_size: int = 15,
         use_adb: bool = False,
         poll_hz: float = 90.0,
+        upstream_skeleton_profile: str | None = None,
     ):
         del max_queue_size
+
+        # When set, the skeleton correction is applied HERE, by isaacteleop, on the
+        # raw ByteDance orientations -- the position it will occupy once the
+        # correction moves upstream permanently. Downstream code then sees already
+        # corrected data and must not correct again.
+        self._upstream_correct = None
+        if upstream_skeleton_profile:
+            from isaacteleop.retargeting_engine.utilities import correct_body_orientations
+
+            self._upstream_correct = (correct_body_orientations, upstream_skeleton_profile)
+            logger.info(
+                "[IsaacTeleopReader] applying isaacteleop skeleton correction "
+                "upstream (profile=%s)",
+                upstream_skeleton_profile,
+            )
 
         if IsaacTeleopClient is None:
             raise RuntimeError(
@@ -448,6 +464,9 @@ class IsaacTeleopReader:
                     self._latest_controller = controller
 
             body_poses = _body_data_to_24x7(raw.get("full_body"))
+            if body_poses is not None and self._upstream_correct is not None:
+                fn, profile = self._upstream_correct
+                body_poses[:, 3:] = fn(body_poses[:, 3:], profile).astype(body_poses.dtype)
             if body_poses is None:
                 if not self._unrecognised_logged and not _attr_or_item(
                     raw.get("full_body"), "joint_positions"

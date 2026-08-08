@@ -597,7 +597,10 @@ def load_wrist_bias(skeleton_source: str):
     """
     from gear_sonic.utils.teleop.quest_skeleton_correction import WRIST_BIAS_RAD
 
-    bias = WRIST_BIAS_RAD.get(skeleton_source or "pico", ((0.0,) * 3, (0.0,) * 3))
+    # quest-upstream differs only in where the skeleton correction is applied;
+    # the wrist bias is a separate G1-level offset and applies to both.
+    key = "quest" if skeleton_source == "quest-upstream" else (skeleton_source or "pico")
+    bias = WRIST_BIAS_RAD.get(key, ((0.0,) * 3, (0.0,) * 3))
     if any(any(side) for side in bias):
         d = lambda v: ", ".join(f"{np.degrees(x):+.1f}" for x in v)  # noqa: E731
         print(
@@ -609,6 +612,61 @@ def load_wrist_bias(skeleton_source: str):
     return bias
 
 
+class AutoSkeletonSource:
+    """Resolves --skeleton-source auto from the first frames of body tracking.
+
+    Deliberately does not gate startup. An earlier auto-detect waited for the
+    headset to identify itself before letting the session proceed, which made
+    controllers look dead and the whole stack look broken; operators could not
+    tell that from a real failure. This resolves from body data that is already
+    flowing, so controllers, video and OpenXR come up exactly as they do with an
+    explicit --skeleton-source.
+
+    Requires CONFIRM_FRAMES consecutive frames to agree before committing, so a
+    single degenerate frame cannot decide. At 60 Hz that is a few tens of
+    milliseconds and no operator-visible delay.
+    """
+
+    CONFIRM_FRAMES = 5
+
+    def __init__(self):
+        self.resolved = None
+        self._candidate = None
+        self._streak = 0
+        self._refusals = 0
+
+    def offer(self, body_poses_np):
+        """Feed one frame; returns the resolved source, or None while undecided."""
+        if self.resolved is not None:
+            return self.resolved
+        from gear_sonic.utils.teleop.skeleton_source_detect import classify
+
+        source, scores = classify(body_poses_np[:, :3], body_poses_np[:, 3:])
+        if source is None:
+            self._candidate, self._streak = None, 0
+            self._refusals += 1
+            if self._refusals in (60, 600):
+                print(
+                    "[skeleton] auto-detect cannot identify the headset "
+                    f"(scores {scores}). Teleoperation is running uncorrected; "
+                    "restart with --skeleton-source pico|quest to be certain."
+                )
+            return None
+
+        if source == self._candidate:
+            self._streak += 1
+        else:
+            self._candidate, self._streak = source, 1
+
+        if self._streak >= self.CONFIRM_FRAMES:
+            self.resolved = source
+            print(
+                f"[skeleton] auto-detected {source!r} from body geometry "
+                f"(pico {scores['pico']:.1f} deg vs quest {scores['quest']:.1f} deg)"
+            )
+        return self.resolved
+
+
 def load_skeleton_correction(skeleton_source: str):
     """Return a SkeletonCorrection, or None for the native Pico path.
 
@@ -618,6 +676,14 @@ def load_skeleton_correction(skeleton_source: str):
     measured and which joints remain approximate.
     """
     if skeleton_source in (None, "pico"):
+        return None
+    if skeleton_source == "quest-upstream":
+        # Already corrected by isaacteleop in the reader; correcting again here
+        # would apply the transform twice.
+        print(
+            "[skeleton] skeleton correction supplied upstream by isaacteleop; "
+            "no in-repo correction applied."
+        )
         return None
     if skeleton_source == "quest":
         from gear_sonic.utils.teleop.quest_skeleton_correction import (
@@ -654,7 +720,9 @@ def load_skeleton_correction(skeleton_source: str):
             "and degrade on deep flexion."
         )
         return SkeletonCorrection(left, right)
-    raise ValueError(f"unknown --skeleton-source {skeleton_source!r} (expected pico|quest)")
+    raise ValueError(
+        f"unknown --skeleton-source {skeleton_source!r} (expected pico|quest|quest-upstream)"
+    )
 
 
 def compute_from_body_poses(
@@ -1390,8 +1458,14 @@ class PoseStreamer:
         self.record_idx = 0
 
         self.left_hand_ik_solver, self.right_hand_ik_solver = init_hand_ik_solvers()
-        self.skeleton_correction = load_skeleton_correction(skeleton_source)
-        self.wrist_bias = load_wrist_bias(skeleton_source)
+        self.auto_skeleton = AutoSkeletonSource() if skeleton_source == "auto" else None
+        if self.auto_skeleton is not None:
+            # Nothing to load until the first body frames identify the headset.
+            self.skeleton_correction = None
+            self.wrist_bias = load_wrist_bias("pico")
+        else:
+            self.skeleton_correction = load_skeleton_correction(skeleton_source)
+            self.wrist_bias = load_wrist_bias(skeleton_source)
         self.parent_indices = [
             -1,
             0,
@@ -1459,6 +1533,40 @@ class PoseStreamer:
         self.buffer_cleared = True
         self.step = 0
 
+    def _cross_check_auto_detection(self, resolved: str) -> None:
+        """Compare the geometry result against the headset the runtime reports.
+
+        Independent signals: geometry reads the skeleton's orientation
+        convention, the interaction profile is a fact stated by the runtime.
+        Agreement is confirmation; disagreement means one of them is wrong and
+        the operator is told rather than a robot being driven on a coin flip.
+
+        The profile needs an isaacteleop that exposes get_interaction_profile.
+        Older builds simply skip the check.
+        """
+        try:
+            from isaacteleop.deviceio import identify_headset
+
+            tracker = getattr(self.reader, "controller_tracker", None)
+            session = getattr(self.reader, "deviceio_session", None)
+            if tracker is None or session is None:
+                return
+            profile = tracker.get_interaction_profile(session)
+            reported = identify_headset(profile)
+        except (ImportError, AttributeError):
+            return
+
+        if reported is None:
+            return
+        if reported == resolved:
+            print(f"[skeleton] runtime interaction profile agrees: {profile}")
+            return
+        print(
+            f"[skeleton] WARNING: body geometry says {resolved!r} but the runtime "
+            f"interaction profile says {reported!r} ({profile}). Using {resolved!r}. "
+            "Restart with an explicit --skeleton-source if the robot misbehaves."
+        )
+
     def run_once(self):
         """Execute one iteration of the pose streaming loop."""
         sample = self.reader.get_latest()
@@ -1466,6 +1574,13 @@ class PoseStreamer:
         if sample is None:
             time.sleep(0.005)
             return
+
+        if self.auto_skeleton is not None and self.auto_skeleton.resolved is None:
+            resolved = self.auto_skeleton.offer(sample["body_poses_np"])
+            if resolved is not None:
+                self.skeleton_correction = load_skeleton_correction(resolved)
+                self.wrist_bias = load_wrist_bias(resolved)
+                self._cross_check_auto_detection(resolved)
 
         latest_data = compute_from_body_poses(
             self.parent_indices,
@@ -1697,10 +1812,14 @@ class PoseStreamer:
 def _init_input_source(
     input_source: str,
     buffer_size: int,
+    upstream_skeleton_profile: str | None = None,
 ) -> "PicoReader | input_readers.IsaacTeleopReader":
     """Create, start, and wait for readiness of the requested teleop input source."""
     if input_source == "isaac-teleop":
-        reader = input_readers.IsaacTeleopReader(max_queue_size=buffer_size)
+        reader = input_readers.IsaacTeleopReader(
+            max_queue_size=buffer_size,
+            upstream_skeleton_profile=upstream_skeleton_profile,
+        )
         reader.start()
         print("Using Isaac Teleop (in-process CloudXR / DeviceIO), waiting for data...")
         while reader.get_latest() is None:
@@ -1740,7 +1859,11 @@ def run_pico(
     input_source: str = "xrt",
 ):
     """Run body tracking with real-time visualization and ZMQ streaming."""
-    reader = _init_input_source(input_source, buffer_size)
+    reader = _init_input_source(
+        input_source,
+        buffer_size,
+        upstream_skeleton_profile="quest" if skeleton_source == "quest-upstream" else None,
+    )
     context = zmq.Context()
     socket = context.socket(zmq.PUB)
     socket.bind(f"tcp://*:{port}")
@@ -2049,7 +2172,11 @@ def run_pico_manager(
       A+X: Toggle between planner and pose mode
       A+B+X+Y: Toggle policy start/stop
     """
-    reader = _init_input_source(input_source, buffer_size)
+    reader = _init_input_source(
+        input_source,
+        buffer_size,
+        upstream_skeleton_profile="quest" if skeleton_source == "quest-upstream" else None,
+    )
 
     context = zmq.Context()
     socket = context.socket(zmq.PUB)
@@ -2386,12 +2513,19 @@ if __name__ == "__main__":
         "--skeleton-source",
         type=str,
         default="pico",
-        choices=["pico", "quest"],
+        choices=["pico", "quest", "quest-upstream", "auto"],
         help=(
-            "Headset providing body tracking. 'quest' applies a per-joint "
-            "orientation correction (see utils/teleop/quest_skeleton_correction.py); "
-            "the Quest skeleton reaches us in BD joint order but with different "
-            "orientation conventions. Manager mode only."
+            "Headset providing body tracking. 'quest' applies the per-joint "
+            "orientation correction from utils/teleop/quest_skeleton_correction.py. "
+            "'quest-upstream' applies the equivalent correction from isaacteleop "
+            "instead, at the reader, which is where it will live once the move "
+            "upstream is complete; the two are algebraically identical and exist "
+            "side by side so they can be compared. 'pico' (default) uses the native "
+            "ByteDance skeleton with no correction. 'auto' identifies the headset "
+            "from the first frames of body tracking and applies the matching "
+            "correction; it does not delay startup, but until it resolves the "
+            "skeleton is uncorrected, so prefer an explicit value when you know "
+            "the headset. Manager mode only."
         ),
     )
     args = parser.parse_args()
