@@ -558,36 +558,6 @@ class YawAccumulator:
         return self.heading
 
 
-class SkeletonCorrection:
-    """Maps a non-Pico skeleton's joint orientations onto the Pico convention.
-
-    Each joint gets a two-sided correction::
-
-        corrected[j] = left[j].inv() * local_rots[j] * right[j]
-
-    The left factor is the parent-frame rotation and decides which axis a motion
-    comes out about; the right factor is the child-frame relabelling and decides
-    the joint's rest orientation. A left multiply alone cannot do both, and
-    getting that wrong is invisible to static metrics while destabilising the
-    robot -- see utils/teleop/quest_skeleton_correction.py.
-    """
-
-    def __init__(self, left, right):
-        self.left = list(left)
-        self.right = list(right)
-
-    def apply(self, local_rots, positions=None, root_rot=None):
-        """Return ``local_rots`` rebased onto the Pico convention.
-
-        ``positions`` and ``root_rot`` are unused; kept so callers need not know
-        which correction flavour they hold.
-        """
-        return [
-            self.left[i].inv() * local_rots[i] * self.right[i]
-            for i in range(len(local_rots))
-        ]
-
-
 def load_wrist_bias(skeleton_source: str):
     """Return ((L roll, L pitch, L yaw), (R roll, R pitch, R yaw)) in radians.
 
@@ -597,9 +567,8 @@ def load_wrist_bias(skeleton_source: str):
     """
     from gear_sonic.utils.teleop.quest_skeleton_correction import WRIST_BIAS_RAD
 
-    # quest-upstream differs only in where the skeleton correction is applied;
     # the wrist bias is a separate G1-level offset and applies to both.
-    key = "quest" if skeleton_source == "quest-upstream" else (skeleton_source or "pico")
+    key = skeleton_source or "pico"
     bias = WRIST_BIAS_RAD.get(key, ((0.0,) * 3, (0.0,) * 3))
     if any(any(side) for side in bias):
         d = lambda v: ", ".join(f"{np.degrees(x):+.1f}" for x in v)  # noqa: E731
@@ -667,74 +636,14 @@ class AutoSkeletonSource:
         return self.resolved
 
 
-def load_skeleton_correction(skeleton_source: str):
-    """Return a SkeletonCorrection, or None for the native Pico path.
-
-    Quest body pose arrives already converted to the ByteDance 24-joint layout by
-    the CloudXR client SDK, but with different per-joint orientation conventions.
-    See utils/teleop/quest_skeleton_correction.py for how the offsets were
-    measured and which joints remain approximate.
-    """
-    if skeleton_source in (None, "pico"):
-        return None
-    if skeleton_source == "quest-upstream":
-        # Already corrected by isaacteleop in the reader; correcting again here
-        # would apply the transform twice.
-        print(
-            "[skeleton] skeleton correction supplied upstream by isaacteleop; "
-            "no in-repo correction applied."
-        )
-        return None
-    if skeleton_source == "quest":
-        from gear_sonic.utils.teleop.quest_skeleton_correction import (
-            INFERRED_LEG_JOINTS,
-            QUEST_TO_PICO_LEFT,
-            QUEST_TO_PICO_RIGHT,
-            STATIC_ONLY_JOINTS,
-        )
-
-        left = [sRot.from_quat(q) for q in QUEST_TO_PICO_LEFT]
-        right = [sRot.from_quat(q) for q in QUEST_TO_PICO_RIGHT]
-
-        # Safety check on the root. The root's left factor also remaps which
-        # robot axis an operator rotation drives: a factor that is not near
-        # identity about each world axis sends operator yaw to robot pitch and
-        # operator pitch to robot roll, which destabilises the robot within
-        # ~30 deg of body rotation. Refuse to run rather than rediscover that on
-        # hardware.
-        for axis, name in (((0, 1, 0), "yaw"), ((1, 0, 0), "pitch"), ((0, 0, 1), "roll")):
-            mapped = left[0].inv().apply(axis)
-            if float(np.dot(mapped, axis)) < 0.9:
-                raise ValueError(
-                    f"root skeleton correction remaps operator {name} onto a different "
-                    f"robot axis ({np.round(mapped, 2).tolist()} instead of {list(axis)}). "
-                    "This is unsafe -- see the 'Root safety' section of "
-                    "quest_skeleton_correction.py. Refusing to start."
-                )
-
-        print(
-            "[skeleton] Applying two-sided Quest->Pico orientation correction "
-            "(axis mapping verified). "
-            f"Joints {STATIC_ONLY_JOINTS} are fitted from static poses only; "
-            f"leg joints {INFERRED_LEG_JOINTS} come from Quest vision inference "
-            "and degrade on deep flexion."
-        )
-        return SkeletonCorrection(left, right)
-    raise ValueError(
-        f"unknown --skeleton-source {skeleton_source!r} (expected pico|quest|quest-upstream)"
-    )
-
-
 def compute_from_body_poses(
-    parent_indices: list, device, body_poses_np: np.ndarray, skeleton_correction=None
+    parent_indices: list, device, body_poses_np: np.ndarray
 ):
     """
     Compute local joints and body orientation from provided body_poses_np.
 
-    ``skeleton_correction`` is an optional SkeletonCorrection that rebases a
-    non-Pico skeleton onto the Pico orientation convention in parent-relative
-    space (see utils/teleop/quest_skeleton_correction.py). A plain length-24
-    sequence of scipy Rotations is also accepted.
+    Orientations arrive already on the Pico convention: a non-Pico skeleton is
+    corrected upstream by isaacteleop, in the reader.
     """
     positions = body_poses_np[:, :3]
     global_quats = body_poses_np[:, [6, 3, 4, 5]]
@@ -754,15 +663,6 @@ def compute_from_body_poses(
     # Rebase onto the Pico convention. Applied here, after the local rotations
     # exist and before they become the SMPL pose, because that is the space the
     # offsets were measured in.
-    if skeleton_correction is not None:
-        if hasattr(skeleton_correction, "apply"):
-            # The shoulder correction depends on where the arm is pointing, so
-            # it needs the positions and the root rotation, not just the index.
-            # Pass the RAW root: the arm-direction feature was sampled in the
-            # raw pelvis frame, before the Ry180 convention flip.
-            local_rots = skeleton_correction.apply(local_rots, positions, raw_global_rots[0])
-        else:
-            local_rots = [skeleton_correction[i].inv() * local_rots[i] for i in range(24)]
 
     pose_aa = np.array([rot.as_rotvec() for rot in local_rots])
 
@@ -1463,13 +1363,12 @@ class PoseStreamer:
 
         self.left_hand_ik_solver, self.right_hand_ik_solver = init_hand_ik_solvers()
         self.auto_skeleton = AutoSkeletonSource() if skeleton_source == "auto" else None
-        if self.auto_skeleton is not None:
-            # Nothing to load until the first body frames identify the headset.
-            self.skeleton_correction = None
-            self.wrist_bias = load_wrist_bias("pico")
-        else:
-            self.skeleton_correction = load_skeleton_correction(skeleton_source)
-            self.wrist_bias = load_wrist_bias(skeleton_source)
+        # The skeleton correction itself lives upstream, in the reader. Only the
+        # wrist bias stays here: it is expressed in G1 wrist joint commands, not
+        # in skeleton space, so it is robot-specific rather than headset-specific.
+        self.wrist_bias = load_wrist_bias(
+            "pico" if self.auto_skeleton is not None else skeleton_source
+        )
         self.parent_indices = [
             -1,
             0,
@@ -1582,7 +1481,11 @@ class PoseStreamer:
         if self.auto_skeleton is not None and self.auto_skeleton.resolved is None:
             resolved = self.auto_skeleton.offer(sample["body_poses_np"])
             if resolved is not None:
-                self.skeleton_correction = load_skeleton_correction(resolved)
+                # Install upstream, in the reader. Detection ran on raw frames,
+                # which is required: it identifies the headset by the very
+                # orientation convention the correction rewrites.
+                if resolved != "pico":
+                    self.reader.set_skeleton_profile(resolved)
                 self.wrist_bias = load_wrist_bias(resolved)
                 self._cross_check_auto_detection(resolved)
 
@@ -1590,7 +1493,6 @@ class PoseStreamer:
             self.parent_indices,
             self.device,
             sample["body_poses_np"],
-            skeleton_correction=self.skeleton_correction,
         )
         left_menu_button, left_trigger, right_trigger, left_grip, right_grip = get_controller_inputs(
             self.reader
@@ -1816,13 +1718,13 @@ class PoseStreamer:
 def _init_input_source(
     input_source: str,
     buffer_size: int,
-    upstream_skeleton_profile: str | None = None,
+    skeleton_profile: str | None = None,
 ) -> "PicoReader | input_readers.IsaacTeleopReader":
     """Create, start, and wait for readiness of the requested teleop input source."""
     if input_source == "isaac-teleop":
         reader = input_readers.IsaacTeleopReader(
             max_queue_size=buffer_size,
-            upstream_skeleton_profile=upstream_skeleton_profile,
+            skeleton_profile=skeleton_profile,
         )
         reader.start()
         print("Using Isaac Teleop (in-process CloudXR / DeviceIO), waiting for data...")
@@ -1866,7 +1768,7 @@ def run_pico(
     reader = _init_input_source(
         input_source,
         buffer_size,
-        upstream_skeleton_profile="quest" if skeleton_source == "quest-upstream" else None,
+        skeleton_profile="quest" if skeleton_source == "quest" else None,
     )
     context = zmq.Context()
     socket = context.socket(zmq.PUB)
@@ -2179,7 +2081,7 @@ def run_pico_manager(
     reader = _init_input_source(
         input_source,
         buffer_size,
-        upstream_skeleton_profile="quest" if skeleton_source == "quest-upstream" else None,
+        skeleton_profile="quest" if skeleton_source == "quest" else None,
     )
 
     context = zmq.Context()
@@ -2517,18 +2419,15 @@ if __name__ == "__main__":
         "--skeleton-source",
         type=str,
         default="auto",
-        choices=["auto", "pico", "quest", "quest-upstream"],
+        choices=["auto", "pico", "quest"],
         help=(
             "Headset providing body tracking. 'auto' (default) identifies it from "
             "the first frames of body tracking -- about five frames, with no delay "
             "to startup -- and applies the matching correction; if it cannot tell, "
             "it leaves the skeleton uncorrected and says so. 'pico' uses the native "
-            "ByteDance skeleton with no correction. 'quest' applies the per-joint "
-            "orientation correction from utils/teleop/quest_skeleton_correction.py. "
-            "'quest-upstream' applies the equivalent correction from isaacteleop "
-            "instead, at the reader; the two are algebraically identical and exist "
-            "side by side so they can be compared. Pass an explicit value to pin "
-            "the behaviour. Manager mode only."
+            "ByteDance skeleton with no correction. 'quest' applies the isaacteleop "
+            "per-joint orientation correction in the reader. Pass an explicit value "
+            "to pin the behaviour. Manager mode only."
         ),
     )
     args = parser.parse_args()

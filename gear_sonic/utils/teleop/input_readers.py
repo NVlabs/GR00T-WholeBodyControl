@@ -356,24 +356,21 @@ class IsaacTeleopReader:
         max_queue_size: int = 15,
         use_adb: bool = False,
         poll_hz: float = 90.0,
-        upstream_skeleton_profile: str | None = None,
+        skeleton_profile: str | None = None,
     ):
         del max_queue_size
 
-        # When set, the skeleton correction is applied HERE, by isaacteleop, on the
-        # raw ByteDance orientations -- the position it will occupy once the
-        # correction moves upstream permanently. Downstream code then sees already
-        # corrected data and must not correct again.
-        self._upstream_correct = None
-        if upstream_skeleton_profile:
-            from isaacteleop.retargeting_engine.utilities import correct_body_orientations
-
-            self._upstream_correct = (correct_body_orientations, upstream_skeleton_profile)
-            logger.info(
-                "[IsaacTeleopReader] applying isaacteleop skeleton correction "
-                "upstream (profile=%s)",
-                upstream_skeleton_profile,
-            )
+        # The skeleton correction is applied here, by isaacteleop, on the raw
+        # ByteDance orientations. Downstream code sees corrected data and must not
+        # correct again.
+        #
+        # None means pass the skeleton through untouched, which is both what a
+        # PICO needs and what --skeleton-source auto needs: detection identifies
+        # the headset from the orientation convention, so it must see raw data.
+        # set_skeleton_profile installs the correction once auto has decided.
+        self._skeleton_profile = None
+        self._correct_fn = None
+        self.set_skeleton_profile(skeleton_profile)
 
         if IsaacTeleopClient is None:
             raise RuntimeError(
@@ -397,6 +394,26 @@ class IsaacTeleopReader:
         self._last_new_data_time = time.monotonic()
         self._disconnected = threading.Event()
         self._unrecognised_logged = False
+
+
+    def set_skeleton_profile(self, profile: str | None) -> None:
+        """Install (or clear) the skeleton correction applied to incoming frames.
+
+        Safe to call while the reader thread is running: the correction is a
+        single attribute read per frame, so the worst case is one frame either
+        side of the change.
+        """
+        if not profile:
+            self._skeleton_profile, self._correct_fn = None, None
+            return
+        from isaacteleop.retargeting_engine.utilities import correct_body_orientations
+
+        self._skeleton_profile = profile
+        self._correct_fn = correct_body_orientations
+        logger.info(
+            "[IsaacTeleopReader] applying isaacteleop skeleton correction (profile=%s)",
+            profile,
+        )
 
     def start(self) -> None:
         self._client.start_streaming()
@@ -464,9 +481,11 @@ class IsaacTeleopReader:
                     self._latest_controller = controller
 
             body_poses = _body_data_to_24x7(raw.get("full_body"))
-            if body_poses is not None and self._upstream_correct is not None:
-                fn, profile = self._upstream_correct
-                body_poses[:, 3:] = fn(body_poses[:, 3:], profile).astype(body_poses.dtype)
+            correct_fn = self._correct_fn
+            if body_poses is not None and correct_fn is not None:
+                body_poses[:, 3:] = correct_fn(
+                    body_poses[:, 3:], self._skeleton_profile
+                ).astype(body_poses.dtype)
             if body_poses is None:
                 if not self._unrecognised_logged and not _attr_or_item(
                     raw.get("full_body"), "joint_positions"
