@@ -1436,6 +1436,10 @@ class PoseStreamer:
         record_dir: str,
         record_format: str,
         log_prefix: str = "PoseLoop",
+        # Manager mode always passes this through from --skeleton-source. This
+        # default governs the non-manager path, which _pose_stream_common leaves
+        # unset: "pico" keeps that path uncorrected, matching the flag's
+        # documented "Manager mode only" scope.
         skeleton_source: str = "pico",
     ):
         self.socket = socket
@@ -2164,7 +2168,7 @@ def run_pico_manager(
     enable_waist_tracking: bool = False,
     enable_smpl_vis: bool = False,
     input_source: str = "xrt",
-    skeleton_source: str = "pico",
+    skeleton_source: str = "auto",
 ):
     """
     Manager: creates shared PUB socket and runs pose/planner streamers based on current mode.
@@ -2512,20 +2516,19 @@ if __name__ == "__main__":
     parser.add_argument(
         "--skeleton-source",
         type=str,
-        default="pico",
-        choices=["pico", "quest", "quest-upstream", "auto"],
+        default="auto",
+        choices=["auto", "pico", "quest", "quest-upstream"],
         help=(
-            "Headset providing body tracking. 'quest' applies the per-joint "
+            "Headset providing body tracking. 'auto' (default) identifies it from "
+            "the first frames of body tracking -- about five frames, with no delay "
+            "to startup -- and applies the matching correction; if it cannot tell, "
+            "it leaves the skeleton uncorrected and says so. 'pico' uses the native "
+            "ByteDance skeleton with no correction. 'quest' applies the per-joint "
             "orientation correction from utils/teleop/quest_skeleton_correction.py. "
             "'quest-upstream' applies the equivalent correction from isaacteleop "
-            "instead, at the reader, which is where it will live once the move "
-            "upstream is complete; the two are algebraically identical and exist "
-            "side by side so they can be compared. 'pico' (default) uses the native "
-            "ByteDance skeleton with no correction. 'auto' identifies the headset "
-            "from the first frames of body tracking and applies the matching "
-            "correction; it does not delay startup, but until it resolves the "
-            "skeleton is uncorrected, so prefer an explicit value when you know "
-            "the headset. Manager mode only."
+            "instead, at the reader; the two are algebraically identical and exist "
+            "side by side so they can be compared. Pass an explicit value to pin "
+            "the behaviour. Manager mode only."
         ),
     )
     args = parser.parse_args()
