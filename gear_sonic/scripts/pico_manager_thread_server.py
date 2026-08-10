@@ -1396,7 +1396,11 @@ class PoseStreamer:
         Older builds simply skip the check.
         """
         try:
-            from isaacteleop.deviceio import identify_headset
+            try:
+                from isaacteleop.cloudxr import identify_headset
+            except ImportError:
+                # Layout before NVIDIA/IsaacTeleop#926 moved it out of deviceio.
+                from isaacteleop.deviceio import identify_headset
 
             tracker = getattr(self.reader, "controller_tracker", None)
             session = getattr(self.reader, "deviceio_session", None)
