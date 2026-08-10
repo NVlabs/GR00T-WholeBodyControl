@@ -370,7 +370,23 @@ class IsaacTeleopReader:
         # set_skeleton_profile installs the correction once auto has decided.
         self._skeleton_profile = None
         self._correct_fn = None
-        self.set_skeleton_profile(skeleton_profile)
+
+        # "auto" resolves here rather than in a consumer, and that placement is
+        # load-bearing. Detection has to see raw frames, and the correction has to
+        # be settled before anything downstream latches a reference from the
+        # skeleton -- ThreePointPose.calibrate_now() captures a neck frame once and
+        # never recaptures it. Resolving in a consumer that only runs in one stream
+        # mode meant calibration could happen first, on uncorrected data, and the
+        # global orientation then jumped ~121 deg when the correction arrived.
+        self._auto = None
+        self.resolved_skeleton_source = None
+        if skeleton_profile == "auto":
+            from gear_sonic.utils.teleop.skeleton_source_detect import AutoSkeletonSource
+
+            self._auto = AutoSkeletonSource()
+        else:
+            self.set_skeleton_profile(skeleton_profile)
+            self.resolved_skeleton_source = skeleton_profile or "pico"
 
         if IsaacTeleopClient is None:
             raise RuntimeError(
@@ -481,6 +497,14 @@ class IsaacTeleopReader:
                     self._latest_controller = controller
 
             body_poses = _body_data_to_24x7(raw.get("full_body"))
+            if body_poses is not None and self._auto is not None:
+                resolved = self._auto.offer(body_poses)
+                if resolved is not None:
+                    if resolved != "pico":
+                        self.set_skeleton_profile(resolved)
+                    self.resolved_skeleton_source = resolved
+                    self._auto = None
+
             correct_fn = self._correct_fn
             if body_poses is not None and correct_fn is not None:
                 body_poses[:, 3:] = correct_fn(

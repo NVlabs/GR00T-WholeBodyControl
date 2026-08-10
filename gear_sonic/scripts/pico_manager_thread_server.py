@@ -581,61 +581,6 @@ def load_wrist_bias(skeleton_source: str):
     return bias
 
 
-class AutoSkeletonSource:
-    """Resolves --skeleton-source auto from the first frames of body tracking.
-
-    Deliberately does not gate startup. An earlier auto-detect waited for the
-    headset to identify itself before letting the session proceed, which made
-    controllers look dead and the whole stack look broken; operators could not
-    tell that from a real failure. This resolves from body data that is already
-    flowing, so controllers, video and OpenXR come up exactly as they do with an
-    explicit --skeleton-source.
-
-    Requires CONFIRM_FRAMES consecutive frames to agree before committing, so a
-    single degenerate frame cannot decide. At 60 Hz that is a few tens of
-    milliseconds and no operator-visible delay.
-    """
-
-    CONFIRM_FRAMES = 5
-
-    def __init__(self):
-        self.resolved = None
-        self._candidate = None
-        self._streak = 0
-        self._refusals = 0
-
-    def offer(self, body_poses_np):
-        """Feed one frame; returns the resolved source, or None while undecided."""
-        if self.resolved is not None:
-            return self.resolved
-        from gear_sonic.utils.teleop.skeleton_source_detect import classify
-
-        source, scores = classify(body_poses_np[:, :3], body_poses_np[:, 3:])
-        if source is None:
-            self._candidate, self._streak = None, 0
-            self._refusals += 1
-            if self._refusals in (60, 600):
-                print(
-                    "[skeleton] auto-detect cannot identify the headset "
-                    f"(scores {scores}). Teleoperation is running uncorrected; "
-                    "restart with --skeleton-source pico|quest to be certain."
-                )
-            return None
-
-        if source == self._candidate:
-            self._streak += 1
-        else:
-            self._candidate, self._streak = source, 1
-
-        if self._streak >= self.CONFIRM_FRAMES:
-            self.resolved = source
-            print(
-                f"[skeleton] auto-detected {source!r} from body geometry "
-                f"(pico {scores['pico']:.1f} deg vs quest {scores['quest']:.1f} deg)"
-            )
-        return self.resolved
-
-
 def compute_from_body_poses(
     parent_indices: list, device, body_poses_np: np.ndarray
 ):
@@ -1362,12 +1307,15 @@ class PoseStreamer:
         self.record_idx = 0
 
         self.left_hand_ik_solver, self.right_hand_ik_solver = init_hand_ik_solvers()
-        self.auto_skeleton = AutoSkeletonSource() if skeleton_source == "auto" else None
+        # Detection lives in the reader, which sees raw frames in every stream
+        # mode. The manager only follows its decision, so the wrist bias tracks
+        # the headset.
+        self.auto_skeleton_pending = skeleton_source == "auto"
         # The skeleton correction itself lives upstream, in the reader. Only the
         # wrist bias stays here: it is expressed in G1 wrist joint commands, not
         # in skeleton space, so it is robot-specific rather than headset-specific.
         self.wrist_bias = load_wrist_bias(
-            "pico" if self.auto_skeleton is not None else skeleton_source
+            "pico" if self.auto_skeleton_pending else skeleton_source
         )
         self.parent_indices = [
             -1,
@@ -1478,14 +1426,10 @@ class PoseStreamer:
             time.sleep(0.005)
             return
 
-        if self.auto_skeleton is not None and self.auto_skeleton.resolved is None:
-            resolved = self.auto_skeleton.offer(sample["body_poses_np"])
+        if self.auto_skeleton_pending:
+            resolved = getattr(self.reader, "resolved_skeleton_source", None)
             if resolved is not None:
-                # Install upstream, in the reader. Detection ran on raw frames,
-                # which is required: it identifies the headset by the very
-                # orientation convention the correction rewrites.
-                if resolved != "pico":
-                    self.reader.set_skeleton_profile(resolved)
+                self.auto_skeleton_pending = False
                 self.wrist_bias = load_wrist_bias(resolved)
                 self._cross_check_auto_detection(resolved)
 
@@ -1768,7 +1712,7 @@ def run_pico(
     reader = _init_input_source(
         input_source,
         buffer_size,
-        skeleton_profile="quest" if skeleton_source == "quest" else None,
+        skeleton_profile=skeleton_source if skeleton_source in ("quest", "auto") else None,
     )
     context = zmq.Context()
     socket = context.socket(zmq.PUB)
@@ -2081,7 +2025,7 @@ def run_pico_manager(
     reader = _init_input_source(
         input_source,
         buffer_size,
-        skeleton_profile="quest" if skeleton_source == "quest" else None,
+        skeleton_profile=skeleton_source if skeleton_source in ("quest", "auto") else None,
     )
 
     context = zmq.Context()

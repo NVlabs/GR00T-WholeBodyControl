@@ -176,3 +176,56 @@ def classify(
     if scores[second] - scores[best] < min_margin_deg:
         return None, scores
     return best, scores
+
+
+class AutoSkeletonSource:
+    """Resolves --skeleton-source auto from the first frames of body tracking.
+
+    Deliberately does not gate startup. An earlier auto-detect waited for the
+    headset to identify itself before letting the session proceed, which made
+    controllers look dead and the whole stack look broken; operators could not
+    tell that from a real failure. This resolves from body data that is already
+    flowing, so controllers, video and OpenXR come up exactly as they do with an
+    explicit --skeleton-source.
+
+    Requires CONFIRM_FRAMES consecutive frames to agree before committing, so a
+    single degenerate frame cannot decide. At 60 Hz that is a few tens of
+    milliseconds and no operator-visible delay.
+    """
+
+    CONFIRM_FRAMES = 5
+
+    def __init__(self):
+        self.resolved = None
+        self._candidate = None
+        self._streak = 0
+        self._refusals = 0
+
+    def offer(self, body_poses_np):
+        """Feed one frame; returns the resolved source, or None while undecided."""
+        if self.resolved is not None:
+            return self.resolved
+        source, scores = classify(body_poses_np[:, :3], body_poses_np[:, 3:])
+        if source is None:
+            self._candidate, self._streak = None, 0
+            self._refusals += 1
+            if self._refusals in (60, 600):
+                print(
+                    "[skeleton] auto-detect cannot identify the headset "
+                    f"(scores {scores}). Teleoperation is running uncorrected; "
+                    "restart with --skeleton-source pico|quest to be certain."
+                )
+            return None
+
+        if source == self._candidate:
+            self._streak += 1
+        else:
+            self._candidate, self._streak = source, 1
+
+        if self._streak >= self.CONFIRM_FRAMES:
+            self.resolved = source
+            print(
+                f"[skeleton] auto-detected {source!r} from body geometry "
+                f"(pico {scores['pico']:.1f} deg vs quest {scores['quest']:.1f} deg)"
+            )
+        return self.resolved
