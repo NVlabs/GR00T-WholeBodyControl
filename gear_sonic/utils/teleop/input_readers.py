@@ -340,6 +340,26 @@ def _build_controller_dict(raw: dict[str, Any] | None) -> dict[str, Any] | None:
     return out
 
 
+class SkeletonCorrectionUnavailable(RuntimeError):
+    """The isaacteleop skeleton correction is needed but not importable."""
+
+
+# Deliberately actionable rather than a bare ImportError. The correction ships in
+# isaacteleop 1.5+, while this repo pins 1.3.131, so on any machine that has not
+# been bridged the import is the first thing a Quest operator hits.
+_BRIDGE_MESSAGE = (
+    "the isaacteleop skeleton correction is not available, so a {profile!r} "
+    "skeleton cannot be corrected.\n"
+    "  Driving a robot from an uncorrected Quest skeleton gives it permuted "
+    "joint axes, so this refuses rather than continuing.\n"
+    "  Fix it with:\n"
+    "      git -C ~/IsaacTeleop checkout jsepulveda/quest_remapping\n"
+    "      ./install_scripts/install_isaacteleop_skeleton_correction.sh\n"
+    "  Or run with --skeleton-source pico if you are on a PICO headset.\n"
+    "  (PICO needs no correction and is unaffected by this.)"
+)
+
+
 class IsaacTeleopReader:
     """Background reader using the in-process IsaacTeleop / CloudXR DeviceIO session.
 
@@ -379,6 +399,7 @@ class IsaacTeleopReader:
         # mode meant calibration could happen first, on uncorrected data, and the
         # global orientation then jumped ~121 deg when the correction arrived.
         self._auto = None
+        self._bridge_errors = 0
         self.resolved_skeleton_source = None
         if skeleton_profile == "auto":
             from gear_sonic.utils.teleop.skeleton_source_detect import AutoSkeletonSource
@@ -422,7 +443,10 @@ class IsaacTeleopReader:
         if not profile:
             self._skeleton_profile, self._correct_fn = None, None
             return
-        from isaacteleop.retargeting_engine.utilities import correct_body_orientations
+        try:
+            from isaacteleop.retargeting_engine.utilities import correct_body_orientations
+        except ImportError as exc:
+            raise SkeletonCorrectionUnavailable(_BRIDGE_MESSAGE.format(profile=profile)) from exc
 
         self._skeleton_profile = profile
         self._correct_fn = correct_body_orientations
@@ -500,10 +524,19 @@ class IsaacTeleopReader:
             if body_poses is not None and self._auto is not None:
                 resolved = self._auto.offer(body_poses)
                 if resolved is not None:
-                    if resolved != "pico":
-                        self.set_skeleton_profile(resolved)
-                    self.resolved_skeleton_source = resolved
-                    self._auto = None
+                    try:
+                        if resolved != "pico":
+                            self.set_skeleton_profile(resolved)
+                    except SkeletonCorrectionUnavailable as exc:
+                        # Stay unresolved and keep complaining. Detection happens
+                        # within a second of body data, long before an operator
+                        # starts the policy, so this is seen before the robot moves.
+                        self._bridge_errors += 1
+                        if self._bridge_errors in (1, 300, 3000):
+                            logger.error("[IsaacTeleopReader] %s", exc)
+                    else:
+                        self.resolved_skeleton_source = resolved
+                        self._auto = None
 
             correct_fn = self._correct_fn
             if body_poses is not None and correct_fn is not None:
