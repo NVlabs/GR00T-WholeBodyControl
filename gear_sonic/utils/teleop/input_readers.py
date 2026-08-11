@@ -399,7 +399,7 @@ class IsaacTeleopReader:
         # mode meant calibration could happen first, on uncorrected data, and the
         # global orientation then jumped ~121 deg when the correction arrived.
         self._auto = None
-        self._bridge_errors = 0
+        self._fatal: Exception | None = None
         self.resolved_skeleton_source = None
         if skeleton_profile == "auto":
             from gear_sonic.utils.teleop.skeleton_source_detect import AutoSkeletonSource
@@ -470,6 +470,10 @@ class IsaacTeleopReader:
             logger.exception("Failed to close IsaacTeleopClient cleanly")
 
     def get_latest(self) -> dict[str, Any] | None:
+        # Raised here, not in the reader thread, so it reaches the caller rather
+        # than dying silently in a background thread.
+        if self._fatal is not None:
+            raise self._fatal
         with self._lock:
             return self._latest
 
@@ -528,12 +532,17 @@ class IsaacTeleopReader:
                         if resolved != "pico":
                             self.set_skeleton_profile(resolved)
                     except SkeletonCorrectionUnavailable as exc:
-                        # Stay unresolved and keep complaining. Detection happens
-                        # within a second of body data, long before an operator
-                        # starts the policy, so this is seen before the robot moves.
-                        self._bridge_errors += 1
-                        if self._bridge_errors in (1, 300, 3000):
-                            logger.error("[IsaacTeleopReader] %s", exc)
+                        # Refuse rather than stream an uncorrected non-PICO
+                        # skeleton. Logging and continuing was tried first and is
+                        # not safe: the robot is driven with permuted joint axes
+                        # and falls, which is precisely what this detects.
+                        # Re-raised from get_latest() so it surfaces on the main
+                        # thread and stops the process, matching what an explicit
+                        # --skeleton-source quest does at startup.
+                        logger.error("[IsaacTeleopReader] %s", exc)
+                        self._fatal = exc
+                        self._stop.set()
+                        return
                     else:
                         self.resolved_skeleton_source = resolved
                         self._auto = None
