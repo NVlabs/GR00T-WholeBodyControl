@@ -7,7 +7,8 @@ CloudXR converts a Quest skeleton into the ByteDance 24-joint layout, so the
 stream is device-agnostic in every obvious respect: joint order, positions,
 validity flags, sample rate and quantisation are indistinguishable between a
 PICO 4 Ultra and a Quest 3. What does differ is the per-joint orientation
-convention -- which is exactly what quest_skeleton_correction.py corrects.
+convention -- which is exactly what the isaacteleop skeleton correction
+fixes (isaacteleop.retargeting_engine.utilities.correct_body_orientations).
 
 So classify on the relationship between the two: express each bone's direction
 (from positions, device-agnostic) in its parent joint's own frame (from the

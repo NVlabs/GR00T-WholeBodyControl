@@ -561,22 +561,29 @@ class YawAccumulator:
 def load_wrist_bias(skeleton_source: str):
     """Return ((L roll, L pitch, L yaw), (R roll, R pitch, R yaw)) in radians.
 
-    Added to the commanded G1 wrist joints. See WRIST_BIAS_RAD in
-    utils/teleop/quest_skeleton_correction.py for how the values were measured
-    and why Pico is deliberately zero.
+    Added to the commanded G1 wrist joints. The table lives upstream in
+    isaacteleop.retargeters.G1 (NVIDIA/IsaacTeleop#921), beside the skeleton
+    correction it complements, so other stacks driving a G1 from the same
+    corrected skeleton get it too. See that module for how the values were
+    measured and why Pico is deliberately zero.
     """
-    from gear_sonic.utils.teleop.quest_skeleton_correction import WRIST_BIAS_RAD
+    try:
+        from isaacteleop.retargeters.G1 import wrist_bias_for
+    except ImportError as exc:
+        raise input_readers.SkeletonCorrectionUnavailable(
+            "the isaacteleop G1 wrist bias is not available.\n"
+            "  Run ./install_scripts/install_isaacteleop_skeleton_correction.sh "
+            "with ~/IsaacTeleop on jsepulveda/quest_remapping."
+        ) from exc
 
-    # the wrist bias is a separate G1-level offset and applies to both.
-    key = skeleton_source or "pico"
-    bias = WRIST_BIAS_RAD.get(key, ((0.0,) * 3, (0.0,) * 3))
+    bias = wrist_bias_for(skeleton_source or "pico")
     if any(any(side) for side in bias):
         d = lambda v: ", ".join(f"{np.degrees(x):+.1f}" for x in v)  # noqa: E731
         print(
             f"[skeleton] wrist bias for {skeleton_source!r} (roll, pitch, yaw deg): "
             f"L [{d(bias[0])}]  R [{d(bias[1])}] "
             "(neutral alignment; roll is zeroed rather than Pico-matched -- see "
-            "quest_skeleton_correction.py)"
+            "isaacteleop.retargeters.G1.wrist_bias)"
         )
     return bias
 

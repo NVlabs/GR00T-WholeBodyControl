@@ -46,11 +46,14 @@ note() { echo "  $*"; }
 # ---------------------------------------------------------------------------
 
 SRC="$ISAACTELEOP_DIR/src/python/isaacteleop/retargeting_engine/utilities/full_body_transform.py"
+SRC_WRIST="$ISAACTELEOP_DIR/src/python/isaacteleop/retargeters/G1/wrist_bias.py"
 
 PKG="$(echo "$VENV_TELEOP"/lib/python*/site-packages/isaacteleop/retargeting_engine)"
 [ -d "$PKG" ] || fail "no isaacteleop in $VENV_TELEOP -- is the venv created? (looked for lib/python*/site-packages/isaacteleop)"
 
 DST="$PKG/utilities/full_body_transform.py"
+PKG_G1="$(dirname "$PKG")/retargeters/G1"
+DST_WRIST="$PKG_G1/wrist_bias.py"
 INIT="$PKG/utilities/__init__.py"
 TYPES="$PKG/tensor_types/standard_types.py"
 
@@ -58,7 +61,7 @@ echo "isaacteleop skeleton-correction bridge [$MODE]"
 note "source : $SRC"
 note "target : $PKG"
 
-if [ "$MODE" != "revert" ] && [ ! -f "$SRC" ]; then
+if [ "$MODE" != "revert" ] && { [ ! -f "$SRC" ] || [ ! -f "$SRC_WRIST" ]; }; then
     # Overwhelmingly the cause: the checkout is on a branch that predates #921.
     BRANCH="$(git -C "$ISAACTELEOP_DIR" branch --show-current 2>/dev/null || echo '<not a git repo>')"
     fail "$SRC does not exist.
@@ -74,6 +77,10 @@ fi
 
 if [ "$MODE" = "revert" ]; then
     [ -L "$DST" ] && { rm "$DST"; note "removed symlink"; } || note "no symlink to remove"
+    [ -L "$DST_WRIST" ] && { rm "$DST_WRIST"; note "removed wrist-bias symlink"; } || note "no wrist-bias symlink to remove"
+    if grep -q "^from .wrist_bias import" "$PKG_G1/__init__.py" 2>/dev/null; then
+        sed -i "/^from .wrist_bias import/d;/^__all__ = \[\"WRIST_BIAS_RAD\"/d" "$PKG_G1/__init__.py"; note "removed wrist-bias exports"
+    fi
     if grep -q "bridge alias for quest_remapping" "$TYPES" 2>/dev/null; then
         sed -i '/bridge alias for quest_remapping/d' "$TYPES"; note "removed NUM_BODY_JOINTS alias"
     else
@@ -144,6 +151,20 @@ PY
 }
 step "utilities/__init__ exports" "$present_exports" do_exports
 
+# 4. The G1 wrist bias, the robot-side companion to the skeleton correction.
+present_wrist="no"
+[ -L "$DST_WRIST" ] && [ "$(readlink -f "$DST_WRIST")" = "$(readlink -f "$SRC_WRIST")" ] && present_wrist="yes"
+do_wrist() { rm -f "$DST_WRIST"; ln -s "$SRC_WRIST" "$DST_WRIST"; }
+step "G1 wrist_bias.py symlink" "$present_wrist" do_wrist
+
+present_wrist_exports="no"
+grep -q "^from .wrist_bias import" "$PKG_G1/__init__.py" 2>/dev/null && present_wrist_exports="yes"
+do_wrist_exports() {
+    printf '%s\n' 'from .wrist_bias import WRIST_BIAS_RAD, wrist_bias_for' \
+                   '__all__ = ["WRIST_BIAS_RAD", "wrist_bias_for"]' >> "$PKG_G1/__init__.py"
+}
+step "G1 __init__ exports" "$present_wrist_exports" do_wrist_exports
+
 # ---------------------------------------------------------------------------
 # Prove it actually imports. A green checklist above means nothing on its own:
 # a stale symlink target or a version skew still fails here.
@@ -160,11 +181,14 @@ import sys
 try:
     from isaacteleop.retargeting_engine.utilities import (
         correct_body_orientations, SKELETON_PROFILES)
+    from isaacteleop.retargeters.G1 import wrist_bias_for
     import numpy as np
     q = np.tile([0.0, 0.0, 0.0, 1.0], (24, 1))
     assert np.array_equal(correct_body_orientations(q, "pico"), q), "pico must be identity"
     assert not np.allclose(correct_body_orientations(q, "quest"), q), "quest must change the input"
-    print("  import ok; profiles:", sorted(SKELETON_PROFILES))
+    assert wrist_bias_for("pico") == ((0.0,)*3, (0.0,)*3), "pico wrist bias must be zero"
+    assert any(any(s) for s in wrist_bias_for("quest")), "quest wrist bias must be non-zero"
+    print("  import ok; profiles:", sorted(SKELETON_PROFILES), "+ G1 wrist bias")
 except Exception as exc:  # noqa: BLE001
     print(f"  FAILED: {type(exc).__name__}: {exc}")
     sys.exit(1)
