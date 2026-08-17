@@ -101,7 +101,8 @@ class IsaacTeleopClient:
         self._head_tracker: Any = None
         self._hand_tracker: Any = None
         self._controller_tracker: Any = None
-        self._body_tracker: Any = None
+        self._body_tracker_bd: Any = None
+        self._body_tracker_meta: Any = None
         self._cloudxr_launcher: CloudXRLauncher | None = None
 
     def _clear_trackers_and_session_ref(self) -> None:
@@ -116,7 +117,8 @@ class IsaacTeleopClient:
         self._head_tracker = None
         self._hand_tracker = None
         self._controller_tracker = None
-        self._body_tracker = None
+        self._body_tracker_bd = None
+        self._body_tracker_meta = None
 
     def start_streaming(self) -> None:
         """Launch CloudXR + open OpenXR session + start DeviceIO trackers."""
@@ -132,25 +134,60 @@ class IsaacTeleopClient:
                 accept_eula=True,
                 setup_oob=self._use_adb,
                 usb_local=self._use_adb,
+                host_client=True,
             )
+            try:
+                import socket as _socket
+                import subprocess as _sp
+                from isaacteleop.cloudxr.oob_teleop_env import wss_proxy_port
+                _port = wss_proxy_port()
+                _all_ips = _sp.check_output(["hostname", "-I"], text=True).split()
+                _ips = [ip for ip in _all_ips if not ip.startswith("127.")]
+                print("[IsaacTeleopClient] Web client now served locally.")
+                print("[IsaacTeleopClient] Navigate your Quest browser to ONE of these URLs:")
+                for _ip in _ips:
+                    print(f"[IsaacTeleopClient]   https://{_ip}:{_port}/client/")
+                print("[IsaacTeleopClient] (use whichever IP is on the same subnet as your Quest)")
+            except Exception:
+                print("[IsaacTeleopClient] Web client served at https://<server-ip>:48322/client/")
 
             self._head_tracker = deviceio.HeadTracker()
             self._hand_tracker = deviceio.HandTracker()
             self._controller_tracker = deviceio.ControllerTracker()
-            self._body_tracker = deviceio.FullBodyTracker()
+            # Both full-body vendors are requested up front: which headset connects
+            # (Pico vs Quest) is not known until the browser session negotiates, so
+            # both trackers are created and polled every frame. The server keeps BD
+            # and Meta full-body data mutually exclusive (only the vendor a client is
+            # actually sending reports active), so exactly one of these is ever active
+            # at a time; _get_tracker_data() below prefers Meta when both are present.
+            # The Meta tracker impl reduces its native 84-joint skeleton down to the
+            # same 24-joint BD-shaped FullBodyPoseT as the Pico tracker (the joint
+            # selection CloudXR.js used to do in the browser), so both come back in
+            # an identical layout and no downstream code needs to know which fired.
+            self._body_tracker_bd = deviceio.FullBodyTracker()
+            self._body_tracker_meta = deviceio.FullBodyTracker()
+            vendor_config = deviceio.VendorConfig(
+                [
+                    (self._body_tracker_bd, deviceio.TrackerVendor("body.pico-xr")),
+                    (self._body_tracker_meta, deviceio.TrackerVendor("body.quest-cloudxr")),
+                ]
+            )
             trackers = [
                 self._head_tracker,
                 self._hand_tracker,
                 self._controller_tracker,
-                self._body_tracker,
+                self._body_tracker_bd,
+                self._body_tracker_meta,
             ]
-            required_extensions = deviceio.DeviceIOSession.get_required_extensions(trackers)
+            required_extensions = deviceio.DeviceIOSession.get_required_extensions(
+                trackers, vendor_config
+            )
             oxr_session = stack.enter_context(
                 oxr.OpenXRSession(self._app_name, required_extensions)
             )
             handles = oxr_session.get_handles()
             self._deviceio_session = stack.enter_context(
-                deviceio.DeviceIOSession.run(trackers, handles)
+                deviceio.DeviceIOSession.run(trackers, handles, vendor_config=vendor_config)
             )
             self._exit_stack = stack
             print("Isaac Teleop session initialized.")
@@ -187,13 +224,19 @@ class IsaacTeleopClient:
             return None
 
         session = self._deviceio_session
+        # Meta reports active only when the connected client is actually sending the
+        # Meta full-body skeleton (server-side vendor arbitration keeps BD and Meta
+        # mutually exclusive); prefer it, and fall back to BD for a Pico client.
+        full_body = self._body_tracker_meta.get_body_pose(session).data
+        if full_body is None:
+            full_body = self._body_tracker_bd.get_body_pose(session).data
         return {
             "left_controller": self._controller_tracker.get_left_controller(session).data,
             "right_controller": self._controller_tracker.get_right_controller(session).data,
             "head": self._head_tracker.get_head(session).data,
             "left_hand": self._hand_tracker.get_left_hand(session).data,
             "right_hand": self._hand_tracker.get_right_hand(session).data,
-            "full_body": self._body_tracker.get_body_pose(session).data,
+            "full_body": full_body,
         }
 
     def get_pose_by_name(self, name: str) -> np.ndarray:
