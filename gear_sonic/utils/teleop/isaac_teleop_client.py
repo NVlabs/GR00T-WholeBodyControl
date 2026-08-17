@@ -224,12 +224,20 @@ class IsaacTeleopClient:
             return None
 
         session = self._deviceio_session
-        # Meta reports active only when the connected client is actually sending the
-        # Meta full-body skeleton (server-side vendor arbitration keeps BD and Meta
-        # mutually exclusive); prefer it, and fall back to BD for a Pico client.
+        # This is the "OpenXR Extension Method" of headset identification: which
+        # full-body vendor extension actually delivered active data this frame is
+        # a fact stated by the runtime, not an inference. Meta reports active only
+        # when the connected client is actually sending the Meta full-body
+        # skeleton (server-side vendor arbitration keeps BD and Meta mutually
+        # exclusive), so exactly one of these is ever active; prefer it, and fall
+        # back to BD for a Pico client. Re-derived every frame (not cached) so a
+        # headset swap mid-session is picked up on the next poll.
         full_body = self._body_tracker_meta.get_body_pose(session).data
-        if full_body is None:
+        if full_body is not None:
+            full_body_source = "quest"
+        else:
             full_body = self._body_tracker_bd.get_body_pose(session).data
+            full_body_source = "pico" if full_body is not None else None
         return {
             "left_controller": self._controller_tracker.get_left_controller(session).data,
             "right_controller": self._controller_tracker.get_right_controller(session).data,
@@ -237,6 +245,7 @@ class IsaacTeleopClient:
             "left_hand": self._hand_tracker.get_left_hand(session).data,
             "right_hand": self._hand_tracker.get_right_hand(session).data,
             "full_body": full_body,
+            "full_body_source": full_body_source,
         }
 
     def get_pose_by_name(self, name: str) -> np.ndarray:

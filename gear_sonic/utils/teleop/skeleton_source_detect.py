@@ -27,6 +27,7 @@ And this needs body tracking to be flowing -- it cannot answer before the
 first frame arrives.
 """
 
+import collections
 from typing import Optional, Tuple
 
 import numpy as np
@@ -230,3 +231,93 @@ class AutoSkeletonSource:
                 f"(pico {scores['pico']:.1f} deg vs quest {scores['quest']:.1f} deg)"
             )
         return self.resolved
+
+
+# ---------------------------------------------------------------------------
+# Pico "motion trackers disconnected" degeneration guard.
+#
+# Confirmed by direct capture (34 poses is overkill for this one; two static
+# captures, trackers on vs. physically unplugged, sufficed): with the Pico
+# motion trackers disconnected, XR_BD_body_tracking does not mark joints
+# invalid -- every joint still reports 100% valid -- it instead freezes the
+# ENTIRE skeleton (all 24 joints, position and orientation alike) to a
+# constant pose. Measured over an 1160-sample capture, every monitored joint's
+# variance was exactly 0.0 for the whole 20s. A live operator, even standing
+# deliberately still, never got below ~0.67 deg / ~22 mm of natural jitter in
+# any 30-frame window on the least-active torso joints -- nobody holds a pose
+# with true machine-zero variance. That gap (0.0 vs. a worst case around
+# 0.05-0.5 mm/deg headroom below the smallest real reading) is what makes a
+# rolling-window "frozen" check reliable here, unlike classify() above, whose
+# signature is a per-frame orientation convention, not a temporal one.
+#
+# BD-only: this says nothing about a frozen Quest/Meta skeleton, which would
+# need its own characterization (the module docstring's original caveat).
+# ---------------------------------------------------------------------------
+
+# Torso/pelvis joints only. These move the least during normal operation, so
+# they are both the joints most likely to produce a false "frozen" reading
+# during genuine operator stillness, and -- per capture -- still measurably
+# non-zero (>=0.4 deg/frame) even then. Checking only these keeps the guard
+# cheap and avoids the arms, whose large natural motion is a poor fit for a
+# tight variance threshold.
+FROZEN_CHECK_JOINTS = (0, 1, 2, 3, 6, 9)  # PELVIS, LEFT_HIP, RIGHT_HIP, SPINE1, SPINE2, SPINE3
+
+FROZEN_WINDOW = 30  # frames; ~0.3-0.5s at typical DeviceIO poll rates
+FROZEN_ROT_EPS_DEG = 0.05
+FROZEN_POS_EPS_M = 0.0005  # 0.5 mm
+
+
+def _quat_angle_deg(q: np.ndarray, ref: np.ndarray) -> np.ndarray:
+    """Angle in degrees between each row of ``q`` (N, 4 xyzw) and one reference quat."""
+    q = q / np.linalg.norm(q, axis=-1, keepdims=True)
+    ref = ref / np.linalg.norm(ref)
+    dot = np.abs(np.clip(q @ ref, -1.0, 1.0))
+    return np.degrees(2.0 * np.arccos(dot))
+
+
+class TrackersDisconnectedDetector:
+    """Rolling-window detector for the Pico "motion trackers disconnected"
+    degenerate skeleton: the torso/pelvis joints frozen to a constant pose.
+
+    Stateful because the signature is temporal (zero motion over a window),
+    unlike ``classify()``'s per-frame orientation check. Feed it every frame
+    while operating on a Pico skeleton; call ``reset()`` when switching away
+    from Pico (or on any gap in body data) so a stale window from before the
+    gap cannot combine with fresh data after it.
+    """
+
+    def __init__(self, window: int = FROZEN_WINDOW):
+        self._window = window
+        self._pos_history: collections.deque = collections.deque(maxlen=window)
+        self._quat_history: collections.deque = collections.deque(maxlen=window)
+
+    def reset(self) -> None:
+        self._pos_history.clear()
+        self._quat_history.clear()
+
+    def push(self, positions: np.ndarray, orientations: np.ndarray) -> bool:
+        """Feed one frame; positions (24, 3), orientations (24, 4 xyzw).
+
+        Returns True once the buffered window shows every monitored joint
+        frozen (motion trackers disconnected). Returns False while the window
+        is still filling, or when real motion is present.
+        """
+        positions = np.asarray(positions, dtype=np.float64)[list(FROZEN_CHECK_JOINTS)]
+        orientations = np.asarray(orientations, dtype=np.float64)[list(FROZEN_CHECK_JOINTS)]
+        self._pos_history.append(positions)
+        self._quat_history.append(orientations)
+        if len(self._pos_history) < self._window:
+            return False
+
+        pos = np.stack(self._pos_history)  # (window, J, 3)
+        quat = np.stack(self._quat_history)  # (window, J, 4)
+
+        pos_spread = np.linalg.norm(pos.std(axis=0), axis=-1)  # (J,)
+
+        mean_q = quat.mean(axis=0)
+        mean_q = mean_q / np.linalg.norm(mean_q, axis=-1, keepdims=True)
+        rot_spread = np.array(
+            [np.std(_quat_angle_deg(quat[:, j, :], mean_q[j])) for j in range(quat.shape[1])]
+        )
+
+        return bool(np.all(pos_spread < FROZEN_POS_EPS_M) and np.all(rot_spread < FROZEN_ROT_EPS_DEG))

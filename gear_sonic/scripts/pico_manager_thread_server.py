@@ -1314,15 +1314,19 @@ class PoseStreamer:
         self.record_idx = 0
 
         self.left_hand_ik_solver, self.right_hand_ik_solver = init_hand_ik_solvers()
-        # Detection lives in the reader, which sees raw frames in every stream
-        # mode. The manager only follows its decision, so the wrist bias tracks
-        # the headset.
-        self.auto_skeleton_pending = skeleton_source == "auto"
+        # Detection lives in the reader (the OpenXR Extension Method, resolved
+        # live every frame -- see IsaacTeleopReader._run()), which sees raw frames
+        # in every stream mode. The manager only follows its decision, so the
+        # wrist bias tracks the headset. Kept reactive (checked every run_once(),
+        # not just once) because the resolved source can change mid-session: an
+        # operator in auto mode may switch XR displays without restarting.
+        self.skeleton_source_mode = skeleton_source
+        self._last_resolved_skeleton_source = None
         # The skeleton correction itself lives upstream, in the reader. Only the
         # wrist bias stays here: it is expressed in G1 wrist joint commands, not
         # in skeleton space, so it is robot-specific rather than headset-specific.
         self.wrist_bias = load_wrist_bias(
-            "pico" if self.auto_skeleton_pending else skeleton_source
+            "pico" if skeleton_source == "auto" else skeleton_source
         )
         self.parent_indices = [
             -1,
@@ -1391,44 +1395,6 @@ class PoseStreamer:
         self.buffer_cleared = True
         self.step = 0
 
-    def _cross_check_auto_detection(self, resolved: str) -> None:
-        """Compare the geometry result against the headset the runtime reports.
-
-        Independent signals: geometry reads the skeleton's orientation
-        convention, the interaction profile is a fact stated by the runtime.
-        Agreement is confirmation; disagreement means one of them is wrong and
-        the operator is told rather than a robot being driven on a coin flip.
-
-        The profile needs an isaacteleop that exposes get_interaction_profile.
-        Older builds simply skip the check.
-        """
-        try:
-            try:
-                from isaacteleop.cloudxr import identify_headset
-            except ImportError:
-                # Layout before NVIDIA/IsaacTeleop#926 moved it out of deviceio.
-                from isaacteleop.deviceio import identify_headset
-
-            tracker = getattr(self.reader, "controller_tracker", None)
-            session = getattr(self.reader, "deviceio_session", None)
-            if tracker is None or session is None:
-                return
-            profile = tracker.get_interaction_profile(session)
-            reported = identify_headset(profile)
-        except (ImportError, AttributeError):
-            return
-
-        if reported is None:
-            return
-        if reported == resolved:
-            print(f"[skeleton] runtime interaction profile agrees: {profile}")
-            return
-        print(
-            f"[skeleton] WARNING: body geometry says {resolved!r} but the runtime "
-            f"interaction profile says {reported!r} ({profile}). Using {resolved!r}. "
-            "Restart with an explicit --skeleton-source if the robot misbehaves."
-        )
-
     def run_once(self):
         """Execute one iteration of the pose streaming loop."""
         sample = self.reader.get_latest()
@@ -1437,12 +1403,12 @@ class PoseStreamer:
             time.sleep(0.005)
             return
 
-        if self.auto_skeleton_pending:
+        if self.skeleton_source_mode == "auto":
             resolved = getattr(self.reader, "resolved_skeleton_source", None)
-            if resolved is not None:
-                self.auto_skeleton_pending = False
+            if resolved is not None and resolved != self._last_resolved_skeleton_source:
+                print(f"[skeleton] auto mode: source is now {resolved!r} (OpenXR Extension Method)")
                 self.wrist_bias = load_wrist_bias(resolved)
-                self._cross_check_auto_detection(resolved)
+                self._last_resolved_skeleton_source = resolved
 
         latest_data = compute_from_body_poses(
             self.parent_indices,
