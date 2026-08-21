@@ -19,6 +19,7 @@
 #include <array>
 #include <chrono>
 #include <optional>
+#include <string>
 
 #include "../localmotion_kplanner.hpp"  // For LocomotionMode enum
 
@@ -43,6 +44,8 @@ struct CommandMessage {
   /// Optional absolute heading override (radians).  When set, the value is
   /// written directly into HeadingState.delta_heading.
   std::optional<double> delta_heading;
+  /// Optional pre-loaded reference motion folder name to select and play.
+  std::optional<std::string> motion_name;
   bool valid = false;     ///< Set to true once a message has been decoded successfully.
 };
 
@@ -105,4 +108,3 @@ struct PlannerMessage {
   /// Used to detect planner timeouts (stale data → fallback to IDLE).
   std::chrono::steady_clock::time_point timestamp{};
 };
-
