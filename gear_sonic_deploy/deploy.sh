@@ -211,6 +211,7 @@ show_usage() {
     echo "  --input-type TYPE       Set the input type (default: zmq_manager)"
     echo "  --output-type TYPE      Set the output type (default: ros2)"
     echo "  --zmq-host HOST         Set the ZMQ host (default: localhost)"
+    echo "  --deploy-yes            Skip the 'Proceed with deployment?' prompt (auto-confirm)"
     echo ""
     echo "Interface modes:"
     echo "  sim              Use loopback interface for simulation (MuJoCo)"
@@ -251,6 +252,7 @@ MOTION_DATA="$MOTION_DATA_DEFAULT"
 INPUT_TYPE="$INPUT_TYPE_DEFAULT"
 OUTPUT_TYPE="$OUTPUT_TYPE_DEFAULT"
 ZMQ_HOST="$ZMQ_HOST_DEFAULT"
+AUTO_YES=false
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -314,6 +316,10 @@ while [[ $# -gt 0 ]]; do
             fi
             ZMQ_HOST="$2"
             shift 2
+            ;;
+        --deploy-yes)
+            AUTO_YES=true
+            shift
             ;;
         sim|real)
             INTERFACE_MODE="$1"
@@ -544,7 +550,12 @@ else
     echo -e "${YELLOW}📋 This will start the simulation control system.${NC}"
 fi
 echo ""
-read -p "$(echo -e ${GREEN}Proceed with deployment? [Y/n]: ${NC})" confirm
+if [[ "$AUTO_YES" == "true" ]]; then
+    confirm="y"
+    echo -e "${GREEN}Proceed with deployment? [Y/n]: y (auto-confirmed via --deploy-yes)${NC}"
+else
+    read -p "$(echo -e ${GREEN}Proceed with deployment? [Y/n]: ${NC})" confirm
+fi
 
 if [[ "$confirm" =~ ^[Yy]$ ]] || [[ -z "$confirm" ]]; then
     echo ""
