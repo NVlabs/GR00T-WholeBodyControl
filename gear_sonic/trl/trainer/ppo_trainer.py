@@ -733,6 +733,7 @@ class TRLPPOTrainer(PPOTrainer):  # noqa: F405
         self.use_padding_mask = self.config.get("use_padding_mask", False)
         self.ppo_shuffle_every_epoch = self.config.get("ppo_shuffle_every_epoch", True)
         self.empty_cache_every_n_ppo_epoch = self.config.get("empty_cache_every_n_ppo_epoch", -1)
+        self.defer_episode_buffer_updates = self.config.get("defer_episode_buffer_updates", False)
 
         self.entropy_coef = self.config.entropy_coef
         self.desired_kl = self.config.desired_kl
@@ -906,6 +907,7 @@ class TRLPPOTrainer(PPOTrainer):  # noqa: F405
         self.storage.clear()
 
         dones = torch.zeros(self.env.num_envs, device=device)
+        deferred_rewards, deferred_lengths = [], []
         with torch.no_grad():
             for i in range(self.num_steps_per_env):  # noqa: B007
                 # Compute the actions and values
@@ -964,11 +966,30 @@ class TRLPPOTrainer(PPOTrainer):  # noqa: F405
                 self._process_env_step(rewards, dones, infos)
                 self.cur_reward_sum += rewards_stored
                 self.cur_episode_length += 1
-                new_ids = (dones > 0).nonzero(as_tuple=False)
-                self.state.rewbuffer.extend(self.cur_reward_sum[new_ids].cpu().numpy().tolist())
-                self.state.lenbuffer.extend(self.cur_episode_length[new_ids].cpu().numpy().tolist())
-                self.cur_reward_sum[new_ids] = 0
-                self.cur_episode_length[new_ids] = 0
+                if self.defer_episode_buffer_updates:
+                    done_mask = dones > 0
+                    deferred_rewards.append(self.cur_reward_sum[done_mask])
+                    deferred_lengths.append(self.cur_episode_length[done_mask])
+                    self.cur_reward_sum.masked_fill_(done_mask.unsqueeze(-1), 0)
+                    self.cur_episode_length.masked_fill_(done_mask, 0)
+                else:
+                    new_ids = (dones > 0).nonzero(as_tuple=False)
+                    self.state.rewbuffer.extend(
+                        self.cur_reward_sum[new_ids].cpu().numpy().tolist()
+                    )
+                    self.state.lenbuffer.extend(
+                        self.cur_episode_length[new_ids].cpu().numpy().tolist()
+                    )
+                    self.cur_reward_sum[new_ids] = 0
+                    self.cur_episode_length[new_ids] = 0
+
+            if self.defer_episode_buffer_updates:
+                self.state.rewbuffer.extend(
+                    torch.cat(deferred_rewards).unsqueeze(1).cpu().numpy().tolist()
+                )
+                self.state.lenbuffer.extend(
+                    torch.cat(deferred_lengths).unsqueeze(1).cpu().numpy().tolist()
+                )
 
             policy_model.clear_rollout()
             # gc.collect()
