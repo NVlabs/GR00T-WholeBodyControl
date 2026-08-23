@@ -113,6 +113,57 @@ def _enable_shared_observation_cache(env, config):
     manager._sonic_shared_cache_enabled = True
 
 
+def _enable_fast_circular_buffer(config):
+    """Remove redundant history-buffer copies in Isaac Lab's circular buffer."""
+    if not config.get("sonic_fast_circular_buffer", True):
+        return
+
+    import torch
+    from isaaclab.utils.buffers import CircularBuffer
+
+    if getattr(CircularBuffer, "_sonic_fast_enabled", False):
+        return
+
+    def fast_reset(self, batch_ids=None):
+        self._sonic_needs_init = True
+        batch_ids = slice(None) if batch_ids is None else batch_ids
+        self._num_pushes[batch_ids] = 0
+        if self._buffer is not None:
+            self._buffer[:, batch_ids, :] = 0.0
+
+    def fast_append(self, data):
+        if data.shape[0] != self.batch_size:
+            raise ValueError(
+                f"The input data has '{data.shape[0]}' batch size while expecting "
+                f"'{self.batch_size}'"
+            )
+        data = data.to(self._device)
+        if self._buffer is None:
+            self._pointer = -1
+            self._buffer = torch.empty(
+                (self.max_length, *data.shape), dtype=data.dtype, device=self._device
+            )
+            self._sonic_needs_init = True
+        self._pointer = (self._pointer + 1) % self.max_length
+        self._buffer[self._pointer] = data
+        if self._sonic_needs_init:
+            first_push = self._num_pushes == 0
+            self._buffer[:, first_push] = data[first_push]
+            self._sonic_needs_init = False
+        self._num_pushes += 1
+
+    def fast_buffer(self):
+        shifted = torch.roll(
+            self._buffer, shifts=self.max_length - self._pointer - 1, dims=0
+        )
+        return shifted.transpose(0, 1)
+
+    CircularBuffer.reset = fast_reset
+    CircularBuffer.append = fast_append
+    CircularBuffer.buffer = property(fast_buffer)
+    CircularBuffer._sonic_fast_enabled = True
+
+
 def resume_training(config):
     if config.get("checkpoint", None) is not None:
         last_existing_checkpoint = config.checkpoint
@@ -320,6 +371,8 @@ def main(config: OmegaConf):
             app_launcher = AppLauncher(args_cli)
 
         simulation_app = app_launcher.app
+
+    _enable_fast_circular_buffer(config)
 
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
