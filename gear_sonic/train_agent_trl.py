@@ -164,6 +164,31 @@ def _enable_fast_circular_buffer(config):
     CircularBuffer._sonic_fast_enabled = True
 
 
+def _enable_fast_command_reset(env, config):
+    """Transfer all command reset metrics with a single device synchronization."""
+    if not config.get("sonic_fast_command_reset", True):
+        return
+
+    from types import MethodType
+
+    import torch
+
+    def fast_reset(self, env_ids=None):
+        env_ids = slice(None) if env_ids is None else env_ids
+        extras = {}
+        if self.metrics:
+            values = torch.stack([value[env_ids].mean() for value in self.metrics.values()])
+            extras = dict(zip(self.metrics, values.cpu().tolist()))
+        for value in self.metrics.values():
+            value[env_ids] = 0.0
+        self.command_counter[env_ids] = 0
+        self._resample(env_ids)
+        return extras
+
+    for term in env.env.command_manager._terms.values():  # noqa: SLF001
+        term.reset = MethodType(fast_reset, term)
+
+
 def resume_training(config):
     if config.get("checkpoint", None) is not None:
         last_existing_checkpoint = config.checkpoint
@@ -415,6 +440,7 @@ def main(config: OmegaConf):
     env_config.config.experiment_dir = str(Path(config.experiment_dir))
 
     env = create_manager_env(config, device, args_cli)
+    _enable_fast_command_reset(env, config)
     _enable_shared_observation_cache(env, config)
     if config.get("replay", False):
         _save_video_path = config.get("replay_save_video", None)
