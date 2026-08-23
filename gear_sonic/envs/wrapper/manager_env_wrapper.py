@@ -65,6 +65,7 @@ class ManagerEnvWrapper:
         self._action_ylim = float(self.config.get("action_plot_ylim", 10.0))
         self._plot_window = int(self.config.get("action_plot_window", 200))
         self._step_counter = 0
+        self._store_env_actions = bool(self.config.get("store_env_actions", True))
         self._action_fig = None
         self._action_lines = None
         self._action_hist = None
@@ -970,8 +971,9 @@ class ManagerEnvWrapper:
         # Store obs for action_transform_module when obs_dict is not provided in next step()
         self._last_obs_dict = new_obs
         self.extras = extras
-        # Store env_actions for callbacks (e.g., MultiLatentSaveCallback)
-        extras["env_actions"] = env_actions.detach().cpu()
+        # Store env_actions for callbacks (e.g., MultiLatentSaveCallback) only when requested.
+        if self._store_env_actions:
+            extras["env_actions"] = env_actions.detach().cpu()
         return new_obs, rew, dones, extras
 
     def get_env_data(self, key):

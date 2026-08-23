@@ -36,6 +36,7 @@ config:
   save_rendering_dir: ${experiment_dir}/renderings_training
   experiment_dir: ${experiment_dir}
   terrain_type: plane # "0: plane" or "1: trimesh"
+  store_env_actions: false # Set to true to restore the original behavior (copy actions to the CPU every step).
 
   # Object mass override (kg). Set to override USD-defined mass.
   # Example: ++manager_env.config.object_mass=0.1
