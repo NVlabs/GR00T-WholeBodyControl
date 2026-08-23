@@ -66,6 +66,9 @@ class ManagerEnvWrapper:
         self._plot_window = int(self.config.get("action_plot_window", 200))
         self._step_counter = 0
         self._store_env_actions = bool(self.config.get("store_env_actions", True))
+        self._collect_adaptive_sampling_diagnostics = bool(
+            self.config.get("collect_adaptive_sampling_diagnostics", True)
+        )
         self._action_fig = None
         self._action_lines = None
         self._action_hist = None
@@ -919,7 +922,11 @@ class ManagerEnvWrapper:
                 extras["to_log"][k] = v
             else:
                 extras["to_log"][k] = torch.tensor(v, dtype=torch.float)
-        if self._motion_lib is not None and self._motion_lib.use_adaptive_sampling:
+        if (
+            self._collect_adaptive_sampling_diagnostics
+            and self._motion_lib is not None
+            and self._motion_lib.use_adaptive_sampling
+        ):
             extras["to_log"][
                 "adp_samp/num_episodes_min"
             ] = self._motion_lib.adp_samp_num_episodes.min()

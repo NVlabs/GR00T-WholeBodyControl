@@ -37,6 +37,7 @@ config:
   experiment_dir: ${experiment_dir}
   terrain_type: plane # "0: plane" or "1: trimesh"
   store_env_actions: false # Set to true to restore the original behavior (copy actions to the CPU every step).
+  collect_adaptive_sampling_diagnostics: false # Set to true to restore the original behavior (collect sampling diagnostics every step).
 
   # Object mass override (kg). Set to override USD-defined mass.
   # Example: ++manager_env.config.object_mass=0.1
