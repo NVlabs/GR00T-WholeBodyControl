@@ -70,6 +70,49 @@ from gear_sonic.utils.obs_utils import get_group_term_obs_shape
 register_rl_resolvers()
 
 
+def _enable_shared_observation_cache(env, config):
+    """Reuse deterministic raw observation terms across policy and critic groups."""
+    if not config.get("sonic_shared_observation_cache", True):
+        return
+
+    manager = env.env.observation_manager
+    if getattr(manager, "_sonic_shared_cache_enabled", False):
+        return
+
+    shared_names = {"actions", "base_ang_vel", "joint_pos", "joint_vel"}
+    for group_name, term_names in manager._group_obs_term_names.items():  # noqa: SLF001
+        term_cfgs = manager._group_obs_term_cfgs[group_name]  # noqa: SLF001
+        for term_name, term_cfg in zip(term_names, term_cfgs):
+            if term_name not in shared_names or term_cfg.params:
+                continue
+            original = term_cfg.func
+            cache_key = (term_name, id(original))
+
+            def cached_term(
+                env_obj, *args, _original=original, _cache_key=cache_key, **kwargs
+            ):
+                cache = getattr(manager, "_sonic_raw_obs_cache", None)
+                if cache is None:
+                    return _original(env_obj, *args, **kwargs)
+                if _cache_key not in cache:
+                    cache[_cache_key] = _original(env_obj, *args, **kwargs)
+                return cache[_cache_key]
+
+            term_cfg.func = cached_term
+
+    original_compute = manager.compute
+
+    def cached_compute(update_history=False):
+        manager._sonic_raw_obs_cache = {}
+        try:
+            return original_compute(update_history=update_history)
+        finally:
+            manager._sonic_raw_obs_cache = None
+
+    manager.compute = cached_compute
+    manager._sonic_shared_cache_enabled = True
+
+
 def resume_training(config):
     if config.get("checkpoint", None) is not None:
         last_existing_checkpoint = config.checkpoint
@@ -319,6 +362,7 @@ def main(config: OmegaConf):
     env_config.config.experiment_dir = str(Path(config.experiment_dir))
 
     env = create_manager_env(config, device, args_cli)
+    _enable_shared_observation_cache(env, config)
     if config.get("replay", False):
         _save_video_path = config.get("replay_save_video", None)
         env.run_replay(
