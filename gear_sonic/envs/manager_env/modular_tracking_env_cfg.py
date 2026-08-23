@@ -970,6 +970,9 @@ class ModularTrackingEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
         self.sim.physx.gpu_max_rigid_patch_count = 10 * 2**15
+        self.sim.physx.gpu_max_num_partitions = config.get(
+            "gpu_max_num_partitions", self.sim.physx.gpu_max_num_partitions
+        )
 
         # Increase collision stack size for scenes with complex collision meshes (e.g. staircases)
         gpu_collision_stack_size_exp = config.get("gpu_collision_stack_size_exp", 26)

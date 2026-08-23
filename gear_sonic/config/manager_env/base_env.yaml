@@ -30,6 +30,7 @@ config:
   decimation: 4
   episode_length_s: 10.0
   sim_dt: 0.005
+  gpu_max_num_partitions: 1 # Use 8 to restore IsaacLab's original default behavior.
   viewer_eye: [4.5, 0.0, 6.0]
   viewer_lookat: [0.0, 0.0, 2.0]
   render_results: false
