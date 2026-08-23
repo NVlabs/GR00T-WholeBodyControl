@@ -734,6 +734,7 @@ class TRLPPOTrainer(PPOTrainer):  # noqa: F405
         self.ppo_shuffle_every_epoch = self.config.get("ppo_shuffle_every_epoch", True)
         self.empty_cache_every_n_ppo_epoch = self.config.get("empty_cache_every_n_ppo_epoch", -1)
         self.defer_episode_buffer_updates = self.config.get("defer_episode_buffer_updates", False)
+        self.fast_gradient_finite_check = self.config.get("fast_gradient_finite_check", False)
 
         self.entropy_coef = self.config.entropy_coef
         self.desired_kl = self.config.desired_kl
@@ -2073,16 +2074,16 @@ class TRLPPOTrainer(PPOTrainer):  # noqa: F405
         args = self.args
         model = self.model
 
-        # Check for NaN/Inf in gradients
-        for name, param in model.named_parameters():
-            if param.grad is not None and (
-                torch.isnan(param.grad).any() or torch.isinf(param.grad).any()
-            ):
-                print(  # noqa: T201
-                    f"[Rank {self.accelerator.process_index}] NaN/Inf grad in {name}, norm={param.grad.norm():.3e}"
-                )
-                self.optimizer.zero_grad()
-                return None
+        if not self.fast_gradient_finite_check:
+            for name, param in model.named_parameters():
+                if param.grad is not None and (
+                    torch.isnan(param.grad).any() or torch.isinf(param.grad).any()
+                ):
+                    print(  # noqa: T201
+                        f"[Rank {self.accelerator.process_index}] NaN/Inf grad in {name}, norm={param.grad.norm():.3e}"
+                    )
+                    self.optimizer.zero_grad()
+                    return None
         grad_norm = None
         if args.max_grad_norm is not None and args.max_grad_norm > 0:
             # deepspeed does its own clipping
@@ -2111,6 +2112,18 @@ class TRLPPOTrainer(PPOTrainer):  # noqa: F405
                     grad_norm = grad_norm.item()
             else:
                 grad_norm = _grad_norm
+
+        if self.fast_gradient_finite_check and grad_norm is not None:
+            is_finite = (
+                torch.isfinite(grad_norm) if torch.is_tensor(grad_norm) else math.isfinite(grad_norm)
+            )
+            if not bool(is_finite):
+                print(
+                    f"[Rank {self.accelerator.process_index}] NaN/Inf gradient norm",
+                    flush=True,
+                )
+                self.optimizer.zero_grad()
+                return None
 
         return grad_norm
 

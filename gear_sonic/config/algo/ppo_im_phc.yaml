@@ -29,6 +29,7 @@ algo:
     sync_advantage_normalization: True
     empty_cache_every_n_ppo_epoch: 3
     defer_episode_buffer_updates: true  # Set to false to restore the original behavior.
+    fast_gradient_finite_check: true  # Set to false to restore the original behavior.
 
     num_steps_per_env: 32
     save_interval: 500
