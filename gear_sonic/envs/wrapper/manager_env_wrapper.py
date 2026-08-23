@@ -863,7 +863,7 @@ class ManagerEnvWrapper:
         # This prevents a false large rate penalty on the first step of a new episode
         # Only applies when action_transform_module is used (buffers created in reset())
         reset_mask = dones.bool()
-        if reset_mask.any() and hasattr(self.env, "_prev_meta_action"):
+        if hasattr(self.env, "_prev_meta_action") and reset_mask.any():
             self.env._prev_meta_action[reset_mask] = 0.0  # noqa: SLF001
             self.env._last_meta_action[reset_mask] = 0.0  # noqa: SLF001
             self.env._prev_full_latent[reset_mask] = 0.0  # noqa: SLF001
