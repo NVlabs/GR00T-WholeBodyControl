@@ -735,6 +735,7 @@ class TRLPPOTrainer(PPOTrainer):  # noqa: F405
         self.empty_cache_every_n_ppo_epoch = self.config.get("empty_cache_every_n_ppo_epoch", -1)
         self.defer_episode_buffer_updates = self.config.get("defer_episode_buffer_updates", False)
         self.fast_gradient_finite_check = self.config.get("fast_gradient_finite_check", False)
+        self.value_evaluate_chunk_size = self.config.get("value_evaluate_chunk_size", 1024)
 
         self.entropy_coef = self.config.entropy_coef
         self.desired_kl = self.config.desired_kl
@@ -851,7 +852,7 @@ class TRLPPOTrainer(PPOTrainer):  # noqa: F405
 
         return policy_state_dict
 
-    def _chunked_value_evaluate(self, value_model, obs_dict, episode_attnmask, chunk_size=1024):
+    def _chunked_value_evaluate(self, value_model, obs_dict, episode_attnmask, chunk_size=None):
         """Evaluate the value model in chunks to limit peak GPU memory.
 
         Args:
@@ -863,6 +864,8 @@ class TRLPPOTrainer(PPOTrainer):  # noqa: F405
         Returns:
             Value predictions ``(batch, seq, num_critics)``.
         """
+        if chunk_size is None:
+            chunk_size = self.value_evaluate_chunk_size
         batch_size = list(obs_dict.values())[0].shape[0]  # noqa: RUF015
         if batch_size <= chunk_size:
             return value_model.evaluate(obs_dict=obs_dict, episode_attnmask=episode_attnmask)
