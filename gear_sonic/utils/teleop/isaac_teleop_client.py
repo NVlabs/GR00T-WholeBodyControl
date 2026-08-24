@@ -14,6 +14,7 @@ by ``install_scripts/install_pico.sh``).
 
 from __future__ import annotations
 
+import os
 import time
 from contextlib import ExitStack
 from pathlib import Path
@@ -182,6 +183,19 @@ class IsaacTeleopClient:
             required_extensions = deviceio.DeviceIOSession.get_required_extensions(
                 trackers, vendor_config
             )
+
+            # CloudXR withholds XR_META_body_tracking_full_body unless asked, because
+            # its support is not conformant: the joints are relayed from the connected
+            # client rather than produced by a conformant implementation. The Meta
+            # tracker above needs it, so opt in -- but only for this process, not via
+            # the shared ~/.cloudxr/run/cloudxr.env, which every CloudXR application
+            # sources.
+            #
+            # isaacteleop sets this itself before xrCreateInstance from 1.5 on. This
+            # covers .venv_teleop, which is still pinned to 1.3.131; setdefault means
+            # the two agree, and an operator who exports the variable still wins.
+            os.environ.setdefault("NV_CXR_ENABLE_NON_CONFORMANT_META_BODY_TRACKING", "1")
+
             oxr_session = stack.enter_context(
                 oxr.OpenXRSession(self._app_name, required_extensions)
             )
