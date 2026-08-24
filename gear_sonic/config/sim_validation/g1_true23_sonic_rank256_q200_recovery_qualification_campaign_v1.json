@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_rank256_q200_recovery_qualification_campaign_overlay_v1",
+  "role": "offline_mjlab_rank256_q200_mixed_controller_qualification_only",
+  "base_campaign_contract": {
+    "path": "gear_sonic/config/sim_validation/g1_true23_sonic_recovery_qualification_campaign_v1.json",
+    "sha256": "2e24e3acf1d9ef7e1cf664de64935773a99ad225e8046f5b23f413932e21fad3"
+  },
+  "q200_recovery_contract": {
+    "path": "gear_sonic/config/sim_validation/g1_true23_sonic_rank256_q200_teacher_recovery_v1.json",
+    "sha256": "c7693102814b2d992a134b88c89f146de656e1cf34dc14b755c2c1e0d32e6683"
+  },
+  "q200_pass_report": {
+    "path": "artifacts/g1_true23/sonic_rank256_q200_teacher_recovery.seed835868017.v1.json",
+    "sha256": "ff2898f25ccfcc2c6e9964cba5678013376fce855bd6ef72a8818d195438773a"
+  },
+  "candidate": {
+    "manifest_path": "artifacts/g1_true23/sonic_seed835_counterexample_round3_rank256_bc_last_affine_v1.manifest.json",
+    "manifest_sha256": "ad8a779e7867c88fdd6e9d60b6e85584a24f30368c32908b27f2274378c0b213",
+    "decoder_sha256": "d1a20a098ccc3328ab188c081b5cefa642425bda9e7d06711a599a66531279ca"
+  },
+  "window": {
+    "mode": "cutoff191",
+    "anchor_q9": 9,
+    "last_action_q9": 518,
+    "total_transitions": 510,
+    "student_transition_count": 191,
+    "student_first_q9": 9,
+    "student_last_q9": 199,
+    "teacher_transition_count": 319,
+    "teacher_first_q9": 200,
+    "teacher_last_q9": 518
+  },
+  "disturbance_timing": {
+    "teacher_local_apply_transition": 50,
+    "global_apply_transition": 241,
+    "apply_q9": 250,
+    "first_disturbed_observation_global_transition": 242,
+    "first_disturbed_observation_q9": 251,
+    "baseline_global_transitions": [231, 232, 233, 234, 235, 236, 237, 238, 239, 240],
+    "scan_first_global_transition": 241
+  },
+  "cohort": {
+    "reuse_base_campaign_exact_twenty_seeds_and_vectors": true,
+    "nominal_rollouts": 10,
+    "disturbance_rollouts": 10,
+    "fail_fast": true,
+    "automatic_retry_permitted": false
+  },
+  "boundaries": {
+    "qualification_only": true,
+    "published_teacher_label_count": 0,
+    "published_training_row_count": 0,
+    "teacher_support_qualified": false,
+    "training_performed": false,
+    "promotion_or_deployment": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

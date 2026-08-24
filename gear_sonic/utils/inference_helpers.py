@@ -14,6 +14,15 @@ import torch
 from torch import nn
 
 
+def available_universal_token_encoders(
+    universal_token_module,
+    preferred_order=("smpl", "g1", "teleop"),
+):
+    """Return configured encoders only; teleop-only models must not probe missing keys."""
+    configured = set(universal_token_module.encoders_to_iterate)
+    return tuple(name for name in preferred_order if name in configured)
+
+
 # ---------------------------------------------------------------------------
 # Generic policy export
 # ---------------------------------------------------------------------------

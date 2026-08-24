@@ -65,6 +65,7 @@
 #include <chrono>
 #include <algorithm>
 #include <numeric>
+#include <stdexcept>
 
 // DDS
 #include <unitree/robot/channel/channel_publisher.hpp>
@@ -105,6 +106,7 @@
 // Input interface and input handlers
 #include "../include/input_interface/keyboard_handler.hpp"
 #include "../include/input_interface/gamepad.hpp"
+#include "../include/input_interface/control_session_state.hpp"
 #include "../include/input_interface/zmq_endpoint_interface.hpp"
 #include "../include/input_interface/interface_manager.hpp"
 #include "../include/input_interface/gamepad_manager.hpp"
@@ -184,6 +186,7 @@ class G1Deploy {
     // Input interface and buffered input data
     // =========================================================================
     std::unique_ptr<InputInterface> input_interface_;
+    std::shared_ptr<ControlSessionState> control_session_state_;
     
     // Buffered input data (the real data to the policy engine)
     // has_*_data_ flags indicate whether the getter returned valid buffered data (true) or defaults (false)
@@ -2128,6 +2131,112 @@ class G1Deploy {
 
 
 
+    static constexpr std::array<int, 6> SONIC_REQUIRED_29DOF_MOTOR_INDICES = {
+      WaistRoll,
+      WaistPitch,
+      LeftWristPitch,
+      LeftWristYaw,
+      RightWristPitch,
+      RightWristYaw,
+    };
+
+    static bool HasPhysicalMotorTelemetry(const MotorState_& motor_state) {
+      const auto temperature = motor_state.temperature();
+      return motor_state.mode() != 0
+          && std::isfinite(motor_state.vol())
+          && motor_state.vol() > 1.0F
+          && (temperature[0] > 0 || temperature[1] > 0);
+    }
+
+    static bool IsKnownIncompatibleSonicEmbodiment(uint8_t mode_machine) {
+      switch (mode_machine) {
+        case 1:  // 23-DoF beta
+        case 3:  // 29-DoF locked-waist beta
+        case 4:  // 23-DoF rev1
+        case 6:  // 29-DoF locked-waist rev1
+        case 9:  // dual-arm
+          return true;
+        default:
+          return false;
+      }
+    }
+
+    static bool IsReleasedSonic29DofEmbodiment(const LowState_& low_state) {
+      const uint8_t mode_machine = low_state.mode_machine();
+      if (mode_machine != 2 && mode_machine != 5) {
+        return false;
+      }
+      for (const int index : SONIC_REQUIRED_29DOF_MOTOR_INDICES) {
+        if (!HasPhysicalMotorTelemetry(low_state.motor_state()[index])) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    /**
+     * Verify the physical robot before releasing its current motion mode or
+     * creating a LowCmd publisher. Released SONIC checkpoints have 29 action
+     * outputs and are not validated for 23-DoF or locked-waist G1 variants.
+     */
+    void RequireReleasedSonic29DofEmbodiment() {
+      constexpr int REQUIRED_ADVANCING_SAMPLES = 5;
+      constexpr auto TIMEOUT = std::chrono::seconds(5);
+      const auto deadline = std::chrono::steady_clock::now() + TIMEOUT;
+      uint32_t last_tick = 0;
+      uint8_t stable_mode_machine = 0;
+      int stable_samples = 0;
+      bool have_tick = false;
+
+      while (std::chrono::steady_clock::now() < deadline) {
+        const auto low_state_data = low_state_buffer_.GetDataWithTime();
+        const std::shared_ptr<const LowState_> low_state = low_state_data.data;
+        if (!low_state) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(10));
+          continue;
+        }
+
+        const uint32_t tick = low_state->tick();
+        if (have_tick && tick == last_tick) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(10));
+          continue;
+        }
+        have_tick = true;
+        last_tick = tick;
+
+        const uint8_t mode_machine = low_state->mode_machine();
+        if (mode_machine != stable_mode_machine) {
+          stable_mode_machine = mode_machine;
+          stable_samples = 0;
+        }
+        ++stable_samples;
+        if (stable_samples < REQUIRED_ADVANCING_SAMPLES) {
+          continue;
+        }
+
+        if (IsReleasedSonic29DofEmbodiment(*low_state)) {
+          std::cout << "[PASS] Detected full 29-DoF G1 (mode_machine="
+                    << unsigned(mode_machine)
+                    << ") before enabling command publication." << std::endl;
+          return;
+        }
+
+        if (IsKnownIncompatibleSonicEmbodiment(mode_machine)) {
+          throw std::runtime_error(
+            "Refusing real control: detected incompatible G1 mode_machine="
+            + std::to_string(unsigned(mode_machine))
+            + "; released SONIC requires a full 29-DoF G1 (mode 2 or 5).");
+        }
+
+        // Unknown/startup modes and incomplete telemetry remain blocked while
+        // the bounded probe waits for a stable, fully populated 29-DoF state.
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      }
+
+      throw std::runtime_error(
+        "Refusing real control: no stable full 29-DoF LowState telemetry within 5 seconds.");
+    }
+
   public:
     OperatorState operator_state;
 
@@ -2181,8 +2290,25 @@ class G1Deploy {
         model_path(model_file_path),
         planner_path(planner_file_path) {
       
+      const bool loopback_interface =
+        networkInterface == "lo" || networkInterface == "lo0";
+      if (disable_crc_check_ && !loopback_interface) {
+        throw std::runtime_error(
+          "Refusing startup: --disable-crc-check is simulation-only and "
+          "requires loopback interface lo/lo0.");
+      }
+
       // Initialize ChannelFactory
       ChannelFactory::Instance()->Init(0, networkInterface);
+
+      // Subscribe before creating any LowCmd publisher or releasing the
+      // current robot motion mode. Real hardware must prove a full 29-DoF
+      // embodiment; MuJoCo simulation opts out together with its CRC bypass.
+      lowstate_subscriber_.reset(new ChannelSubscriber<LowState_>(HG_STATE_TOPIC));
+      lowstate_subscriber_->InitChannel(std::bind(&G1Deploy::LowStateHandler, this, std::placeholders::_1), 1);
+      if (!disable_crc_check_) {
+        RequireReleasedSonic29DofEmbodiment();
+      }
 
       // Initialize Dex3 hands (ChannelFactory already initialized above)
       dex3_hands_.initialize("");
@@ -2257,9 +2383,6 @@ class G1Deploy {
       // create publisher
       lowcmd_publisher_.reset(new ChannelPublisher<LowCmd_>(HG_CMD_TOPIC));
       lowcmd_publisher_->InitChannel();
-      // create subscriber
-      lowstate_subscriber_.reset(new ChannelSubscriber<LowState_>(HG_STATE_TOPIC));
-      lowstate_subscriber_->InitChannel(std::bind(&G1Deploy::LowStateHandler, this, std::placeholders::_1), 1);
       imutorso_subscriber_.reset(new ChannelSubscriber<IMUState_>(HG_IMU_TORSO));
       imutorso_subscriber_->InitChannel(std::bind(&G1Deploy::imuTorsoHandler, this, std::placeholders::_1), 1);
       // Load motion data
@@ -2448,6 +2571,14 @@ class G1Deploy {
       }
 
       // Initialize input interface based on type
+      if (input_type == "zmq_manager") {
+        if (output_type != "zmq" && output_type != "all") {
+          throw std::runtime_error(
+              "zmq_manager requires ZMQ output for the fail-closed "
+              "control_session challenge");
+        }
+        control_session_state_ = std::make_shared<ControlSessionState>();
+      }
       if (input_type == "gamepad") {
         input_interface_ = std::make_unique<unitree::common::Gamepad>();
         std::cout << "Initialized gamepad input interface" << std::endl;
@@ -2488,7 +2619,8 @@ class G1Deploy {
       }
       else if (input_type == "zmq_manager") {
         input_interface_ = std::make_unique<ZMQManager>(
-          zmq_host, zmq_port, zmq_topic, "command", "planner", zmq_conflate, zmq_verbose
+          zmq_host, zmq_port, zmq_topic, "command", "planner", zmq_conflate,
+          zmq_verbose, control_session_state_
         );
         std::cout << "Initialized ZMQ manager" << std::endl;
         std::cout << "  Host: " << zmq_host << ":" << zmq_port << std::endl;
@@ -2553,7 +2685,9 @@ class G1Deploy {
 #endif
 
       if (create_zmq) {
-        auto zmq_handler = std::make_unique<ZMQOutputHandler>(*state_logger_, zmq_out_port, zmq_out_topic);
+        auto zmq_handler = std::make_unique<ZMQOutputHandler>(
+            *state_logger_, zmq_out_port, zmq_out_topic,
+            control_session_state_);
         std::cout << "Initialized ZMQ output interface" << std::endl;
         // Publish robot config so subscribers can receive it before control loop starts
         zmq_handler->publish_config();
@@ -2775,6 +2909,13 @@ class G1Deploy {
         return false;
       }
 
+      if (!disable_crc_check_ && !IsReleasedSonic29DofEmbodiment(*ls)) {
+        std::cout << "[ERROR] G1 embodiment no longer provides full 29-DoF telemetry "
+                  << "required by released SONIC; mode_machine="
+                  << unsigned(ls->mode_machine()) << std::endl;
+        return false;
+      }
+
       return true;
     }
 
@@ -2905,21 +3046,69 @@ class G1Deploy {
       std::array<double, 7> left_hand_dq = {0.0};
       std::array<double, 7> right_hand_q = {0.0};
       std::array<double, 7> right_hand_dq = {0.0};
-      
-      auto left_hand_state_ptr = dex3_hands_.getState(true);
-      if (left_hand_state_ptr) {
+      bool left_hand_feedback_valid = false;
+      bool right_hand_feedback_valid = false;
+
+      const auto hand_feedback_now = std::chrono::steady_clock::now();
+      const auto left_hand_state = dex3_hands_.getStateWithTime(true);
+      const auto left_hand_state_ptr = left_hand_state.data;
+      const bool left_hand_timestamp_valid =
+          left_hand_state_ptr &&
+          left_hand_state.timestamp != std::chrono::steady_clock::time_point{} &&
+          hand_feedback_now >= left_hand_state.timestamp &&
+          hand_feedback_now - left_hand_state.timestamp <= LOW_STATE_ABSENT_THRESHOLD;
+      if (left_hand_timestamp_valid &&
+          static_cast<int>(left_hand_state_ptr->motor_state().size()) == DEX3_MOTOR_MAX) {
+        left_hand_feedback_valid = true;
         for (int i = 0; i < 7; ++i) {
           left_hand_q[i] = left_hand_state_ptr->motor_state()[i].q();
           left_hand_dq[i] = left_hand_state_ptr->motor_state()[i].dq();
+          left_hand_feedback_valid =
+              left_hand_feedback_valid && std::isfinite(left_hand_q[i]) &&
+              std::isfinite(left_hand_dq[i]);
         }
       }
-      
-      auto right_hand_state_ptr = dex3_hands_.getState(false);
-      if (right_hand_state_ptr) {
+      if (!left_hand_feedback_valid) {
+        left_hand_q.fill(0.0);
+        left_hand_dq.fill(0.0);
+      }
+
+      const auto right_hand_state = dex3_hands_.getStateWithTime(false);
+      const auto right_hand_state_ptr = right_hand_state.data;
+      const bool right_hand_timestamp_valid =
+          right_hand_state_ptr &&
+          right_hand_state.timestamp != std::chrono::steady_clock::time_point{} &&
+          hand_feedback_now >= right_hand_state.timestamp &&
+          hand_feedback_now - right_hand_state.timestamp <= LOW_STATE_ABSENT_THRESHOLD;
+      if (right_hand_timestamp_valid &&
+          static_cast<int>(right_hand_state_ptr->motor_state().size()) == DEX3_MOTOR_MAX) {
+        right_hand_feedback_valid = true;
         for (int i = 0; i < 7; ++i) {
           right_hand_q[i] = right_hand_state_ptr->motor_state()[i].q();
           right_hand_dq[i] = right_hand_state_ptr->motor_state()[i].dq();
+          right_hand_feedback_valid =
+              right_hand_feedback_valid && std::isfinite(right_hand_q[i]) &&
+              std::isfinite(right_hand_dq[i]);
         }
+      }
+      if (!right_hand_feedback_valid) {
+        right_hand_q.fill(0.0);
+        right_hand_dq.fill(0.0);
+      }
+
+      // Preserve measurement age across process boundaries. Logging time is not
+      // sufficient: LowState or either Dex3 sample may already be near its
+      // native deadman when this state is packed for ZMQ.
+      auto feedback_source_timestamp_monotonic = low_state_data.timestamp;
+      if (feedback_source_timestamp_monotonic == std::chrono::steady_clock::time_point{} ||
+          left_hand_state.timestamp == std::chrono::steady_clock::time_point{} ||
+          right_hand_state.timestamp == std::chrono::steady_clock::time_point{}) {
+        feedback_source_timestamp_monotonic = std::chrono::steady_clock::time_point{};
+      } else {
+        feedback_source_timestamp_monotonic =
+            std::min(feedback_source_timestamp_monotonic, left_hand_state.timestamp);
+        feedback_source_timestamp_monotonic =
+            std::min(feedback_source_timestamp_monotonic, right_hand_state.timestamp);
       }
 
       // Log robot state for analysis and debugging
@@ -2937,6 +3126,9 @@ class G1Deploy {
                                     std::span(left_hand_dq),
                                     std::span(right_hand_q),
                                     std::span(right_hand_dq),
+                                    left_hand_feedback_valid,
+                                    right_hand_feedback_valid,
+                                    feedback_source_timestamp_monotonic,
                                     std::span(last_left_hand_action),
                                     std::span(last_right_hand_action),
                                     ros_timestamp);
@@ -2961,6 +3153,25 @@ class G1Deploy {
      *    initial_encoder_mode_ (-1 = stop, 0+ = fall back to local encoder).
      */
     bool GatherInputInterfaceData() {
+      // Independent control-thread deadman for ZMQManager. This remains live
+      // even while the Input thread is decoding or waiting for planner init.
+      if (auto* zmq_manager =
+              dynamic_cast<ZMQManager*>(input_interface_.get());
+          zmq_manager != nullptr && operator_state.start &&
+          !zmq_manager->IsActiveInputLeaseFreshAt(
+              std::chrono::steady_clock::now())) {
+        operator_state.stop = true;
+        operator_state.play = false;
+        if (planner_) {
+          planner_->planner_state_.enabled = false;
+          planner_->planner_state_.initialized = false;
+        }
+        std::cerr
+            << "[Control SAFETY] ZMQ input lease expired; stopping control"
+            << std::endl;
+        return false;
+      }
+
       // Snapshot input interface data into buffers before gathering observations
       // This ensures observations, logging, and output all use the same data
       // some of the data will be overwritten by the motion dataset if we are not using the buffered interface data
@@ -3516,12 +3727,17 @@ class G1Deploy {
         const auto &planner_state = has_planner ? planner_->planner_state_ : ps;
         (*record_input_file_) << motion_reader_.current_motion_index_ << ",";
         (*record_input_file_) << current_frame_ << ",";
-        (*record_input_file_) << operator_state.play << ",";
-        (*record_input_file_) << operator_state.start << ",";
-        (*record_input_file_) << operator_state.stop << ",";
+        (*record_input_file_)
+            << operator_state.play.load(std::memory_order_relaxed) << ",";
+        (*record_input_file_)
+            << operator_state.start.load(std::memory_order_relaxed) << ",";
+        (*record_input_file_)
+            << operator_state.stop.load(std::memory_order_relaxed) << ",";
 
-        (*record_input_file_) << planner_state.enabled << ",";
-        (*record_input_file_) << planner_state.initialized << ",";
+        (*record_input_file_)
+            << planner_state.enabled.load(std::memory_order_relaxed) << ",";
+        (*record_input_file_)
+            << planner_state.initialized.load(std::memory_order_relaxed) << ",";
         
         (*record_input_file_) << movement_state_data.data->locomotion_mode << ",";
         (*record_input_file_) << movement_state_data.data->movement_direction[0] << ",";

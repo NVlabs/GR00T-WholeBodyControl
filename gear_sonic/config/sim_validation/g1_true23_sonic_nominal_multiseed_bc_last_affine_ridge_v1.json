@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_nominal_multiseed_bc_last_affine_ridge_contract_v1",
+  "role": "deterministic_nominal_multiseed_teacher_bc_simulator_candidate_only",
+  "inputs": {
+    "dataset_npz": {
+      "path": "artifacts/g1_true23/selected_teacher_nominal_multiseed_train8_heldout2_v2.npz",
+      "sha256": "db25cc9c1e1ee79b8078b2dd35011b0d794c013db6516d4c97d4e4ac0383122a"
+    },
+    "dataset_manifest": {
+      "path": "artifacts/g1_true23/selected_teacher_nominal_multiseed_train8_heldout2_v2.manifest.json",
+      "sha256": "c415b8acb31fc1eff818daedc88cf549fa08ab6840fee29b6d0f81115a11d0e1"
+    },
+    "dataset_contract": {
+      "path": "gear_sonic/config/sim_validation/g1_true23_selected_teacher_nominal_multiseed_collection_v1.json",
+      "sha256": "5d693bfab86c063b0943fba75fd39427b90192c0981f2b77fb33ab397e0ac121"
+    },
+    "base_decoder": {
+      "path": "artifacts/g1_true23/sonic_native124_21204_bc_last_affine_ridge_seed20260805_v2.decoder.onnx",
+      "sha256": "011740f86483323fc0f1c39ab25b784cf9411b401e56fee8b7a716664e921ee1"
+    },
+    "base_manifest": {
+      "path": "artifacts/g1_true23/sonic_native124_21204_bc_last_affine_ridge_seed20260805_v2.manifest.json",
+      "sha256": "e43fb5e531fdccda46d2e28ce7a987c8d1d064e64ae58325e6caea4d758240db"
+    },
+    "bootstrap_npz": {
+      "path": "artifacts/g1_true23/native124_selected_21204_teacher_bootstrap_seed20260805_v1.npz",
+      "sha256": "136768fd1595265d9743d5a9e5f7ef38e431de9a57f9ff85246123a7d649f475"
+    },
+    "bootstrap_manifest": {
+      "path": "artifacts/g1_true23/native124_selected_21204_teacher_bootstrap_seed20260805_v1.manifest.json",
+      "sha256": "5ab761c3b82d62c3a4524f1f195f6f187b91e56b41e854d186339ddcca86f4a1"
+    },
+    "source_decoder": {
+      "path": "artifacts/g1_true23/causal_model_250_20260803/causal_model_250.decoder.onnx",
+      "sha256": "f18139aa5b98619a5d0e84a9de8378a5081c556d427b20fdc55e4fe917549740"
+    }
+  },
+  "rows": {
+    "run_count": 8,
+    "rows_per_run": 510,
+    "total": 4080,
+    "reset_prefix_per_run": 10,
+    "real_h10_per_run": 500,
+    "leave_one_run_out_fold_count": 8,
+    "heldout_collection_runs_used_for_fit": 0
+  },
+  "model": {
+    "decoder_input_name": "obs_dict",
+    "decoder_input_shape": [1, 994],
+    "decoder_output_name": "action",
+    "decoder_output_shape": [1, 23],
+    "hidden_output_name": "/Mul_7_output_0",
+    "hidden_width": 512,
+    "final_weight_name": "layers.8.weight",
+    "final_bias_name": "layers.8.bias",
+    "only_final_affine_may_change": true,
+    "v2_transform_external_application_count": 1
+  },
+  "fit": {
+    "dtype": "float64",
+    "cpu_threads": 1,
+    "pca_centering_used_for_basis_only": true,
+    "ridge_features_use_uncentered_hidden_projection": true,
+    "pca_variance_fraction": 0.999,
+    "pca_min_rank": 8,
+    "pca_max_rank": 128,
+    "reset_prefix_row_weight": 4.0,
+    "real_h10_row_weight": 1.0,
+    "weights_normalized_to_mean_one": true,
+    "bias_regularized": true,
+    "lambda_grid": [
+      0.000001,
+      0.000003,
+      0.00001,
+      0.00003,
+      0.0001,
+      0.0003,
+      0.001,
+      0.003,
+      0.01,
+      0.03,
+      0.1,
+      0.3,
+      1.0,
+      3.0,
+      10.0
+    ],
+    "lambda_selection": "largest_with_weighted_leave_one_run_out_sse_at_most_1.01_times_minimum",
+    "label_array": "teacher_label_raw_native23",
+    "input_array": "decoder994",
+    "label_semantics": "pre_safe_transform_plain_sonic_raw_native23"
+  },
+  "gates": {
+    "maximum_ridge_condition_number": 100000000.0,
+    "maximum_oof_rmse_ratio_to_base": 0.95,
+    "minimum_leave_one_run_out_folds_beating_base": 7,
+    "maximum_training_all_rmse": 0.12,
+    "maximum_training_each_run_rmse": 0.15,
+    "maximum_training_reset_prefix_rmse": 0.2,
+    "maximum_training_real_h10_rmse": 0.12,
+    "maximum_training_p95_row_rmse": 0.2,
+    "maximum_training_absolute_error": 0.75,
+    "maximum_bootstrap_all_rmse_regression": 0.01,
+    "maximum_bootstrap_reset_prefix_rmse_regression": 0.01,
+    "maximum_bootstrap_absolute_error": 0.8,
+    "plain_raw_absolute_strict_max": 10.0,
+    "maximum_export_reference_absolute_error": 0.00001
+  },
+  "boundaries": {
+    "offline_behavior_cloning_only": true,
+    "teacher_controlled_training_data": true,
+    "heldout_collection_labels_used": false,
+    "support_qualified": false,
+    "support_admitted": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

@@ -7,12 +7,21 @@
  *
  *   Topic      | Purpose
  *   -----------|--------
- *   command    | High-level control (start / stop / mode switch).
- *              | Wire format: `{ start: bool, stop: bool, planner: bool, delta_heading?: f32 }`
- *   planner    | Per-frame locomotion commands (mode, movement, facing, speed, height,
- *              | optional upper-body / hand / VR data).  Active in PLANNER mode.
+ *   command    | High-level control (claim / start / stop / mode switch).
+ *              | Protocol v2 requires receiver epoch, publisher session,
+ *              | command index, claim, start, stop, and planner fields.
+ *   planner    | Per-frame locomotion commands (mode, movement, facing, speed,
+ *              | optional upper-body / hand / VR data) plus session tokens.
  *   pose       | Streamed motion frames (joint_pos, joint_vel, body_quat, …).
- *              | Active in STREAMED_MOTION mode, handled by an internal ZMQEndpointInterface.
+ *              | Under zmq_manager, every frame also carries session tokens.
+ *
+ * ## Control-session ownership
+ *
+ * A process-random 128-bit receiver epoch is published on the output
+ * `control_session` topic. The manager waits for it, sends an explicit claim,
+ * and waits for acknowledgement before publishing control data. The first
+ * valid publisher session wins. Binding and replay counters persist until
+ * native process exit; no stop, mode, or reconnect path resets them.
  *
  * ## Mode Switching
  *
@@ -23,11 +32,19 @@
  * On each mode switch, safety resets are triggered and the planner buffer is
  * cleared to prevent stale commands from leaking across modes.
  *
- * ## Planner Timeout
+ * ## Active-input lease
  *
- * If no planner message arrives within 1 second (PLANNER_TIMEOUT), the manager
- * automatically resets the locomotion to IDLE and clears upper-body / hand-joint
- * control flags.
+ * A start request is accepted only when the selected mode already has fresh
+ * input. Once control is active, loss of planner or pose messages for 500 ms
+ * requests a terminal stop. This native deadman remains effective if the
+ * Python publisher is killed before it can send a stop message. Restart the
+ * native deployment before starting another manager session.
+ *
+ * Standalone `--input-type zmq` retains legacy wire compatibility.
+ * `--input-type zmq_manager` requires protocol v2 session fields and fails
+ * closed. Session tokens provide replay scoping and single-publisher
+ * ownership, not encryption or authentication; use only on a trusted,
+ * firewall-scoped LAN.
  *
  * ## Keyboard Shortcuts (via stdin)
  *
@@ -43,6 +60,7 @@
 #define ZMQ_MANAGER_HPP
 
 #include <memory>
+#include <atomic>
 #include <vector>
 #include <iostream>
 #include <cstring>
@@ -50,7 +68,14 @@
 #include <array>
 #include <thread>
 #include <chrono>
+#include <initializer_list>
+#include <limits>
 #include <mutex>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <unordered_set>
+#include <utility>
 
 #include "input_interface.hpp"
 #include "input_command.hpp"
@@ -80,6 +105,37 @@ class ZMQManager : public InputInterface {
       STREAMED_MOTION = 1  // ZMQ streamed motion mode (pose topic via ZMQEndpointInterface)
     };
 
+    static constexpr auto INPUT_LEASE_TIMEOUT = std::chrono::milliseconds(500);
+    static constexpr auto INPUT_LEASE_FUTURE_TOLERANCE = std::chrono::milliseconds(50);
+    static constexpr auto INPUT_ACTIVATION_GRACE = std::chrono::milliseconds(250);
+
+    static bool IsInputLeaseFreshAt(
+        ManagedMode mode,
+        std::optional<std::chrono::steady_clock::time_point> planner_timestamp,
+        std::optional<std::chrono::steady_clock::time_point> pose_timestamp,
+        std::chrono::steady_clock::time_point now) {
+      const auto& selected_timestamp =
+          mode == ManagedMode::PLANNER ? planner_timestamp : pose_timestamp;
+      if (!selected_timestamp.has_value()) {
+        return false;
+      }
+      const auto age = now - *selected_timestamp;
+      return age >= -INPUT_LEASE_FUTURE_TOLERANCE &&
+             age <= INPUT_LEASE_TIMEOUT;
+    }
+
+    static bool IsPlannerFrameAdvancing(
+        std::optional<int64_t> last_frame, int64_t current_frame) {
+      return current_frame >= 0 &&
+             (!last_frame.has_value() || current_frame > *last_frame);
+    }
+
+    static bool IsCommandIndexAdvancing(
+        std::optional<int64_t> last_index, int64_t current_index) {
+      return current_index >= 0 &&
+             (!last_index.has_value() || current_index > *last_index);
+    }
+
     ZMQManager(
       const std::string& zmq_host,
       int zmq_port,
@@ -87,7 +143,8 @@ class ZMQManager : public InputInterface {
       const std::string& command_topic = "command",
       const std::string& planner_topic = "planner",
       bool zmq_conflate = false,
-      bool zmq_verbose = false
+      bool zmq_verbose = false,
+      std::shared_ptr<ControlSessionState> control_session_state = nullptr
     ) : InputInterface(), 
         zmq_host_(zmq_host), 
         zmq_port_(zmq_port), 
@@ -95,14 +152,20 @@ class ZMQManager : public InputInterface {
         command_topic_(command_topic),
         planner_topic_(planner_topic),
         zmq_conflate_(zmq_conflate), 
-        zmq_verbose_(zmq_verbose) {
+        zmq_verbose_(zmq_verbose),
+        control_session_state_(std::move(control_session_state)) {
       
+      if (!control_session_state_) {
+        throw std::invalid_argument(
+            "ZMQManager requires a control-session state");
+      }
       type_ = InputType::NETWORK;
       active_mode_ = ManagedMode::PLANNER;  // Default to planner mode
       
       // Create pose interface (for streamed motion mode)
       pose_interface_ = std::make_unique<ZMQEndpointInterface>(
-        zmq_host_, zmq_port_, pose_topic_, zmq_conflate_, zmq_verbose_
+        zmq_host_, zmq_port_, pose_topic_, zmq_conflate_, zmq_verbose_,
+        control_session_state_
       );
       
       // Create command subscriber
@@ -146,7 +209,11 @@ class ZMQManager : public InputInterface {
       std::cout << "[ZMQManager] Initialized (default: PLANNER mode)" << std::endl;
       std::cout << "  - Host: " << zmq_host_ << ":" << zmq_port_ << std::endl;
       std::cout << "  - Command topic: '" << command_topic_ << "' (start/stop/mode)" << std::endl;
-      std::cout << "    Format: { start: bool, stop: bool, planner: bool }" << std::endl;
+      std::cout
+          << "    Format v2: { receiver_epoch: u8[16], "
+          << "publisher_session: u8[16], command_index: i64[1], "
+          << "claim: bool[1], start: bool[1], stop: bool[1], "
+          << "planner: bool[1] }" << std::endl;
       std::cout << "  - Planner topic: '" << planner_topic_ << "' (movement)" << std::endl;
       std::cout << "  - Pose topic: '" << pose_topic_ << "' (streamed motion)" << std::endl;
     }
@@ -230,18 +297,33 @@ class ZMQManager : public InputInterface {
       {
         std::lock_guard<std::mutex> lock(command_mutex_);
         if (latest_command_.valid) {
+          ManagedMode new_mode = latest_command_.planner
+                                     ? ManagedMode::PLANNER
+                                     : ManagedMode::STREAMED_MOTION;
           // Set control flags (already accumulated in callback)
           if (latest_command_.start) {
-            start_control_ = true;
+            if (new_mode == ManagedMode::PLANNER) {
+              std::lock_guard<std::mutex> planner_lock(planner_mutex_);
+              latest_planner_message_.valid = false;
+              latest_planner_message_.timestamp = {};
+            } else if (pose_interface_) {
+              pose_interface_->RequireFreshFrameAfterActivation();
+            }
+            start_request_pending_ = true;
+            start_request_deadline_ =
+                std::chrono::steady_clock::now() + INPUT_ACTIVATION_GRACE;
           }
           if (latest_command_.stop) {
             stop_control_ = true;
+            start_request_pending_ = false;
+            mode_transition_pending_ = false;
           }
 
           // Handle mode switching
-          ManagedMode new_mode = latest_command_.planner ? ManagedMode::PLANNER : ManagedMode::STREAMED_MOTION;
-          
           if (new_mode != active_mode_) {
+            mode_transition_pending_ = true;
+            mode_transition_deadline_ =
+                std::chrono::steady_clock::now() + INPUT_ACTIVATION_GRACE;
             // Trigger safety reset on mode switch
             TriggerSafetyReset();
             if (pose_interface_) {
@@ -250,19 +332,10 @@ class ZMQManager : public InputInterface {
 
             if (new_mode == ManagedMode::PLANNER) {
               std::cout << "[ZMQManager] Switched to: PLANNER mode (safety reset)" << std::endl;
-              if (latest_planner_message_.valid) {
-                constexpr auto PLANNER_MESSAGE_TIMEOUT = std::chrono::milliseconds(100);
-                auto time_since_last_planner = std::chrono::steady_clock::now() - latest_planner_message_.timestamp;
-                if (time_since_last_planner < PLANNER_MESSAGE_TIMEOUT) {
-                  // Valid planner message within timeout - use it
-                  // Update upper body control state based on this message
-                  has_upper_body_control_ = latest_planner_message_.upper_body_position.has_value();
-
-                  // Update hand joints control state based on this message
-                  has_hand_joints_ = latest_planner_message_.left_hand_joints.has_value() || 
-                                     latest_planner_message_.right_hand_joints.has_value();
-                }
-              }
+              std::lock_guard<std::mutex> planner_lock(planner_mutex_);
+              latest_planner_message_.valid = false;
+              latest_planner_message_.timestamp = {};
+              is_planner_ready_ = false;
             } else if (new_mode == ManagedMode::STREAMED_MOTION) {
               std::cout << "[ZMQManager] Switched to: STREAMED MOTION mode (safety reset)" << std::endl;
               trigger_zmq_toggle = true;
@@ -319,6 +392,8 @@ class ZMQManager : public InputInterface {
       }
       if (emergency_stop_) {
         operator_state.stop = true;
+        start_request_pending_ = false;
+        mode_transition_pending_ = false;
         if (planner_state.enabled) {
           planner_state.enabled = false;
           planner_state.initialized = false;
@@ -342,6 +417,8 @@ class ZMQManager : public InputInterface {
       // Handle stop control
       if (stop_control_) {
         operator_state.stop = true;
+        start_request_pending_ = false;
+        mode_transition_pending_ = false;
         if (planner_state.enabled) {
           planner_state.enabled = false;
           planner_state.initialized = false;
@@ -358,25 +435,93 @@ class ZMQManager : public InputInterface {
         
         // Clear hand joints control state
         has_hand_joints_ = false;
+        return;
+      }
+      if (operator_state.stop) {
+        operator_state.play = false;
+        start_request_pending_ = false;
+        mode_transition_pending_ = false;
+        planner_state.enabled = false;
+        planner_state.initialized = false;
+        return;
       }
 
-      // Delegate based on current mode
-      if (active_mode_ == ManagedMode::PLANNER) {
-        // Planner mode: handle planner input ourselves
-        handlePlannerInput(motion_reader, current_motion, current_frame,
-                          operator_state, reinitialize_heading,
-                          heading_state_buffer,
-                          has_planner, planner_state, movement_state_buffer,
-                          current_motion_mutex);
-      } else {
-        // Streamed motion mode: delegate to pose interface
-        if (pose_interface_) {
-          pose_interface_->handle_input(motion_reader, current_motion, current_frame,
-                                       operator_state, reinitialize_heading,
-                                       heading_state_buffer,
-                                       has_planner, planner_state, movement_state_buffer,
-                                       current_motion_mutex, report_temperature);
+      // Pose packets must be decoded before they are allowed to renew the
+      // lease. This also resolves the cross-SUB ordering race where the command
+      // can arrive just before the first pose packet is processed.
+      if (active_mode_ == ManagedMode::STREAMED_MOTION && pose_interface_) {
+        pose_interface_->handle_input(
+            motion_reader,
+            current_motion,
+            current_frame,
+            operator_state,
+            reinitialize_heading,
+            heading_state_buffer,
+            has_planner,
+            planner_state,
+            movement_state_buffer,
+            current_motion_mutex,
+            report_temperature);
+        if (operator_state.stop) {
+          return;
         }
+      }
+
+      const auto now = std::chrono::steady_clock::now();
+      const bool input_is_fresh = HasFreshActiveInput(now);
+
+      // A mode switch is de-energized while the two independent SUB sockets
+      // converge. The grace is bounded and never renews from malformed data.
+      if (mode_transition_pending_) {
+        if (!input_is_fresh) {
+          operator_state.play = false;
+          if (now <= mode_transition_deadline_) {
+            return;
+          }
+          StopForExpiredInputLease(operator_state, planner_state);
+          return;
+        }
+        mode_transition_pending_ = false;
+      }
+
+      if (operator_state.start) {
+        start_request_pending_ = false;
+      } else if (start_request_pending_) {
+        if (!input_is_fresh) {
+          operator_state.play = false;
+          if (now <= start_request_deadline_) {
+            return;
+          }
+          StopForExpiredInputLease(operator_state, planner_state);
+          return;
+        }
+        start_request_pending_ = false;
+        start_control_ = true;
+      }
+
+      // Once active, there is no ordinary dropout grace: the selected input
+      // must remain inside its 500 ms lease on every control iteration.
+      if (operator_state.start && !input_is_fresh) {
+        StopForExpiredInputLease(operator_state, planner_state);
+        return;
+      }
+
+      if (active_mode_ == ManagedMode::PLANNER) {
+        handlePlannerInput(
+            motion_reader,
+            current_motion,
+            current_frame,
+            operator_state,
+            reinitialize_heading,
+            heading_state_buffer,
+            has_planner,
+            planner_state,
+            movement_state_buffer,
+            current_motion_mutex);
+      } else if (start_control_ && !operator_state.start) {
+        operator_state.start = true;
+        operator_state.play = true;
+        reinitialize_heading = true;
       }
     }
 
@@ -438,13 +583,74 @@ class ZMQManager : public InputInterface {
     }
 
     std::optional<std::chrono::steady_clock::time_point> GetLastUpdateTime() const override {
-      if ((active_mode_ == ManagedMode::STREAMED_MOTION) && pose_interface_) {
+      if (active_mode_ == ManagedMode::PLANNER) {
+        std::lock_guard<std::mutex> lock(planner_mutex_);
+        if (latest_planner_message_.timestamp !=
+            std::chrono::steady_clock::time_point{}) {
+          return latest_planner_message_.timestamp;
+        }
+        return {};
+      }
+      if (pose_interface_) {
         return pose_interface_->GetLastUpdateTime();
       }
-      return InputInterface::GetLastUpdateTime();
+      return {};
+    }
+
+    bool IsActiveInputLeaseFreshAt(
+        std::chrono::steady_clock::time_point now) const {
+      return HasFreshActiveInput(now);
     }
 
   private:
+    friend struct ZMQWireTestAccess;
+
+    bool HasFreshActiveInput(std::chrono::steady_clock::time_point now) const {
+      std::optional<std::chrono::steady_clock::time_point> planner_timestamp;
+      {
+        std::lock_guard<std::mutex> lock(planner_mutex_);
+        if (latest_planner_message_.timestamp !=
+            std::chrono::steady_clock::time_point{}) {
+          planner_timestamp = latest_planner_message_.timestamp;
+        }
+      }
+      const auto pose_timestamp =
+          pose_interface_ ? pose_interface_->GetLastUpdateTime()
+                          : std::optional<std::chrono::steady_clock::time_point>{};
+      return IsInputLeaseFreshAt(
+          active_mode_,
+          planner_timestamp,
+          pose_timestamp,
+          now);
+    }
+
+    void StopForExpiredInputLease(
+        OperatorState& operator_state,
+        PlannerState& planner_state) {
+      operator_state.stop = true;
+      operator_state.play = false;
+      planner_state.enabled = false;
+      planner_state.initialized = false;
+      start_request_pending_ = false;
+      mode_transition_pending_ = false;
+      {
+        std::lock_guard<std::mutex> lock(planner_mutex_);
+        latest_planner_message_.valid = false;
+        latest_planner_message_.timestamp = {};
+      }
+      has_upper_body_control_ = false;
+      has_hand_joints_ = false;
+      has_vr_3point_control_ = false;
+      if (pose_interface_) {
+        pose_interface_->TriggerSafetyReset();
+      }
+      std::cerr
+          << "[ZMQManager SAFETY] Active "
+          << (active_mode_ == ManagedMode::PLANNER ? "planner" : "pose")
+          << " input lease expired or was never established; stopping control"
+          << std::endl;
+    }
+
     // Handle planner mode input (similar to GamepadManager::handleGamepadPlannerInput)
     void handlePlannerInput(MotionDataReader& motion_reader,
                            std::shared_ptr<const MotionSequence>& current_motion,
@@ -456,7 +662,18 @@ class ZMQManager : public InputInterface {
                            PlannerState& planner_state,
                            DataBuffer<MovementState>& movement_state_buffer,
                            std::mutex& current_motion_mutex) {
-      
+      const auto stop_if_input_lease_expired = [&]() {
+        if (operator_state.stop) {
+          operator_state.play = false;
+          return true;
+        }
+        if (HasFreshActiveInput(std::chrono::steady_clock::now())) {
+          return false;
+        }
+        StopForExpiredInputLease(operator_state, planner_state);
+        return true;
+      };
+
       // Handle safety reset from interface manager (same as GamepadManager)
       if (CheckAndClearSafetyReset()) {
         {
@@ -465,6 +682,9 @@ class ZMQManager : public InputInterface {
         }
         if (operator_state.start) {
           if (planner_state.enabled && planner_state.initialized) {
+            if (stop_if_input_lease_expired()) {
+              return;
+            }
             // Planner is already on, keep it as is (don't touch initialized flag)
             {
               std::lock_guard<std::mutex> lock(current_motion_mutex);
@@ -488,6 +708,9 @@ class ZMQManager : public InputInterface {
             auto wait_start = std::chrono::steady_clock::now();
             constexpr auto PLANNER_INIT_TIMEOUT = std::chrono::seconds(5);
             while (planner_state.enabled) {
+              if (stop_if_input_lease_expired()) {
+                return;
+              }
               {
                 std::lock_guard<std::mutex> lock(current_motion_mutex);
                 if (current_motion->name == "planner_motion") {
@@ -495,6 +718,9 @@ class ZMQManager : public InputInterface {
                 }
               }
               std::this_thread::sleep_for(std::chrono::milliseconds(100));
+              if (stop_if_input_lease_expired()) {
+                return;
+              }
               auto elapsed = std::chrono::steady_clock::now() - wait_start;
               if (elapsed > PLANNER_INIT_TIMEOUT) {
                 std::cerr << "[ZMQCommandManager ERROR] Planner initialization timeout after 5 seconds" << std::endl;
@@ -513,6 +739,9 @@ class ZMQManager : public InputInterface {
 
             is_planner_ready_ = true;
 
+            if (stop_if_input_lease_expired()) {
+              return;
+            }
             // Play motion
             {
               std::lock_guard<std::mutex> lock(current_motion_mutex);
@@ -542,6 +771,9 @@ class ZMQManager : public InputInterface {
         auto wait_start = std::chrono::steady_clock::now();
         constexpr auto PLANNER_INIT_TIMEOUT = std::chrono::seconds(5);
         while (planner_state.enabled) {
+          if (stop_if_input_lease_expired()) {
+            return;
+          }
           {
             std::lock_guard<std::mutex> lock(current_motion_mutex);
             if (current_motion->name == "planner_motion") {
@@ -550,6 +782,9 @@ class ZMQManager : public InputInterface {
             }
           }
           std::this_thread::sleep_for(std::chrono::milliseconds(100));
+          if (stop_if_input_lease_expired()) {
+            return;
+          }
           auto elapsed = std::chrono::steady_clock::now() - wait_start;
           if (elapsed > PLANNER_INIT_TIMEOUT) {
             std::cerr << "[ZMQCommandManager ERROR] Planner initialization timeout" << std::endl;
@@ -568,6 +803,9 @@ class ZMQManager : public InputInterface {
         
         is_planner_ready_ = true;
 
+        if (stop_if_input_lease_expired()) {
+          return;
+        }
         {
           std::lock_guard<std::mutex> lock(current_motion_mutex);
           operator_state.play = true;
@@ -584,12 +822,52 @@ class ZMQManager : public InputInterface {
         
         if (latest_planner_message_.valid) {
           // Valid planner message within timeout - use it
-          // Update upper body control state based on this message
-          has_upper_body_control_ = latest_planner_message_.upper_body_position.has_value();
+          if (latest_planner_message_.upper_body_position.has_value()) {
+            upper_body_joint_positions_.SetData(
+                *latest_planner_message_.upper_body_position);
+          }
+          if (latest_planner_message_.upper_body_velocity.has_value()) {
+            upper_body_joint_velocities_.SetData(
+                *latest_planner_message_.upper_body_velocity);
+          }
+          if (latest_planner_message_.left_hand_joints.has_value()) {
+            left_hand_joint_.SetData(
+                *latest_planner_message_.left_hand_joints);
+          }
+          if (latest_planner_message_.right_hand_joints.has_value()) {
+            right_hand_joint_.SetData(
+                *latest_planner_message_.right_hand_joints);
+          }
 
-          // Update hand joints control state based on this message
+          has_upper_body_control_ = latest_planner_message_.upper_body_position.has_value();
           has_hand_joints_ = latest_planner_message_.left_hand_joints.has_value() || 
                              latest_planner_message_.right_hand_joints.has_value();
+          if (latest_planner_message_.vr_position.has_value()) {
+            vr_3point_position_.SetData(*latest_planner_message_.vr_position);
+            if (latest_planner_message_.vr_orientation.has_value()) {
+              vr_3point_orientation_.SetData(
+                  *latest_planner_message_.vr_orientation);
+            }
+            if (latest_planner_message_.vr_compliance.has_value()) {
+              SetVR3PointCompliance(
+                  *latest_planner_message_.vr_compliance);
+            }
+            has_vr_3point_control_ = true;
+            if (pose_interface_) {
+              pose_interface_->SetVR3PointPosition(
+                  *latest_planner_message_.vr_position);
+              if (latest_planner_message_.vr_orientation.has_value()) {
+                pose_interface_->SetVR3PointOrientation(
+                    *latest_planner_message_.vr_orientation);
+              }
+              if (latest_planner_message_.vr_compliance.has_value()) {
+                pose_interface_->SetVR3PointCompliance(
+                    *latest_planner_message_.vr_compliance);
+              }
+            }
+          } else {
+            has_vr_3point_control_ = false;
+          }
 
           MovementState mode_state(
             latest_planner_message_.mode,
@@ -671,83 +949,223 @@ class ZMQManager : public InputInterface {
         const std::string& topic,
         const ZMQPackedMessageSubscriber::DecodedHeader& hdr,
         const std::vector<ZMQPackedMessageSubscriber::BufferView>& bufs) {
-      
-      if (hdr.fields.empty() || bufs.empty()) return;
-      
-      int start_idx = -1, stop_idx = -1, planner_idx = -1;
-      for (size_t i = 0; i < hdr.fields.size(); ++i) {
-        if (hdr.fields[i].name == "start") start_idx = static_cast<int>(i);
-        else if (hdr.fields[i].name == "stop") stop_idx = static_cast<int>(i);
-        else if (hdr.fields[i].name == "planner") planner_idx = static_cast<int>(i);
-      }
-      
-      if (start_idx < 0 || stop_idx < 0 || planner_idx < 0) {
-        std::cerr << "[ZMQManager] Command missing fields (need: start, stop, planner)" << std::endl;
+
+      if (hdr.version != 2 || hdr.fields.empty() ||
+          bufs.size() != hdr.fields.size()) {
+        std::cerr << "[ZMQManager] Command field/buffer count mismatch"
+                  << std::endl;
         return;
       }
-      
+
+      int receiver_epoch_idx = -1, publisher_session_idx = -1;
+      int command_index_idx = -1, claim_idx = -1;
+      int start_idx = -1, stop_idx = -1, planner_idx = -1;
+      std::unordered_set<std::string> seen_fields;
+      for (size_t i = 0; i < hdr.fields.size(); ++i) {
+        if (!seen_fields.insert(hdr.fields[i].name).second) {
+          std::cerr << "[ZMQManager] Command contains duplicate field '"
+                    << hdr.fields[i].name << "'" << std::endl;
+          return;
+        }
+        if (hdr.fields[i].name == "receiver_epoch") {
+          receiver_epoch_idx = static_cast<int>(i);
+        } else if (hdr.fields[i].name == "publisher_session") {
+          publisher_session_idx = static_cast<int>(i);
+        } else if (hdr.fields[i].name == "command_index") {
+          command_index_idx = static_cast<int>(i);
+        } else if (hdr.fields[i].name == "claim") {
+          claim_idx = static_cast<int>(i);
+        } else if (hdr.fields[i].name == "start") {
+          start_idx = static_cast<int>(i);
+        } else if (hdr.fields[i].name == "stop") {
+          stop_idx = static_cast<int>(i);
+        } else if (hdr.fields[i].name == "planner") {
+          planner_idx = static_cast<int>(i);
+        } else {
+          std::cerr << "[ZMQManager] Command contains unknown field '"
+                    << hdr.fields[i].name << "'" << std::endl;
+          return;
+        }
+      }
+
+      if (receiver_epoch_idx < 0 || publisher_session_idx < 0 ||
+          command_index_idx < 0 || claim_idx < 0 || start_idx < 0 ||
+          stop_idx < 0 || planner_idx < 0) {
+        std::cerr << "[ZMQManager] Command missing control-session fields"
+                  << std::endl;
+        return;
+      }
+
+      const bool needs_swap = hdr.NeedsByteSwap();
+      const auto decode_token =
+          [&](int index, ControlSessionToken& destination) {
+            if (index < 0 ||
+                static_cast<std::size_t>(index) >= bufs.size()) {
+              return false;
+            }
+            const auto& field = hdr.fields[index];
+            const auto& buffer = bufs[index];
+            if (field.dtype != "u8" ||
+                field.shape != std::vector<std::size_t>{
+                                   CONTROL_SESSION_TOKEN_SIZE} ||
+                buffer.data == nullptr ||
+                buffer.size != CONTROL_SESSION_TOKEN_SIZE) {
+              return false;
+            }
+            const auto* bytes =
+                static_cast<const std::uint8_t*>(buffer.data);
+            const auto parsed = ControlSessionState::ParseWireToken(
+                std::span<const std::uint8_t>(
+                    bytes, CONTROL_SESSION_TOKEN_SIZE));
+            if (!parsed.has_value()) {
+              return false;
+            }
+            destination = *parsed;
+            return true;
+          };
+      const auto decode_boolean_scalar = [&](int index, bool& destination) {
+        if (index < 0 || static_cast<std::size_t>(index) >= bufs.size()) {
+          return false;
+        }
+        const auto& field = hdr.fields[index];
+        const auto& buffer = bufs[index];
+        if (field.shape.size() != 1 || field.shape[0] != 1 ||
+            buffer.data == nullptr) {
+          return false;
+        }
+        if (field.dtype == "bool" || field.dtype == "u8") {
+          if (buffer.size != sizeof(uint8_t)) {
+            return false;
+          }
+          uint8_t value = 0;
+          std::memcpy(&value, buffer.data, sizeof(value));
+          if (value > 1) {
+            return false;
+          }
+          destination = value == 1;
+          return true;
+        }
+        if (field.dtype == "i32") {
+          if (buffer.size != sizeof(int32_t)) {
+            return false;
+          }
+          int32_t value = 0;
+          std::memcpy(&value, buffer.data, sizeof(value));
+          if (needs_swap) {
+            value = byte_swap(value);
+          }
+          if (value != 0 && value != 1) {
+            return false;
+          }
+          destination = value == 1;
+          return true;
+        }
+        return false;
+      };
+
       CommandMessage cmd;
-      cmd.valid = true;
-      
-      bool needs_swap = hdr.NeedsByteSwap();
-      
-      // Decode start
-      const auto& start_buf = bufs[start_idx];
-      const auto& start_field = hdr.fields[start_idx];
-      if (start_field.dtype == "bool" || start_field.dtype == "u8") {
-        uint8_t val = 0;
-        if (start_buf.size >= sizeof(uint8_t)) {
-          std::memcpy(&val, start_buf.data, sizeof(uint8_t));
-          cmd.start = (val != 0);
-        }
-      } else if (start_field.dtype == "i32") {
-        int32_t val = 0;
-        if (start_buf.size >= sizeof(int32_t)) {
-          std::memcpy(&val, start_buf.data, sizeof(int32_t));
-          if (needs_swap) val = byte_swap(val);
-          cmd.start = (val != 0);
-        }
+      if (!decode_token(receiver_epoch_idx, cmd.receiver_epoch) ||
+          !decode_token(publisher_session_idx, cmd.publisher_session) ||
+          !decode_boolean_scalar(claim_idx, cmd.claim) ||
+          !decode_boolean_scalar(start_idx, cmd.start) ||
+          !decode_boolean_scalar(stop_idx, cmd.stop) ||
+          !decode_boolean_scalar(planner_idx, cmd.planner)) {
+        std::cerr
+            << "[ZMQManager] Command field dtype, shape, value, or buffer size is invalid"
+            << std::endl;
+        return;
       }
-      
-      // Decode stop
-      const auto& stop_buf = bufs[stop_idx];
-      const auto& stop_field = hdr.fields[stop_idx];
-      if (stop_field.dtype == "bool" || stop_field.dtype == "u8") {
-        uint8_t val = 0;
-        if (stop_buf.size >= sizeof(uint8_t)) {
-          std::memcpy(&val, stop_buf.data, sizeof(uint8_t));
-          cmd.stop = (val != 0);
-        }
-      } else if (stop_field.dtype == "i32") {
-        int32_t val = 0;
-        if (stop_buf.size >= sizeof(int32_t)) {
-          std::memcpy(&val, stop_buf.data, sizeof(int32_t));
-          if (needs_swap) val = byte_swap(val);
-          cmd.stop = (val != 0);
-        }
+
+      const auto& command_index_field = hdr.fields[command_index_idx];
+      const auto& command_index_buffer = bufs[command_index_idx];
+      if (command_index_field.dtype != "i64" ||
+          command_index_field.shape != std::vector<std::size_t>{1} ||
+          command_index_buffer.data == nullptr ||
+          command_index_buffer.size != sizeof(std::int64_t)) {
+        std::cerr << "[ZMQManager] Invalid command index field"
+                  << std::endl;
+        return;
       }
-      
-      // Decode planner
-      const auto& planner_buf = bufs[planner_idx];
-      const auto& planner_field = hdr.fields[planner_idx];
-      if (planner_field.dtype == "bool" || planner_field.dtype == "u8") {
-        uint8_t val = 0;
-        if (planner_buf.size >= sizeof(uint8_t)) {
-          std::memcpy(&val, planner_buf.data, sizeof(uint8_t));
-          cmd.planner = (val != 0);
-        }
-      } else if (planner_field.dtype == "i32") {
-        int32_t val = 0;
-        if (planner_buf.size >= sizeof(int32_t)) {
-          std::memcpy(&val, planner_buf.data, sizeof(int32_t));
-          if (needs_swap) val = byte_swap(val);
-          cmd.planner = (val != 0);
-        }
+      std::memcpy(
+          &cmd.command_index,
+          command_index_buffer.data,
+          sizeof(cmd.command_index));
+      if (needs_swap) {
+        cmd.command_index = byte_swap(cmd.command_index);
       }
-      
+      if (cmd.command_index < 0 || (cmd.start && cmd.stop) ||
+          (cmd.claim && (cmd.start || cmd.stop)) ||
+          (!cmd.claim && !cmd.start && !cmd.stop)) {
+        std::cerr << "[ZMQManager] Invalid command action"
+                  << std::endl;
+        return;
+      }
+
+      // STOP is terminal and fail-safe. Any publisher that knows the current
+      // receiver epoch may stop, but it cannot change mode, claim ownership, or
+      // start control. Binding and replay counters remain intact until process
+      // exit.
+      if (cmd.stop) {
+        if (!control_session_state_->IsReceiverEpoch(
+                cmd.receiver_epoch)) {
+          std::cerr << "[ZMQManager] STOP receiver epoch mismatch"
+                    << std::endl;
+          return;
+        }
+        std::lock_guard<std::mutex> lock(command_mutex_);
+        if (!latest_command_.valid) {
+          latest_command_.start = false;
+          latest_command_.stop = false;
+        }
+        latest_command_.stop = true;
+        latest_command_.planner =
+            active_mode_ == ManagedMode::PLANNER;
+        latest_command_.valid = true;
+        return;
+      }
+
+      if (cmd.claim) {
+        const auto result = control_session_state_->ClaimPublisher(
+            cmd.receiver_epoch, cmd.publisher_session);
+        if (result != ControlSessionState::ClaimResult::CLAIMED &&
+            result !=
+                ControlSessionState::ClaimResult::ALREADY_CLAIMED) {
+          std::cerr << "[ZMQManager] Publisher claim rejected"
+                    << std::endl;
+          return;
+        }
+        std::lock_guard<std::mutex> lock(command_mutex_);
+        if (last_accepted_command_index_.has_value() &&
+            cmd.command_index < *last_accepted_command_index_) {
+          std::cerr << "[ZMQManager] Claim command index regressed"
+                    << std::endl;
+          return;
+        }
+        if (!last_accepted_command_index_.has_value() ||
+            cmd.command_index > *last_accepted_command_index_) {
+          last_accepted_command_index_ = cmd.command_index;
+        }
+        return;
+      }
+
+      if (!control_session_state_->IsClaimedPublisher(
+              cmd.receiver_epoch, cmd.publisher_session)) {
+        std::cerr << "[ZMQManager] Command publisher is not owner"
+                  << std::endl;
+        return;
+      }
+
       // Update buffer with OR logic to accumulate start/stop signals
       std::lock_guard<std::mutex> lock(command_mutex_);
-      
+      if (!IsCommandIndexAdvancing(
+              last_accepted_command_index_, cmd.command_index)) {
+        std::cerr << "[ZMQManager] Command index did not advance"
+                  << std::endl;
+        return;
+      }
+      last_accepted_command_index_ = cmd.command_index;
+      cmd.valid = true;
+
       // If starting new accumulation cycle, reset start/stop
       if (!latest_command_.valid) {
         latest_command_.start = false;
@@ -770,16 +1188,33 @@ class ZMQManager : public InputInterface {
         const std::string& topic,
         const ZMQPackedMessageSubscriber::DecodedHeader& hdr,
         const std::vector<ZMQPackedMessageSubscriber::BufferView>& bufs) {
-      
-      int mode_idx = -1, movement_idx = -1, facing_idx = -1;
+      if (hdr.version != 2) {
+        std::cerr << "[ZMQManager] Planner requires session protocol v2"
+                  << std::endl;
+        return;
+      }
+      int receiver_epoch_idx = -1, publisher_session_idx = -1;
+      int frame_index_idx = -1, mode_idx = -1, movement_idx = -1,
+          facing_idx = -1;
       int speed_idx = -1, height_idx = -1;
       int upper_body_position_idx = -1, upper_body_velocity_idx = -1;
       int left_hand_joints_idx = -1, right_hand_joints_idx = -1;
       int vr_position_idx = -1, vr_orientation_idx = -1, vr_compliance_idx = -1;
+      std::unordered_set<std::string> seen_fields;
 
       for (size_t i = 0; i < hdr.fields.size(); ++i) {
         const auto& f = hdr.fields[i];
-        if (f.name == "mode") mode_idx = static_cast<int>(i);
+        if (!seen_fields.insert(f.name).second) {
+          std::cerr << "[ZMQManager] Planner contains duplicate field '"
+                    << f.name << "'" << std::endl;
+          return;
+        }
+        if (f.name == "receiver_epoch") {
+          receiver_epoch_idx = static_cast<int>(i);
+        } else if (f.name == "publisher_session") {
+          publisher_session_idx = static_cast<int>(i);
+        } else if (f.name == "frame_index") frame_index_idx = static_cast<int>(i);
+        else if (f.name == "mode") mode_idx = static_cast<int>(i);
         else if (f.name == "movement") movement_idx = static_cast<int>(i);
         else if (f.name == "facing") facing_idx = static_cast<int>(i);
         else if (f.name == "speed") speed_idx = static_cast<int>(i);
@@ -791,17 +1226,139 @@ class ZMQManager : public InputInterface {
         else if (f.name == "vr_position") vr_position_idx = static_cast<int>(i);
         else if (f.name == "vr_orientation") vr_orientation_idx = static_cast<int>(i);
         else if (f.name == "vr_compliance") vr_compliance_idx = static_cast<int>(i);
+        else {
+          std::cerr << "[ZMQManager] Planner contains unknown field '"
+                    << f.name << "'" << std::endl;
+          return;
+        }
       }
       
-      if (mode_idx < 0 || movement_idx < 0 || facing_idx < 0) {
+      if (receiver_epoch_idx < 0 || publisher_session_idx < 0 ||
+          frame_index_idx < 0 || mode_idx < 0 || movement_idx < 0 ||
+          facing_idx < 0) {
         std::cerr << "[ZMQManager] Planner missing required fields" << std::endl;
+        return;
+      }
+
+      if (bufs.size() != hdr.fields.size()) {
+        std::cerr << "[ZMQManager] Planner field/buffer count mismatch" << std::endl;
+        return;
+      }
+
+      const auto valid_field =
+          [&](int index,
+              std::size_t expected_elements,
+              std::initializer_list<const char*> allowed_dtypes) {
+            if (index < 0 || static_cast<std::size_t>(index) >= bufs.size()) {
+              return false;
+            }
+            const auto& field = hdr.fields[index];
+            const auto& buffer = bufs[index];
+            const bool dtype_allowed = std::any_of(
+                allowed_dtypes.begin(),
+                allowed_dtypes.end(),
+                [&](const char* dtype) { return field.dtype == dtype; });
+            if (!dtype_allowed || field.shape.empty() || buffer.data == nullptr) {
+              return false;
+            }
+            std::size_t element_count = 1;
+            for (const auto dimension : field.shape) {
+              if (dimension == 0 ||
+                  element_count >
+                      std::numeric_limits<std::size_t>::max() / dimension) {
+                return false;
+              }
+              element_count *= dimension;
+            }
+            const bool shape_valid =
+                field.shape == std::vector<std::size_t>{expected_elements} ||
+                (expected_elements > 1 &&
+                 field.shape ==
+                     std::vector<std::size_t>{1, expected_elements});
+            return shape_valid && element_count == expected_elements &&
+                   buffer.size == expected_elements * field.GetElementSize();
+          };
+
+      const auto optional_field_valid =
+          [&](int index,
+              std::size_t expected_elements,
+              std::initializer_list<const char*> allowed_dtypes) {
+            return index < 0 ||
+                   valid_field(index, expected_elements, allowed_dtypes);
+          };
+
+      const auto exact_token_shape = [&](int index) {
+        return index >= 0 &&
+               static_cast<std::size_t>(index) < hdr.fields.size() &&
+               hdr.fields[index].shape ==
+                   std::vector<std::size_t>{
+                       CONTROL_SESSION_TOKEN_SIZE};
+      };
+
+      if (!exact_token_shape(receiver_epoch_idx) ||
+          !exact_token_shape(publisher_session_idx) ||
+          !valid_field(
+              receiver_epoch_idx, CONTROL_SESSION_TOKEN_SIZE, {"u8"}) ||
+          !valid_field(
+              publisher_session_idx, CONTROL_SESSION_TOKEN_SIZE, {"u8"}) ||
+          !valid_field(frame_index_idx, 1, {"i64"}) ||
+          !valid_field(mode_idx, 1, {"i32"}) ||
+          !valid_field(movement_idx, 3, {"f32", "f64"}) ||
+          !valid_field(facing_idx, 3, {"f32", "f64"}) ||
+          !optional_field_valid(speed_idx, 1, {"f32", "f64"}) ||
+          !optional_field_valid(height_idx, 1, {"f32", "f64"}) ||
+          !optional_field_valid(
+              upper_body_position_idx, 17, {"f32", "f64"}) ||
+          !optional_field_valid(
+              upper_body_velocity_idx, 17, {"f32", "f64"}) ||
+          !optional_field_valid(left_hand_joints_idx, 7, {"f32", "f64"}) ||
+          !optional_field_valid(right_hand_joints_idx, 7, {"f32", "f64"}) ||
+          !optional_field_valid(vr_position_idx, 9, {"f32", "f64"}) ||
+          !optional_field_valid(vr_orientation_idx, 12, {"f32", "f64"}) ||
+          !optional_field_valid(vr_compliance_idx, 3, {"f32", "f64"})) {
+        std::cerr
+            << "[ZMQManager] Planner field dtype, shape, or buffer size is invalid"
+            << std::endl;
         return;
       }
       
       PlannerMessage msg;
       msg.valid = true;
+
+      const auto parse_token =
+          [&](int index, ControlSessionToken& destination) {
+            const auto* bytes =
+                static_cast<const std::uint8_t*>(bufs[index].data);
+            const auto parsed = ControlSessionState::ParseWireToken(
+                std::span<const std::uint8_t>(
+                    bytes, CONTROL_SESSION_TOKEN_SIZE));
+            if (!parsed.has_value()) {
+              return false;
+            }
+            destination = *parsed;
+            return true;
+          };
+      if (!parse_token(receiver_epoch_idx, msg.receiver_epoch) ||
+          !parse_token(
+              publisher_session_idx, msg.publisher_session)) {
+        std::cerr << "[ZMQManager] Invalid planner session token"
+                  << std::endl;
+        return;
+      }
       
       bool needs_swap = hdr.NeedsByteSwap();
+
+      const auto& frame_index_buf = bufs[frame_index_idx];
+      int64_t frame_index_value = -1;
+      std::memcpy(
+          &frame_index_value, frame_index_buf.data, sizeof(frame_index_value));
+      if (needs_swap) frame_index_value = byte_swap(frame_index_value);
+      if (frame_index_value < 0) {
+        std::cerr << "[ZMQManager] Planner frame index is negative"
+                  << std::endl;
+        return;
+      }
+      msg.frame_index = frame_index_value;
       
       // Decode mode
       const auto& mode_buf = bufs[mode_idx];
@@ -908,9 +1465,6 @@ class ZMQManager : public InputInterface {
           }
         }
         msg.upper_body_position = upper_body_position_data;
-
-        // Push into upper-body position buffer
-        upper_body_joint_positions_.SetData(upper_body_position_data);
       }
 
       // Optional: upper_body_velocity (17 DOF, decode based on dtype)
@@ -939,9 +1493,6 @@ class ZMQManager : public InputInterface {
           }
         }
         msg.upper_body_velocity = upper_body_velocity_data;
-
-        // Push into upper-body velocity buffer
-        upper_body_joint_velocities_.SetData(upper_body_velocity_data);
       }
       
       // Optional: left_hand_joints (7 DOF, decode based on dtype)
@@ -970,9 +1521,6 @@ class ZMQManager : public InputInterface {
           }
         }
         msg.left_hand_joints = left_hand_joints_data;
-
-        // Push into left hand joint buffer
-        left_hand_joint_.SetData(left_hand_joints_data);
       }
 
       // Optional: right_hand_joints (7 DOF, decode based on dtype)
@@ -1001,20 +1549,23 @@ class ZMQManager : public InputInterface {
           }
         }
         msg.right_hand_joints = right_hand_joints_data;
-
-        // Push into right hand joint buffer
-        right_hand_joint_.SetData(right_hand_joints_data);
       }
 
-      // Decode VR 3-point tracking data if present (9 doubles for position, 12 doubles for orientation, 3 doubles for compliance)
-      // Use default values from InputInterface as fallback
+      // Decode VR data transactionally. The receive thread never reads control
+      // buffers owned by the input/control thread.
       bool has_vr_position = (vr_position_idx >= 0);
       bool has_vr_orientation = (vr_orientation_idx >= 0);
       bool has_vr_compliance = (vr_compliance_idx >= 0);
-      // Default values from input_interface.hpp
-      std::array<double, 9> vr_position_values = GetVR3PointPosition().second;
-      std::array<double, 12> vr_orientation_values = GetVR3PointOrientation().second;
-      std::array<double, 3> vr_compliance_values = GetVR3PointCompliance();
+      if (!has_vr_position &&
+          (has_vr_orientation || has_vr_compliance)) {
+        std::cerr
+            << "[ZMQManager] VR orientation/compliance requires position"
+            << std::endl;
+        return;
+      }
+      std::array<double, 9> vr_position_values{};
+      std::array<double, 12> vr_orientation_values{};
+      std::array<double, 3> vr_compliance_values{};
       
       if (has_vr_position) {
           const auto& vr_pos_field = hdr.fields[vr_position_idx];
@@ -1148,54 +1699,144 @@ class ZMQManager : public InputInterface {
           }
       }
 
-      // Handle VR 3-point tracking: vr_position is required, orientation and compliance are optional
-      // If vr_position is present, set has_vr_3point_control_ = true and update all buffers
+      const auto all_finite = [](const auto& values) {
+        return std::all_of(
+            values.begin(),
+            values.end(),
+            [](double value) { return std::isfinite(value); });
+      };
+      const auto optional_finite = [&](const auto& values) {
+        return !values.has_value() || all_finite(*values);
+      };
+
+      if (msg.mode < static_cast<int>(LocomotionMode::IDLE) ||
+          msg.mode > static_cast<int>(LocomotionMode::SCARE_WALK) ||
+          !all_finite(msg.movement) || !all_finite(msg.facing) ||
+          !std::isfinite(msg.speed) || !std::isfinite(msg.height) ||
+          msg.speed < -1.0 ||
+          msg.speed > 10.0 || msg.height < -1.0 || msg.height > 2.0 ||
+          !optional_finite(msg.upper_body_position) ||
+          !optional_finite(msg.upper_body_velocity) ||
+          !optional_finite(msg.left_hand_joints) ||
+          !optional_finite(msg.right_hand_joints)) {
+        std::cerr << "[ZMQManager] Planner values are non-finite or out of range"
+                  << std::endl;
+        return;
+      }
+
+      const double movement_norm = std::hypot(
+          msg.movement[0], msg.movement[1], msg.movement[2]);
+      const double facing_norm =
+          std::hypot(msg.facing[0], msg.facing[1], msg.facing[2]);
+      if (movement_norm > 1.5 || facing_norm < 1e-6 ||
+          facing_norm > 1.5) {
+        std::cerr
+            << "[ZMQManager] Planner direction magnitude is out of range"
+            << std::endl;
+        return;
+      }
+
+      if (msg.upper_body_position.has_value() &&
+          std::any_of(
+              msg.upper_body_position->begin(),
+              msg.upper_body_position->end(),
+              [](double value) { return std::abs(value) > 4.0 * M_PI; })) {
+        std::cerr << "[ZMQManager] Upper-body position is out of range"
+                  << std::endl;
+        return;
+      }
+      if (msg.upper_body_velocity.has_value() &&
+          std::any_of(
+              msg.upper_body_velocity->begin(),
+              msg.upper_body_velocity->end(),
+              [](double value) { return std::abs(value) > 50.0; })) {
+        std::cerr << "[ZMQManager] Upper-body velocity is out of range"
+                  << std::endl;
+        return;
+      }
+      const auto hand_out_of_range = [](const auto& values) {
+        return values.has_value() &&
+               std::any_of(
+                   values->begin(),
+                   values->end(),
+                   [](double value) { return std::abs(value) > 4.0 * M_PI; });
+      };
+      if (hand_out_of_range(msg.left_hand_joints) ||
+          hand_out_of_range(msg.right_hand_joints)) {
+        std::cerr << "[ZMQManager] Hand-joint position is out of range"
+                  << std::endl;
+        return;
+      }
+
       if (has_vr_position) {
-        // Always update all three buffers when VR position is present
-        // (orientation and compliance will use defaults if not provided)
-        vr_3point_position_.SetData(vr_position_values);
-        vr_3point_orientation_.SetData(vr_orientation_values);
+        if (!all_finite(vr_position_values) ||
+            std::any_of(
+                vr_position_values.begin(),
+                vr_position_values.end(),
+                [](double value) { return std::abs(value) > 10.0; })) {
+          std::cerr << "[ZMQManager] VR 3-point values are invalid"
+                    << std::endl;
+          return;
+        }
+        if (has_vr_orientation) {
+          if (!all_finite(vr_orientation_values)) {
+            std::cerr << "[ZMQManager] VR orientation is non-finite"
+                      << std::endl;
+            return;
+          }
+          for (std::size_t quaternion = 0; quaternion < 3; ++quaternion) {
+            const std::size_t offset = quaternion * 4;
+            const double norm = std::hypot(
+                std::hypot(
+                    vr_orientation_values[offset],
+                    vr_orientation_values[offset + 1]),
+                std::hypot(
+                    vr_orientation_values[offset + 2],
+                    vr_orientation_values[offset + 3]));
+            if (norm < 0.5 || norm > 1.5) {
+              std::cerr << "[ZMQManager] VR quaternion is invalid"
+                        << std::endl;
+              return;
+            }
+          }
+        }
+        if (has_vr_compliance &&
+            (!all_finite(vr_compliance_values) ||
+             std::any_of(
+                 vr_compliance_values.begin(),
+                 vr_compliance_values.end(),
+                 [](double value) {
+                   return value < 0.0 || value > 0.5;
+                 }))) {
+          std::cerr << "[ZMQManager] VR compliance is out of range"
+                    << std::endl;
+          return;
+        }
+        msg.vr_position = vr_position_values;
+        if (has_vr_orientation) {
+          msg.vr_orientation = vr_orientation_values;
+        }
         if (has_vr_compliance) {
-          SetVR3PointCompliance(vr_compliance_values);
-        }
-        has_vr_3point_control_ = true;
-
-        pose_interface_->SetVR3PointPosition(vr_position_values);
-        pose_interface_->SetVR3PointOrientation(vr_orientation_values);
-        pose_interface_->SetVR3PointCompliance(vr_compliance_values);
-        
-        if constexpr (DEBUG_LOGGING) {
-            std::cout << "[ZMQManager] VR 3-point data updated:" << std::endl;
-            std::cout << "  Position (left, right, head): [";
-            for (int j = 0; j < 9; ++j) {
-                if (j > 0) std::cout << ", ";
-                std::cout << std::fixed << std::setprecision(4) << vr_position_values[j];
-            }
-            std::cout << "]" << (has_vr_position ? " (from message)" : " (default)") << std::endl;
-            
-            std::cout << "  Orientation (left quat, right quat, head quat): [";
-            for (int j = 0; j < 12; ++j) {
-                if (j > 0) std::cout << ", ";
-                std::cout << std::fixed << std::setprecision(4) << vr_orientation_values[j];
-            }
-            std::cout << "]" << (has_vr_orientation ? " (from message)" : " (default)") << std::endl;
-            if (has_vr_compliance) {
-              std::cout << "  Compliance (left, right, head): [";
-              for (int j = 0; j < 3; ++j) {
-                  if (j > 0) std::cout << ", ";
-                  std::cout << std::fixed << std::setprecision(4) << vr_compliance_values[j];
-              }
-              std::cout << "]" << (has_vr_compliance ? " (from message)" : " (default)") << std::endl;
-            }
+          msg.vr_compliance = vr_compliance_values;
         }
       }
-      else {
-        // No VR position provided - disable VR 3-point control
-        has_vr_3point_control_ = false;
-      }
 
-      // Update buffer directly (no queue) and set timestamp
+      // Commit one fully validated planner frame. No safety lease or target
+      // buffer is updated for a partial, malformed, or non-finite packet.
       std::lock_guard<std::mutex> lock(planner_mutex_);
+      if (!control_session_state_->IsClaimedPublisher(
+              msg.receiver_epoch, msg.publisher_session)) {
+        std::cerr << "[ZMQManager] Planner publisher is not owner"
+                  << std::endl;
+        return;
+      }
+      if (!IsPlannerFrameAdvancing(
+              last_accepted_planner_frame_, msg.frame_index)) {
+        std::cerr << "[ZMQManager] Planner frame did not advance"
+                  << std::endl;
+        return;
+      }
+      last_accepted_planner_frame_ = msg.frame_index;
       latest_planner_message_ = msg;
       latest_planner_message_.timestamp = std::chrono::steady_clock::now();
     }
@@ -1212,6 +1853,7 @@ class ZMQManager : public InputInterface {
     std::string planner_topic_;      ///< Topic for planner movement commands.
     bool zmq_conflate_;              ///< ZMQ conflate option for pose topic.
     bool zmq_verbose_;               ///< Verbose logging flag.
+    std::shared_ptr<ControlSessionState> control_session_state_;
     
     // ------------------------------------------------------------------
     // Owned sub-components
@@ -1227,13 +1869,16 @@ class ZMQManager : public InputInterface {
     // ------------------------------------------------------------------
     // Mode / message state
     // ------------------------------------------------------------------
-    ManagedMode active_mode_;           ///< Current operational mode (PLANNER or STREAMED_MOTION).
+    std::atomic<ManagedMode> active_mode_{
+        ManagedMode::PLANNER};  ///< Current operational mode.
     
     std::mutex command_mutex_;          ///< Guards access to latest_command_.
     CommandMessage latest_command_;     ///< Most recent (or accumulated) command message.
+    std::optional<int64_t> last_accepted_command_index_;
     
-    std::mutex planner_mutex_;          ///< Guards access to latest_planner_message_.
+    mutable std::mutex planner_mutex_;  ///< Guards access to latest_planner_message_.
     PlannerMessage latest_planner_message_;  ///< Most recent planner movement message.
+    std::optional<int64_t> last_accepted_planner_frame_;
     
     // ------------------------------------------------------------------
     // Per-frame control flags (reset at start of update())
@@ -1242,12 +1887,16 @@ class ZMQManager : public InputInterface {
     bool report_temperature_flag_ = false;  ///< Set by 'F'/'f' keyboard shortcut.
     bool start_control_ = false;   ///< Start request from command message.
     bool stop_control_ = false;    ///< Stop request from command message.
+    bool start_request_pending_ = false;
+    std::chrono::steady_clock::time_point start_request_deadline_{};
+    bool mode_transition_pending_ = false;
+    std::chrono::steady_clock::time_point mode_transition_deadline_{};
 
     /// True once the planner has been initialised and is generating motions.
-    bool is_planner_ready_ = false;
+    std::atomic<bool> is_planner_ready_{false};
     /// True when transitioning from streamed-motion (teleop) back to planner mode;
     /// used to keep forwarding VR/hand data from the pose interface until planner is ready.
-    bool switch_from_teleop_to_planner_ = false;
+    std::atomic<bool> switch_from_teleop_to_planner_{false};
 
     /// Tracks the previous frame's VR-3-point state to detect enable/disable transitions
     /// and automatically toggle encoder mode accordingly.

@@ -50,6 +50,7 @@
 #include <iostream>
 #include <iomanip>
 #include <cstring>
+#include <optional>
 
 // Forward declaration – MotionSequence is defined in motion_data_reader.hpp.
 struct MotionSequence;
@@ -68,6 +69,8 @@ public:
     static constexpr int HISTORY_FRAMES = 5;
     /// Maximum tolerated gap (in current-rate frames) before a catch-up reset.
     static constexpr int MAX_GAP_FRAMES = 200;
+    /// Fixed frame capacity reserved in every streamed MotionSequence.
+    static constexpr int MAX_MOTION_FRAMES = 15000;
     
     /// Returned by MergeIncomingData() to communicate what happened.
     struct MergeResult {
@@ -95,7 +98,7 @@ public:
         std::vector<int64_t> frame_indices;  ///< Monotonic global frame indices (required).
         
         int protocol_version = 1;    ///< Protocol version (1, 2, or 3).
-        bool catch_up_enabled = true; ///< true → use MAX_GAP_FRAMES; false → allow infinite delay.
+        bool catch_up_enabled = true; ///< Wire-compatible flag; native safety bounds always apply.
         
         // Derived dimensions (must match the vector sizes above)
         int num_frames = 0;       ///< Number of frames in this chunk.
@@ -113,8 +116,9 @@ public:
     void Reset() {
         streamed_motion_ = std::make_shared<MotionSequence>();
         streamed_motion_->name = "streamed";
-        streamed_motion_->ReserveCapacity(15000, 29, 1, 1, 0, 0);
+        streamed_motion_->ReserveCapacity(MAX_MOTION_FRAMES, 29, 1, 1, 0, 0);
         stream_window_start_ = 0;
+        frame_step_.reset();
     }
     
     // Main merging method: merge incoming data with existing buffered data
@@ -133,8 +137,41 @@ public:
         
         // Extract frame step and validate
         int frame_step = CalculateFrameStep(data.frame_indices);
+        if (frame_step < 1 || frame_step > 1000 ||
+            (frame_step_.has_value() && *frame_step_ != frame_step)) {
+            std::cerr
+                << "[StreamedMotionMerger] Frame step changed or is invalid"
+                << std::endl;
+            return result;
+        }
         int incoming_frame_start = static_cast<int>(data.frame_indices[0]);
         int incoming_frame_end = static_cast<int>(data.frame_indices[data.num_frames - 1]);
+        const int64_t maximum_safe_window_start =
+            static_cast<int64_t>(std::numeric_limits<int>::max()) -
+            static_cast<int64_t>(MAX_MOTION_FRAMES) * frame_step;
+        if (incoming_frame_start < 0 ||
+            incoming_frame_end < incoming_frame_start ||
+            incoming_frame_start > maximum_safe_window_start ||
+            stream_window_start_ < 0 ||
+            stream_window_start_ > maximum_safe_window_start ||
+            current_playback_frame < 0 ||
+            current_playback_frame >= MAX_MOTION_FRAMES) {
+            std::cerr
+                << "[StreamedMotionMerger] Frame window is out of safe range"
+                << std::endl;
+            return result;
+        }
+        if (frame_step_.has_value() && streamed_motion_ &&
+            streamed_motion_->timesteps > 0 &&
+            (static_cast<int64_t>(incoming_frame_start) -
+             stream_window_start_) %
+                    frame_step !=
+                0) {
+            std::cerr
+                << "[StreamedMotionMerger] Incoming frames changed stride phase"
+                << std::endl;
+            return result;
+        }
         
         if constexpr (DEBUG_LOGGING) {
             std::cout << "[StreamedMotionMerger] Processing " << data.num_frames << " frames, "
@@ -159,6 +196,16 @@ public:
             merge_dst_frame,
             did_catchup
         );
+
+        const int64_t merged_timesteps =
+            static_cast<int64_t>(merge_dst_frame) + data.num_frames;
+        if (merge_dst_frame < 0 || merged_timesteps <= 0 ||
+            merged_timesteps > MAX_MOTION_FRAMES) {
+            std::cerr
+                << "[StreamedMotionMerger] Merged window exceeds capacity"
+                << std::endl;
+            return result;
+        }
         
         // Create new motion sequence
         auto new_motion = CreateNewMotion(data);
@@ -180,7 +227,7 @@ public:
         CopyIncomingDataToMotion(data, new_motion, merge_dst_frame);
         
         // Update total timesteps
-        new_motion->timesteps = merge_dst_frame + data.num_frames;
+        new_motion->timesteps = static_cast<int>(merged_timesteps);
         
         if constexpr (DEBUG_LOGGING) {
             std::cout << "[StreamedMotionMerger] Merged motion: " << new_motion->timesteps 
@@ -195,6 +242,7 @@ public:
         // Update state
         streamed_motion_ = new_motion;
         stream_window_start_ = new_window_start;
+        frame_step_ = frame_step;
         
         // Build result
         result.motion = new_motion;
@@ -210,6 +258,7 @@ public:
 private:
     std::shared_ptr<MotionSequence> streamed_motion_;
     int stream_window_start_ = 0;
+    std::optional<int> frame_step_;
     
     // Validate incoming data structure
     bool ValidateIncomingData(const IncomingData& data) const {
@@ -217,6 +266,77 @@ private:
         if (data.body_quat.empty() || data.frame_indices.empty()) {
             std::cerr << "[StreamedMotionMerger] Missing required fields (body_quat or frame_indices)" << std::endl;
             return false;
+        }
+
+        if (data.num_frames < 2 || data.num_frames > 512 ||
+            data.num_joints < 0 || data.num_joints > 256 ||
+            data.num_quat_bodies <= 0 || data.num_quat_bodies > 256 ||
+            data.num_smpl_joints < 0 || data.num_smpl_joints > 256 ||
+            data.num_smpl_poses < 0 || data.num_smpl_poses > 256 ||
+            data.frame_indices.size() !=
+                static_cast<std::size_t>(data.num_frames) ||
+            data.body_quat.size() !=
+                static_cast<std::size_t>(data.num_frames)) {
+            std::cerr << "[StreamedMotionMerger] Invalid dimensions"
+                      << std::endl;
+            return false;
+        }
+
+        for (const auto& bodies : data.body_quat) {
+            if (bodies.size() !=
+                static_cast<std::size_t>(data.num_quat_bodies)) {
+                std::cerr
+                    << "[StreamedMotionMerger] Body-quaternion dimensions mismatch"
+                    << std::endl;
+                return false;
+            }
+        }
+
+        const auto matrix_matches =
+            [frames = data.num_frames](
+                const auto& values, int width) {
+                if (values.empty()) {
+                    return width == 0;
+                }
+                return values.size() == static_cast<std::size_t>(frames) &&
+                       std::all_of(
+                           values.begin(), values.end(),
+                           [width](const auto& row) {
+                               return row.size() ==
+                                      static_cast<std::size_t>(width);
+                           });
+            };
+        if (!matrix_matches(data.joint_pos, data.num_joints) ||
+            !matrix_matches(data.joint_vel, data.num_joints) ||
+            !matrix_matches(data.smpl_joints, data.num_smpl_joints) ||
+            !matrix_matches(data.smpl_pose, data.num_smpl_poses)) {
+            std::cerr << "[StreamedMotionMerger] Data dimensions mismatch"
+                      << std::endl;
+            return false;
+        }
+
+        int64_t expected_step = -1;
+        for (std::size_t frame = 0; frame < data.frame_indices.size();
+             ++frame) {
+            const int64_t value = data.frame_indices[frame];
+            if (value < 0 ||
+                value > std::numeric_limits<int>::max()) {
+                std::cerr << "[StreamedMotionMerger] Frame index out of range"
+                          << std::endl;
+                return false;
+            }
+            if (frame > 0) {
+                const int64_t step =
+                    value - data.frame_indices[frame - 1];
+                if (step <= 0 || step > 1000 ||
+                    (expected_step >= 0 && step != expected_step)) {
+                    std::cerr
+                        << "[StreamedMotionMerger] Frame indices are not uniform"
+                        << std::endl;
+                    return false;
+                }
+                expected_step = step;
+            }
         }
         
         // Validate protocol-specific requirements
@@ -279,10 +399,11 @@ private:
             return;
         }
         
-        // Calculate max gap based on catch_up flag
-        int max_gap_frames = catch_up_enabled 
-            ? (MAX_GAP_FRAMES + HISTORY_FRAMES) 
-            : std::numeric_limits<int>::max();
+        // A sender cannot disable the native memory-safety bound. Keep the
+        // flag for protocol compatibility, but always catch up before growth
+        // can approach the fixed MotionSequence capacity.
+        (void)catch_up_enabled;
+        const int max_gap_frames = MAX_GAP_FRAMES + HISTORY_FRAMES;
         
 
         int stream_window_end = stream_window_start_ + frame_step * (streamed_motion_->timesteps - 1);
@@ -356,7 +477,7 @@ private:
         int smpl_poses_to_reserve = data.num_smpl_poses;
         
         new_motion->ReserveCapacity(
-            15000,
+            MAX_MOTION_FRAMES,
             joints_to_reserve,
             bodies_to_reserve,
             body_quaternions_to_reserve,

@@ -85,6 +85,7 @@ Documentation
    getting_started/download_models
    getting_started/quickstart
    getting_started/vr_teleop_setup
+   getting_started/pico4_ultra_g1_edu
 
 .. toctree::
    :maxdepth: 2
@@ -106,6 +107,7 @@ Documentation
    :caption: Training
 
    getting_started/installation_training
+   getting_started/g1_23dof_mjlab_training
    user_guide/training
    user_guide/training_data
    user_guide/new_embodiments

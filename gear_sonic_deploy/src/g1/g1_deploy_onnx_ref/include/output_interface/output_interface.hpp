@@ -123,8 +123,8 @@ protected:
      *   base_trans_measured    |  3   | Measured base translation (fixed default).
      *   base_quat_measured     |  4   | Measured base quaternion from IMU.
      *   body_q_measured        | 29   | Measured joint positions (MuJoCo order + default offsets).
-     *   left_hand_q_measured   |  7   | Left-hand Dex3 joint positions.
-     *   right_hand_q_measured  |  7   | Right-hand Dex3 joint positions.
+     *   left_hand_q_measured   |  7   | Measured left-hand Dex3 positions from StateLogger.
+     *   right_hand_q_measured  |  7   | Measured right-hand Dex3 positions from StateLogger.
      *   vr_3point_position     |  9   | VR positions rotated into target body frame.
      *   vr_3point_orientation  | 12   | VR orientations (passed through).
      *   vr_3point_compliance   |  3   | VR compliance values (passed through).
@@ -159,6 +159,10 @@ protected:
 
         std::vector<StateLogger::Entry> entries = state_logger_.GetLatest(1);
         const StateLogger::Entry& state = entries[0];
+        // Hand command arguments remain part of the transport interface, but
+        // measured aliases must only come from the Dex3 state snapshot.
+        (void)left_hand_joint;
+        (void)right_hand_joint;
 
         // ---- Validate current motion frame ----
         bool motion_frame_valid = current_motion && 
@@ -262,8 +266,8 @@ protected:
         output_data_map_[kBaseTransMeasured].assign(base_trans_measured.begin(), base_trans_measured.end());
         output_data_map_[kBaseQuatMeasured].assign(base_quat_measured.begin(), base_quat_measured.end());
         output_data_map_[kBodyQMeasured].assign(body_q_measured.begin(), body_q_measured.end());
-        output_data_map_[kLeftHandQMeasured].assign(left_hand_joint.begin(), left_hand_joint.end());
-        output_data_map_[kRightHandQMeasured].assign(right_hand_joint.begin(), right_hand_joint.end());
+        output_data_map_[kLeftHandQMeasured] = state.left_hand_q;
+        output_data_map_[kRightHandQMeasured] = state.right_hand_q;
 
         // write vr controller data:
         output_data_map_[kVr3pointPosition].assign(vr_3point_position_sent.begin(), vr_3point_position_sent.end());

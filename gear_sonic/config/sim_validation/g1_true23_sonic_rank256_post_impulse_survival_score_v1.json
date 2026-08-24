@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_rank256_post_impulse_survival_score_contract_v1",
+  "role": "offline_mjlab_rank256_exact_impulse_post_recovery_observation_survival_score_experiment_only",
+  "parent": {
+    "grouped_result_path": "/root/g1_true23_runs/sonic_rank256_grouped_multiobjective_survival_score_v1/rank256_grouped_multiobjective_survival_score_result.json",
+    "grouped_result_sha256": "5a2336687d79965f4a4a0e4a5556d4aab68eb1250c6c35581cb68f48697a69bb"
+  },
+  "collection": {
+    "num_envs": 128,
+    "steps": 510,
+    "total_transitions": 65280,
+    "all_envs_receive_exact_vector": true,
+    "impulse_global_transition": 241,
+    "impulse_q9": 250,
+    "first_recovery_observation_transition": 242,
+    "first_recovery_observation_q9": 251,
+    "exact_vector": [-0.109284965708, 0.348842165152, -0.026012141987, 0.137065557322, -0.499675156302, -0.717607152875],
+    "exploration_std": 0.05,
+    "first_episode_only": true,
+    "autoreset_rows_excluded": true
+  },
+  "gradient": {
+    "outcome": "first_episode_survival_length",
+    "credit_assignment": "post_impulse_observations_only",
+    "baseline": "per_transition_active_population_mean",
+    "normalization": "per_transition_active_population_z_score",
+    "contribution": "equal_valid_transition_normalized",
+    "minimum_first_recovery_survivors": 32,
+    "minimum_active_per_transition": 16,
+    "minimum_population_std_frames": 5.1,
+    "minimum_valid_transitions": 16,
+    "direction_l2": 0.000591382415,
+    "scales": [-4.0, -2.0, -1.0, -0.5, 0.0, 0.25, 0.5, 1.0, 2.0, 4.0]
+  },
+  "evaluation": {
+    "nominal_seed": 835868017,
+    "disturbance_seed": 2069156915,
+    "candidate_requires_nominal_not_worse_than_baseline": true,
+    "candidate_requires_disturbance_strictly_better_than_baseline": true,
+    "zero_faults_required": true,
+    "no_candidate_retires_score_gradient_route": true
+  },
+  "boundaries": {
+    "simulator_only": true,
+    "optimizer_steps": 0,
+    "critic_updates": 0,
+    "teacher_labels_used": false,
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_rank256_shifted_base_causal_recovery_screen_contract_v1",
+  "role": "offline_mjlab_fresh_process_screen_of_shifted_base_post_push_causal_direction_only",
+  "parents": {
+    "collection_contract_relative_path": "gear_sonic/config/sim_validation/g1_true23_sonic_rank256_shifted_base_causal_recovery_score_v1.json",
+    "collection_contract_sha256": "9a6ebac05c49463d579f9166fcbe69ac5e34efbbc49e7ba49ec5ae8480fe7583",
+    "collection_result_path": "/root/g1_true23_runs/sonic_rank256_shifted_base_causal_recovery_score_v1/rank256_shifted_base_causal_recovery_score_result.json",
+    "collection_result_sha256": "3cb089686957186c5c2cba38346fe35685639a1e92fa9d5b042fe5cf4d8cb937",
+    "direction_path": "/root/g1_true23_runs/sonic_rank256_shifted_base_causal_recovery_score_v1/checkpoints/rank256_shifted_base_causal_recovery_score_direction.pt",
+    "direction_sha256": "d99f2fc11d5a3c7674f63e60512b9c54cffdaca1ef6a0c71a08c844851d0d26d",
+    "direction_state_sha256": "15f667ce002ac56f8c1fd3d5a82974d4caba031b5c82fa96e9bbcc997bea2259"
+  },
+  "screen": {
+    "scales": [-8.0, -4.0, -2.0, -1.0, -0.5, 0.0, 0.5, 1.0, 2.0, 4.0, 8.0],
+    "scenarios": ["nominal", "disturbance"],
+    "one_fresh_process_per_evaluation": true,
+    "baseline_policy_state_sha256": "6acada92dd6e2700499c64255e077c7e844aa0f96b0700e2e2c5640606ae0650",
+    "baseline_nominal_expected_minimum_transitions": 486,
+    "baseline_disturbance_expected_transitions": 287,
+    "candidate_minimum_nominal_completed_transitions": 486,
+    "candidate_minimum_disturbance_completed_transitions": 288,
+    "zero_faults_required": true
+  },
+  "boundaries": {
+    "simulator_only": true,
+    "additional_training_transitions": 0,
+    "optimizer_steps": 0,
+    "critic_updates": 0,
+    "teacher_labels_used": false,
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

@@ -30,6 +30,7 @@ class ManagerEnvWrapper:
         self.env = env
         self.config = OmegaConf.create(config)
         self.device = env.device
+        self._validate_g1_23dof_runtime_contract()
         self.viewer_focused = True
         self.is_manager_env = True
         if hasattr(self.env, "num_envs"):
@@ -169,6 +170,32 @@ class ManagerEnvWrapper:
             self.env.viewport_camera_controller.update_view_to_asset_root("robot")
         except:  # noqa: E722
             self.viewer_focused = False
+
+    def _validate_g1_23dof_runtime_contract(self) -> None:
+        """Fail before reset/rollout if PhysX resolves a different 23-DoF order."""
+        robot_cfg = self.config.get("robot", {})
+        if robot_cfg.get("type") != "g1_23dof_rev_1_0":
+            return
+
+        from gear_sonic.utils.g1_23dof_contract import (
+            DECODER_OUTPUT_LAYOUT,
+            NATIVE_IL23_JOINT_NAMES,
+        )
+
+        actual_joint_names = tuple(self.env.scene["robot"].joint_names)
+        if actual_joint_names != NATIVE_IL23_JOINT_NAMES:
+            raise RuntimeError(
+                "G1 23-DoF native IsaacLab order mismatch; refusing rollout. "
+                f"expected={NATIVE_IL23_JOINT_NAMES}, actual={actual_joint_names}"
+            )
+
+        embodiment = robot_cfg.get("embodiment", {})
+        if embodiment.get("decoder_output_layout") != DECODER_OUTPUT_LAYOUT:
+            raise RuntimeError(
+                "G1 23-DoF decoder output layout mismatch; refusing rollout. "
+                f"expected={DECODER_OUTPUT_LAYOUT!r}, "
+                f"actual={embodiment.get('decoder_output_layout')!r}"
+            )
 
     def _setup_replay_joint_indices(self):
         """Setup joint indices for replay mode if robot has more DOFs than motion lib (29)."""

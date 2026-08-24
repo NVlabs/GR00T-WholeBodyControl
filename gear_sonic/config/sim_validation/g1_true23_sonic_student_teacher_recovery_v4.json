@@ -1,0 +1,131 @@
+{
+  "schema_version": 3,
+  "kind": "g1_true23_sonic_student_teacher_recovery_contract_v3",
+  "role": "offline_mjlab_mixed_controller_recoverability_diagnostic_only",
+  "candidate": {
+    "manifest_relative_path": "artifacts/g1_true23/sonic_nominal_multiseed_bc_last_affine_ridge_v1.manifest.json",
+    "manifest_sha256": "359e2526e9d8b8fb009dca3841b831798555046922feb93425257aac0f16dca9",
+    "decoder_sha256": "91014f0cc37899ae795cc09e6a5a3c653ff6c587cf5d10cf22f41cbad280d544",
+    "encoder_sha256": "733353148bef1eb8dd83a96416b7a89f0b5c3530ceb9e0cec9c25fdb04f56ff2",
+    "bc_contract_sha256": "b1b1d1c85a7965f734bf54d91f9314770f8d90c1ba120aefe53c9abcb7df7a5e"
+  },
+  "teacher": {
+    "iteration": 21204,
+    "checkpoint_sha256": "9cb0a06db441b8ceb51404b45ba25a81bd4120114aa6b97d6f660cac3f742f81",
+    "actor_state_sha256": "17302f7076cb480fe4ffc253e7b8228fcbaa033ccb3bf7aac1ed34940b8648ec",
+    "onnx_sha256": "321504108e677fb4b70d1398ff9a20e168def2231eb574e6d8fc1f39385d7b9b",
+    "pytorch_device": "cuda:0",
+    "onnx_provider": "CPUExecutionProvider",
+    "maximum_pt_onnx_absolute_error": 1e-5,
+    "query_every_transition": true
+  },
+  "motion": {
+    "relative_path": "artifacts/g1_native124_multimotion/scaling_all61/feasible_v1/npz/B_DadDance.npz",
+    "sha256": "a4962f1e4df45ca70ada473a962b52527b17ac667dfb17ef3cd37d4ed21c3bfb",
+    "anchor_q9": 9,
+    "last_action_q9": 518,
+    "total_transitions": 510,
+    "control_hz": 50.0
+  },
+  "modes": {
+    "cutoff50": {
+      "student_transition_count": 50,
+      "student_first_q9": 9,
+      "student_last_q9": 58,
+      "teacher_transition_count": 460,
+      "teacher_first_q9": 59,
+      "teacher_last_q9": 518
+    },
+    "cutoff75": {
+      "student_transition_count": 75,
+      "student_first_q9": 9,
+      "student_last_q9": 83,
+      "teacher_transition_count": 435,
+      "teacher_first_q9": 84,
+      "teacher_last_q9": 518
+    },
+    "cutoff100": {
+      "student_transition_count": 100,
+      "student_first_q9": 9,
+      "student_last_q9": 108,
+      "teacher_transition_count": 410,
+      "teacher_first_q9": 109,
+      "teacher_last_q9": 518
+    },
+    "cutoff140": {
+      "student_transition_count": 140,
+      "student_first_q9": 9,
+      "student_last_q9": 148,
+      "teacher_transition_count": 370,
+      "teacher_first_q9": 149,
+      "teacher_last_q9": 518
+    }
+  },
+  "selected124_state": {
+    "layout": "exact_checkpoint21204_causal_selected124",
+    "reset_torso": "virtual_q9_torso_quaternion(current_robot_torso,reference_torso_q9,reference_torso_q10)",
+    "normal_torso": "robot_torso_snapshotted_before_q9_to_q10_step",
+    "reference": "joint_q9_and_q10_plus_torso_q9",
+    "robot_state": "biased_joint_position_q10_joint_velocity_q10_gyro_q10",
+    "reset_previous_selected_raw": "zeros23",
+    "normal_previous_selected_raw": "(actual_final_unbiased_hardware_target-selected_home)/selected_scale",
+    "student_teacher_handoff_resets_state": false
+  },
+  "action_chain": {
+    "student": "decoder_plain_sonic_raw_native23_to_v11_safe_target_v2_once",
+    "teacher": "selected124_onnx_raw_hardware23_to_exact_composite_plain_sonic_raw_native23_to_v11_safe_target_v2_once",
+    "wrapper_clip_actions": null,
+    "plain_raw_native_strict_abs_max": 10.0,
+    "v2_transform_application_count": 1,
+    "maximum_actual_chain_absolute_error": 1e-6
+  },
+  "gates": {
+    "minimum_base_height_m": 0.45,
+    "maximum_base_tilt_rad": 1.0,
+    "maximum_joint_velocity_ratio": 1.0,
+    "maximum_tracking_rmse_rad": 0.75,
+    "required_zero_counts": [
+      "termination_count",
+      "q9_discontinuity_count",
+      "nonfinite_count",
+      "raw_clip_required_count",
+      "action_semantics_mismatch_count",
+      "target_soft_limit_violation_count",
+      "actuator_target_soft_limit_violation_count",
+      "measured_soft_limit_violation_count",
+      "joint_velocity_limit_violation_count",
+      "teacher_parity_violation_count",
+      "teacher_composite_mismatch_count",
+      "selected_state_mismatch_count"
+    ],
+    "only_final_timeout_permitted": true
+  },
+  "bindings": {
+    "previous_recovery_contract_sha256": "d2db339bbbd478e1ad5476743540dd58b49b9e14f9347a3c44866f0c5a634bbf",
+    "base_recovery_contract_sha256": "59a414ef938d3d4144049950cab1ac01033e5df7d9217a06951f956751fc6cba",
+    "bootstrap_contract_sha256": "38952e2459437c7a19e062384a8f587f0e3b69f2ada8eef223c63bdb0f9e2ce9",
+    "support_contract_sha256": "28d29c4204a3a0c4952723a9bfb40327ea2fa4aa50ca39bb510ea6121c6119e9",
+    "composite_contract_sha256": "841eb09a6210fc0753cfdc795570a758811baa3eeb458f0bc5e30e624667b2ff"
+  },
+  "report": {
+    "exclusive_atomic_json": true,
+    "compact_aggregates_and_digests_only": true,
+    "terminal_ee_position_evidence": "configured_body_scalar_xyz_norm_z_threshold_and_dominant_z_body",
+    "terminal_ee_position_arrays_permitted": false,
+    "teacher_raw_or_action_arrays_permitted": false,
+    "training_arrays_permitted": false
+  },
+  "boundaries": {
+    "simulator_only": true,
+    "diagnostic_only": true,
+    "recoverability_claim_only": true,
+    "teacher_labels_admitted": false,
+    "training_performed": false,
+    "support_qualified": false,
+    "dagger_data": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

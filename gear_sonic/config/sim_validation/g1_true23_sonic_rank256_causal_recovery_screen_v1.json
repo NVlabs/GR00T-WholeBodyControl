@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_rank256_causal_recovery_screen_contract_v1",
+  "role": "fresh_process_screen_of_reference_relative_causal_recovery_direction",
+  "parents": {
+    "collection_result_path": "/root/g1_true23_runs/sonic_rank256_causal_recovery_score_v2/rank256_causal_recovery_score_collection_result_v2.json",
+    "collection_result_sha256": "e282955910fefb1d0d6387fe826bdc3550038949c30d1eef152fb8b735148c26",
+    "gradient_evidence_path": "/root/g1_true23_runs/sonic_rank256_causal_recovery_score_v2/gradient_evidence.json",
+    "gradient_evidence_sha256": "ab220c0ebfbef6fe569b07c4ce328a90414495c58f04efe0bd4194cef9993366",
+    "direction_path": "/root/g1_true23_runs/sonic_rank256_causal_recovery_score_v2/checkpoints/rank256_causal_recovery_score_direction_v2.pt",
+    "direction_sha256": "aa6c3f960816e72e2e2c463e5bbad19750c9811c1e796cf1ad140969afd42728",
+    "direction_state_sha256": "345d11aaf5ddbf92c8feaaa644cb1e30c204ef5b25ac33af5790f93bdcbf4474"
+  },
+  "screen": {
+    "scales": [-4.0, -2.0, -1.0, -0.5, 0.0, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0],
+    "scenarios": ["nominal", "disturbance"],
+    "one_fresh_process_per_evaluation": true,
+    "original_policy_nominal_minimum_transitions": 486,
+    "original_policy_disturbance_strictly_above_transitions": 287,
+    "zero_faults_required": true
+  },
+  "boundaries": {
+    "additional_training_transitions": 0,
+    "optimizer_steps": 0,
+    "critic_updates": 0,
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

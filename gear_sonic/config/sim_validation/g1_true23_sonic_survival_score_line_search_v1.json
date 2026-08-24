@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_survival_score_line_search_contract_v1",
+  "role": "offline_mjlab_on_policy_first_episode_survival_score_direction_diagnostic",
+  "seed": 20260805,
+  "parent_full_support_contract": {
+    "relative_path": "gear_sonic/config/sim_validation/g1_true23_sonic_task_space_ppo_full_support_v1.json",
+    "sha256": "7454d22296f2f1415531fd02d01ea3a18f8907270687a96434ea84be51051f3d"
+  },
+  "negative_evidence": {
+    "ppo_delta_line_search_path": "/root/g1_true23_runs/sonic_task_space_ppo_full_support_delta_line_search_v1_retry1.json",
+    "ppo_delta_line_search_sha256": "8d9ecb6adc8437efdee24a42b13e5200626628be06c2a295f161b461b00ad1cc",
+    "quarter_step_result_path": "/root/g1_true23_runs/sonic_task_space_ppo_quarter_step_v1_seed20260805_retry1/quarter_step_result.json",
+    "quarter_step_result_sha256": "3d310e57a1a168437d68c7675760ce15ab32594f87ef6526d656f31a48831953",
+    "quarter_step_terminal_q9": 160,
+    "quarter_step_completed_transitions": 152,
+    "quarter_step_candidate_selected": false,
+    "quarter_vs_full_delta_cosine": 0.2840025806087036
+  },
+  "rollout": {
+    "num_envs": 128,
+    "num_steps_per_env": 160,
+    "training_transitions": 20480,
+    "first_episode_only": true,
+    "autoreset_rows_excluded": true,
+    "pre_adam_full_support_gate_required": true,
+    "optimizer_steps": 0,
+    "critic_updates": 0
+  },
+  "survival_score": {
+    "outcome": "no_first_episode_done_through_all_160_actions",
+    "baseline": "batch_mean_success_fraction",
+    "loss": "negative_mean_active_transition_centered_survival_times_action_log_probability",
+    "gradient_parameters": [
+      "core.actor_module.decoders.g1_dyn.module.14.bias",
+      "core.actor_module.decoders.g1_dyn.module.14.weight",
+      "core.actor_module.decoders.g1_dyn.module.16.bias",
+      "core.actor_module.decoders.g1_dyn.module.16.weight"
+    ],
+    "gradient_batches": 40,
+    "gradient_batch_size": 512,
+    "direction": "negative_gradient",
+    "direction_l2_target": 0.002365529660531515,
+    "direction_l2_basis": "one_quarter_of_full_support_model0_to_model1_trainable_delta",
+    "scales": [-1.0, -0.5, 0.0, 0.25, 0.5, 1.0, 2.0]
+  },
+  "evaluation_gate": {
+    "baseline_completed_transitions": 155,
+    "baseline_terminal_q9": 163,
+    "candidate_minimum_completed_transitions": 156,
+    "candidate_minimum_terminal_q9": 164,
+    "required_termination_names": ["ee_body_pos"],
+    "required_zero_counts": [
+      "nonfinite_count",
+      "raw_clip_required_count",
+      "action_semantics_mismatch_count",
+      "q9_discontinuity_count"
+    ],
+    "candidate_reward_floor": "paired_baseline_minus_max_0p2_abs_or_50",
+    "selection": "maximum_completed_transitions_then_same_horizon_episode_return_then_smallest_absolute_scale"
+  },
+  "boundaries": {
+    "diagnostic_candidate_only": true,
+    "teacher_labels_used": false,
+    "dagger_data": false,
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_hybrid_cutoff140_qualification_contract_v1",
+  "role": "student_prefix_plus_exact_selected_teacher_recovery_simulator_qualification",
+  "inputs": {
+    "candidate_manifest": {"path": "artifacts/g1_true23/sonic_nominal_dagger_bc_last_affine_ridge_v1.manifest.json", "sha256": "1bdf87f653d047ee45284a1d2e55efca8582013b1f51c80597ef7f78a1d1f9a9"},
+    "candidate_decoder": {"path": "artifacts/g1_true23/sonic_nominal_dagger_bc_last_affine_ridge_v1.decoder.onnx", "sha256": "e725fbdef73a087c9e4ea789b4442c0812f09e1ee96f098af574b29949d38ebf"},
+    "recovery_contract": {"path": "gear_sonic/config/sim_validation/g1_true23_sonic_student_teacher_recovery_v4.json", "sha256": "2b70f24f07619ad586a93f0e9c465e5d9647143d198f124c2568e4dd7e357581"},
+    "cutoff140_collection_contract": {"path": "gear_sonic/config/sim_validation/g1_true23_sonic_nominal_dagger_cutoff140_collection_v2.json", "sha256": "291a788ad513d7c2be75bc3dd56170a6ab5c43926b28c04cf8854d2b049f7e2f"},
+    "prior_passing_manifest": {"path": "artifacts/g1_true23/sonic_nominal_dagger_cutoff140_seed20260805_v2.manifest.json", "sha256": "1ef6f74e55d25024b8844c35b023bb16b56965868f9de5655fbc6e4597582928"}
+  },
+  "runtime": {
+    "mode": "cutoff140",
+    "anchor_q9": 9,
+    "last_q9": 518,
+    "total_transitions": 510,
+    "student_transitions": 140,
+    "teacher_transitions": 370,
+    "student_last_q9": 148,
+    "teacher_first_q9": 149,
+    "allowed_seeds": [20260805, 611723381, 835868017, 921108064],
+    "teacher_queried_every_transition": true,
+    "teacher_substitution_before_cutoff": false,
+    "safe_target_transform_application_count": 1
+  },
+  "gates": {
+    "exact_final_timeout_only": true,
+    "minimum_base_height_m": 0.45,
+    "maximum_base_tilt_rad": 1.0,
+    "maximum_joint_velocity_ratio": 1.0,
+    "maximum_tracking_rmse_rad": 0.75,
+    "plain_raw_absolute_strict_max": 10.0,
+    "zero_action_parity_history_state_and_semantic_mismatches": true
+  },
+  "boundaries": {
+    "simulator_only": true,
+    "mixed_controller_teleop_candidate": true,
+    "pure_student_qualified": false,
+    "teacher_labels_admitted": false,
+    "training_performed": false,
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

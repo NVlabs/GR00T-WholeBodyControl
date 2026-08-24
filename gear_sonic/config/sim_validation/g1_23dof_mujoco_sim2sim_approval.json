@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_mujoco_sim2sim_approval",
+  "promotion_enabled": true,
+  "robot_model": "g1_23dof_rev_1_0",
+  "mujoco_version": "3.2.3",
+  "runner_sha256": "be956d4da52cdbf70e72abb6fa82d7f9b7dd1d86fb0a9c678f58fc6384445226",
+  "runtime_sha256": "0897a9c7ab77fd611c3869036b3b28976ccf3cebd2ef6fa4d585688658373e16",
+  "promotion_source_sha256": "1a055ba4df4edff18458b5b36469a2187ff1959a8eb96dbbbe61781446684e5f",
+  "config_sha256": "1ffce4afaeb82e20323e24cf4645a98259d9378ba5936e9d9d52e426241a25cf",
+  "mjcf_sha256": "ea1ce67705253e73a91f9587aa70a34aaa2d17943517b2fe5ac209283b2c9e0c",
+  "urdf_sha256": "e2f55a541a485d486b376b752734cd1912c3b1b6e74f57e89e2e68691b5aa523",
+  "asset_manifest_sha256": "a98562b34a591fd26a2f4024d84454aa0d3f40ca9067e4d17d900d00f18a492b"
+}

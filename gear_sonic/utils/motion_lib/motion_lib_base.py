@@ -359,7 +359,12 @@ class MotionLibBase:
         self.randomize_wrist_prob = self.m_cfg.get("randomize_wrist_prob", 0.3)
         self.randomize_wrist_std = self.m_cfg.get("randomize_wrist_std", 0.1)
         # MuJoCo DOF indices for wrist joints (L/R roll/pitch/yaw)
-        self.wrist_mujoco_dof_indices = [19, 20, 21, 26, 27, 28]
+        self.wrist_mujoco_dof_indices = list(
+            self.m_cfg.get("wrist_mujoco_dof_indices", [19, 20, 21, 26, 27, 28])
+        )
+        self.source_pose_aa_mujoco_dof_indices = self.m_cfg.get(
+            "source_pose_aa_mujoco_dof_indices", None
+        )
 
     def load_data(self, motion_file):
         if osp.isfile(motion_file):
@@ -1728,6 +1733,25 @@ class MotionLibBase:
 
             return trans, height_diff
 
+    def _project_source_pose_aa(self, pose_aa):
+        """Project configured source MuJoCo DOFs before target-skeleton FK."""
+        keep = self.source_pose_aa_mujoco_dof_indices
+        if keep is None:
+            return pose_aa
+        keep = list(keep)
+        target_joint_count = len(keep) + 1  # root plus actuated joints
+        if pose_aa.shape[-2] == target_joint_count:
+            return pose_aa
+        required_source_joint_count = max(keep) + 2
+        if pose_aa.shape[-2] < required_source_joint_count:
+            raise ValueError(
+                "source pose_aa has "
+                f"{pose_aa.shape[-2]} joints; selector requires at least "
+                f"{required_source_joint_count}"
+            )
+        root_and_joints = [0] + [index + 1 for index in keep]
+        return pose_aa[..., root_and_joints, :]
+
     def load_motion_with_skeleton(
         self,
         ids,
@@ -1769,6 +1793,7 @@ class MotionLibBase:
 
             trans = to_torch(curr_file["root_trans_offset"]).clone()[start:end]
             pose_aa = to_torch(curr_file["pose_aa"][start:end]).clone()
+            pose_aa = self._project_source_pose_aa(pose_aa)
 
             # import ipdb; ipdb.set_trace()
             if "action" in curr_file.keys():  # noqa: SIM118
@@ -1833,6 +1858,7 @@ class MotionLibBase:
                     list(self.res_non_nav_dataset.values())
                 )
                 selected_pose_aa = to_torch(selected_file["pose_aa"])
+                selected_pose_aa = self._project_source_pose_aa(selected_pose_aa)
 
                 # Sample a matching slice from the selected motion
                 # Use the same method as main code to determine sequence length

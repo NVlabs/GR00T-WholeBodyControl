@@ -1,0 +1,38 @@
+# @package _global_
+# Genuine native-23 warm-start from official SONIC low-latency checkpoint.
+# Encoder/decoder dimensions stay 267 -> token64 -> 994 -> 23. Only temporal
+# meaning of ten lower-body reference frames changes to 0.00..0.18 s at 50 Hz.
+
+defaults:
+  - /exp/manager/universal_token/all_modes/sonic_g1_23dof_rev_1_0_warm_start
+  - override /actor_critic: universal_token/teleop_mlp_v1_low_latency
+  - _self_
+
+exp_var: low_latency_warm_start
+experiment_name: ${exp_base}_${exp_var}
+
+true23_warm_start:
+  source_family: sonic_low_latency
+  source_hf_revision: 7c90a56cfe04788c4f041daeef5b1e12930675ad
+  source_checkpoint_sha256: 0031ae7db24747445d6eb7c27697640973a837546f0b8763e775143c47d4507c
+  initialization_only: true
+
+manager_env:
+  config:
+    robot:
+      embodiment:
+        reference_profile: released_low_latency_step1_0p02s
+        reference_contract:
+          profile: released_low_latency_step1_0p02s
+          source_sample_rate_hz: 50
+          source_sample_period_s: 0.02
+          future_frame_count: 10
+          future_frame_step: 1
+          future_frame_offsets_s: [0.0, 0.02, 0.04, 0.06, 0.08, 0.1, 0.12, 0.14, 0.16, 0.18]
+          horizon_s: 0.18
+          command_layout: positions_120_then_velocities_120
+
+  commands:
+    motion:
+      num_future_frames: 10
+      dt_future_ref_frames: 0.02

@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_rank256_balance_residual_screen_contract_v1",
+  "role": "simulator_only_bounded_state_feedback_residual_screen_after_causal_trace",
+  "parents": {
+    "causal_trace": {
+      "path": "/root/g1_true23_runs/sonic_rank256_exact_push_causal_trace_v1.json",
+      "sha256": "01b5745b26d681707d9b812ecf5db71ae7ddf8c500e9e370cba7460a07f3dc85"
+    },
+    "fine_direction_screen": {
+      "path": "/root/g1_true23_runs/sonic_rank256_two_direction_fine_screen_v1/rank256_two_direction_screen_result.json",
+      "sha256": "037debaa08ca8eb5fc1b30720e267101180b2adc898290278f055f94c266bffd"
+    }
+  },
+  "controller": {
+    "signal": {
+      "orientation_error_gain": 1.5,
+      "angular_velocity_error_gain": 0.5,
+      "linear_velocity_error_gain": 0.1,
+      "deadband": 0.05,
+      "signal_clip": 1.0
+    },
+    "residual_gain": 0.4,
+    "residual_abs_clip": 0.4,
+    "variants": [
+      ["baseline", 0.0, 0.0],
+      ["ankle_positive", 1.0, 0.0],
+      ["ankle_negative", -1.0, 0.0],
+      ["hip_positive", 0.0, 1.0],
+      ["hip_negative", 0.0, -1.0],
+      ["ankle_positive_hip_negative", 1.0, -1.0],
+      ["ankle_negative_hip_positive", -1.0, 1.0],
+      ["ankle_hip_positive", 1.0, 1.0],
+      ["ankle_hip_negative", -1.0, -1.0]
+    ],
+    "native_pitch_indices": {
+      "left_hip_pitch_joint": 0,
+      "right_hip_pitch_joint": 1,
+      "left_ankle_pitch_joint": 15,
+      "right_ankle_pitch_joint": 16
+    }
+  },
+  "evaluation": {
+    "disturbance_first": true,
+    "nominal_top_improving_count": 3,
+    "candidate_requires_disturbance_strictly_above_baseline": true,
+    "candidate_requires_nominal_not_below_baseline": true
+  },
+  "boundaries": {
+    "training_transitions": 0,
+    "optimizer_steps": 0,
+    "critic_updates": 0,
+    "teacher_labels_used": false,
+    "support_qualified": false,
+    "deployment_ready": false,
+    "robot_or_network_commands_permitted": false,
+    "hardware_authorized": false
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_rank256_balance_residual_screen_contract_v1",
+  "role": "simulator_only_deadbanded_proven_sign_balance_residual_tuning",
+  "parents": {
+    "causal_trace": {
+      "path": "/root/g1_true23_runs/sonic_rank256_exact_push_causal_trace_v1.json",
+      "sha256": "01b5745b26d681707d9b812ecf5db71ae7ddf8c500e9e370cba7460a07f3dc85"
+    },
+    "initial_residual_screen": {
+      "path": "/root/g1_true23_runs/sonic_rank256_balance_residual_screen_v1_retry2/rank256_balance_residual_screen_result.json",
+      "sha256": "1f97b5093c41570dddc0eb13533e3d399198f99077625a8800d41760dfc5bf89"
+    }
+  },
+  "controller": {
+    "signal": {
+      "orientation_error_gain": 1.5,
+      "angular_velocity_error_gain": 0.5,
+      "linear_velocity_error_gain": 0.1,
+      "deadband": 0.3,
+      "signal_clip": 1.0
+    },
+    "residual_gain": 0.4,
+    "residual_abs_clip": 0.4,
+    "maximum_applied_residual_abs": 1.0,
+    "variants": [
+      ["baseline", 0.0, 0.0],
+      ["ankle_m1", -1.0, 0.0],
+      ["ankle_m1p5", -1.5, 0.0],
+      ["ankle_m2", -2.0, 0.0],
+      ["ankle_m2p5", -2.5, 0.0],
+      ["ankle_m3", -3.0, 0.0]
+    ],
+    "native_pitch_indices": {
+      "left_hip_pitch_joint": 0,
+      "right_hip_pitch_joint": 1,
+      "left_ankle_pitch_joint": 15,
+      "right_ankle_pitch_joint": 16
+    }
+  },
+  "evaluation": {
+    "disturbance_first": true,
+    "nominal_top_improving_count": 3,
+    "candidate_requires_disturbance_strictly_above_baseline": true,
+    "candidate_requires_nominal_not_below_baseline": true,
+    "meaningful_improvement_minimum_steps": 20
+  },
+  "boundaries": {
+    "training_transitions": 0,
+    "optimizer_steps": 0,
+    "critic_updates": 0,
+    "teacher_labels_used": false,
+    "support_qualified": false,
+    "deployment_ready": false,
+    "robot_or_network_commands_permitted": false,
+    "hardware_authorized": false
+  }
+}

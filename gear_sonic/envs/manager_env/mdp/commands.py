@@ -32,6 +32,10 @@ import torch
 from gear_sonic.envs.env_utils import joint_utils
 from gear_sonic.isaac_utils import rotations
 from gear_sonic.trl.utils import common, order_converter, torch_transform
+from gear_sonic.utils.g1_23dof_contract import (
+    ROBOT_MODEL as TRUE23_ROBOT_MODEL,
+    reference_profile_contract,
+)
 from gear_sonic.utils.motion_lib import motion_lib_robot
 
 if TYPE_CHECKING:
@@ -129,6 +133,24 @@ class TrackingCommand(CommandTerm):
         """
         super().__init__(cfg, env)
 
+        robot_config = getattr(env.cfg, "config", {}).get("robot", {})
+        self._require_complete_future_horizon = (
+            robot_config.get("type") == TRUE23_ROBOT_MODEL
+        )
+        self._true23_reference_contract = None
+        if self._require_complete_future_horizon:
+            embodiment = robot_config.get("embodiment", {})
+            profile = embodiment.get("reference_profile")
+            self._true23_reference_contract = reference_profile_contract(profile)
+            if (
+                embodiment.get("reference_contract")
+                != self._true23_reference_contract
+            ):
+                raise ValueError(
+                    "true23 command reference contract differs from immutable "
+                    "artifact schema"
+                )
+        self._future_horizon_tail_steps = 0
         self.is_evaluating = False
         self.cmd_body_names = self.cfg.body_names
         self.robot: Articulation = env.scene[cfg.asset_name]
@@ -333,22 +355,59 @@ class TrackingCommand(CommandTerm):
         self.body_quat_relative_w[:, :, 0] = 1.0
 
         self.num_future_frames = self.cfg.num_future_frames
+        if (
+            self._require_complete_future_horizon
+            and self.num_future_frames
+            != self._true23_reference_contract["future_frame_count"]
+        ):
+            raise ValueError(
+                "true23 command future-frame count differs from reference profile"
+            )
         # Motion lib is at target_fps; ref frames are spaced by dt_future_ref_frames (seconds).
         # frame_skips = number of motion-lib steps between consecutive ref frames (integer).
         # Effective spacing equals dt_future_ref_frames only when (dt_future_ref_frames * target_fps) is an integer;  # noqa: E501
         # otherwise integer division truncates and the velocity calculation will be incorrect.
-        self.frame_skips = self.cfg.dt_future_ref_frames // (1.0 / motion_lib_cfg.target_fps)
+        legacy_frame_skips = self.cfg.dt_future_ref_frames // (
+            1.0 / motion_lib_cfg.target_fps
+        )
         steps_exact = self.cfg.dt_future_ref_frames * motion_lib_cfg.target_fps
-        if abs(steps_exact - round(steps_exact)) > 1e-9:
-            import warnings
+        if self._require_complete_future_horizon:
+            if abs(steps_exact - round(steps_exact)) > 1e-9:
+                raise ValueError(
+                    "true23 reference profile requires an integer 50 Hz "
+                    "future-frame stride"
+                )
+            self.frame_skips = int(round(steps_exact))
+        else:
+            # Preserve historical floor-division semantics and value type for
+            # every non-true23 embodiment.
+            self.frame_skips = legacy_frame_skips
+            if abs(steps_exact - round(steps_exact)) > 1e-9:
+                import warnings
 
-            warnings.warn(
-                f"dt_future_ref_frames={self.cfg.dt_future_ref_frames} * target_fps={motion_lib_cfg.target_fps} "
-                f"= {steps_exact} is not an integer; "
-                f"using frame_skips={self.frame_skips} so effective ref-frame spacing is "
-                f"{self.frame_skips / motion_lib_cfg.target_fps:.4f}s (not {self.cfg.dt_future_ref_frames}s). "
-                "Velocity-based losses may use incorrect dt.",
-                stacklevel=2,
+                warnings.warn(
+                    f"dt_future_ref_frames={self.cfg.dt_future_ref_frames} * target_fps={motion_lib_cfg.target_fps} "
+                    f"= {steps_exact} is not an integer; "
+                    f"using frame_skips={self.frame_skips} so effective ref-frame spacing is "
+                    f"{self.frame_skips / motion_lib_cfg.target_fps:.4f}s (not {self.cfg.dt_future_ref_frames}s). "
+                    "Velocity-based losses may use incorrect dt.",
+                    stacklevel=2,
+                )
+
+        if self._require_complete_future_horizon:
+            if (
+                int(motion_lib_cfg.target_fps)
+                != self._true23_reference_contract["source_sample_rate_hz"]
+                or self.frame_skips
+                != self._true23_reference_contract["future_frame_step"]
+            ):
+                raise ValueError(
+                    "true23 runtime future stride differs from reference profile"
+                )
+            # One additional source frame proves the forward-difference velocity
+            # of the final selected reference. It may never be terminal-clamped.
+            self._future_horizon_tail_steps = (
+                (self.num_future_frames - 1) * self.frame_skips + 1
             )
 
         self.future_time_steps_init = (
@@ -358,6 +417,9 @@ class TrackingCommand(CommandTerm):
             )
             .view(1, -1)
             .repeat(self.num_envs, 1)
+        )
+        self._enforce_complete_future_horizon(
+            torch.arange(self.num_envs, device=self.device)
         )
 
         if self.cfg.smpl_num_future_frames is None:
@@ -2822,6 +2884,41 @@ class TrackingCommand(CommandTerm):
 
         return sampled_times
 
+    def _enforce_complete_future_horizon(self, env_ids: Sequence[int]) -> None:
+        """Keep true23 playback where every selected velocity has a proof frame."""
+        if not self._require_complete_future_horizon or len(env_ids) == 0:
+            return
+        ids = torch.as_tensor(env_ids, dtype=torch.long, device=self.device)
+        if torch.any(self.time_steps[ids] != 0):
+            raise RuntimeError(
+                "true23 future-horizon start repair is only valid during reset"
+            )
+        # Isaac Lab 2.3.2 computes commands after reset and advances this term
+        # once before producing the reset observation. Reserve that one step.
+        max_start = self.motion_num_steps[ids] - self._future_horizon_tail_steps - 2
+        if torch.any(max_start < 0):
+            shortest = int(self.motion_num_steps[ids].min().item())
+            required = self._future_horizon_tail_steps + 2
+            raise RuntimeError(
+                "true23 motion clip cannot cover complete semantic future "
+                "horizon, velocity proof, and reset advance: "
+                f"shortest={shortest}, "
+                f"required={required}"
+            )
+        invalid = self.motion_start_time_steps[ids] > max_start
+        if torch.any(invalid):
+            invalid_ids = ids[invalid]
+            invalid_max = max_start[invalid]
+            sampled = torch.floor(
+                torch.rand(
+                    invalid_max.shape,
+                    dtype=torch.float32,
+                    device=self.device,
+                )
+                * (invalid_max + 1).to(torch.float32)
+            ).to(self.motion_start_time_steps.dtype)
+            self.motion_start_time_steps[invalid_ids] = sampled
+
     def _resample_command(self, env_ids: Sequence[int]):
         """Resample motion clips, reset robot state, and position objects for given envs.
 
@@ -2979,6 +3076,7 @@ class TrackingCommand(CommandTerm):
                 self.motion_num_steps[env_ids] = self.motion_lib.get_motion_num_steps(
                     self.motion_ids[env_ids]
                 )
+            self._enforce_complete_future_horizon(env_ids)
 
             # Update per-env first contact frame based on assigned motion
             if self._first_contact_frame is not None:
@@ -3216,11 +3314,22 @@ class TrackingCommand(CommandTerm):
                     self._env.reset_terminated, self.motion_ids, cur_time_steps
                 )
         self.time_steps += 1
-        env_ids = torch.where(
-            self.time_steps + self.motion_start_time_steps
-            >= self.motion_lib.get_time_step_total(self.motion_ids)
-        )[0]
-        self._resample_command(env_ids)
+        if self._require_complete_future_horizon:
+            end_steps = self.motion_num_steps - self._future_horizon_tail_steps
+            invalid = torch.where(
+                self.time_steps + self.motion_start_time_steps >= end_steps
+            )[0]
+            if len(invalid) > 0:
+                raise RuntimeError(
+                    "true23 horizon timeout did not reset before semantic "
+                    "future reference became incomplete"
+                )
+        else:
+            end_steps = self.motion_lib.get_time_step_total(self.motion_ids)
+            env_ids = torch.where(
+                self.time_steps + self.motion_start_time_steps >= end_steps
+            )[0]
+            self._resample_command(env_ids)
 
         # Exponential moving average update for running_ref_root_height.
         # ZL this should be moved to the recorders???
@@ -3264,24 +3373,44 @@ class TrackingCommand(CommandTerm):
             ).view(self.num_envs, self.num_rays_x, self.num_rays_y, 3)
 
     @property
+    def tracking_time_out_steps(self) -> torch.Tensor:
+        """Return the first base frame where playback must reset.
+
+        True23 reserves the complete semantic horizon plus one source frame for
+        the final forward-difference velocity. Legacy embodiments retain the
+        original full-clip timeout.
+        """
+        if self._require_complete_future_horizon:
+            return self.motion_num_steps - self._future_horizon_tail_steps
+        return self.motion_lib.get_time_step_total(self.motion_ids)
+
+    @property
     def future_time_steps(self) -> torch.Tensor:
         """Compute absolute time-step indices for all future reference frames.
 
-        Clamps to the last valid frame of each motion to avoid out-of-bounds access.
+        Legacy embodiments clamp at clip end. True23 requires one real frame
+        beyond the selected horizon to prove final forward-difference velocity,
+        so it fails closed instead of terminal-clamping.
 
         Returns:
             Flattened tensor of shape ``(num_envs * num_future_frames,)``.
         """
-        return (
-            torch.clip(
-                self.future_time_steps_init
-                + self.time_steps[:, None]
-                + self.motion_start_time_steps[:, None],
-                max=self.motion_num_steps[:, None] - 1,
-            )
-            .flatten()
-            .long()
+        requested = (
+            self.future_time_steps_init
+            + self.time_steps[:, None]
+            + self.motion_start_time_steps[:, None]
         )
+        if self._require_complete_future_horizon:
+            if torch.any(requested[:, -1] + 1 >= self.motion_num_steps):
+                raise RuntimeError(
+                    "true23 semantic future reference lacks final velocity "
+                    "proof frame; terminal clamping is forbidden"
+                )
+            return requested.flatten().long()
+        return torch.clip(
+            requested,
+            max=self.motion_num_steps[:, None] - 1,
+        ).flatten().long()
 
     @property
     def smpl_future_time_steps(self) -> torch.Tensor:

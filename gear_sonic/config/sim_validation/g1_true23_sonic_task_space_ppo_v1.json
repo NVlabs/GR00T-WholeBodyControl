@@ -1,0 +1,171 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_task_space_ppo_contract_v1",
+  "role": "offline_mjlab_genuine_sonic_task_space_ppo_pilot_only",
+  "seed": 20260805,
+  "prerequisite_failure": {
+    "campaign_report_relative_path": "artifacts/g1_true23/g1_true23_sonic_recovery_qualification_campaign_v1.json",
+    "campaign_report_sha256": "be8151713528f2cb9bcbc9b22c1fc8e2b913cfd5a07b6e246a38a112f17829b3",
+    "required_verdict": "qualification_campaign_failed",
+    "first_failed_run_id": "disturbance_01_seed1542545985",
+    "terminal_transition": 258,
+    "terminal_q9": 267,
+    "hard_safety_violation_count": 0,
+    "soft_safety_warning_count": 118,
+    "published_teacher_label_count": 0,
+    "published_training_row_count": 0
+  },
+  "actor_initialization": {
+    "topology_checkpoint_relative_path": "sonic_release/g1_23dof_rev_1_0_low_latency_init.pt",
+    "topology_checkpoint_sha256": "5e5be23982f15eaf2eb1d52b2433d081b5f43c260ecb5055457edf222b77c9bb",
+    "source_checkpoint_linux_path": "/root/g1_true23_runs/causal_history_recovery_stand_transition_dance_v1/checkpoints/causal_model_250.pt",
+    "source_checkpoint_sha256": "85bd6de646905a44190dbf32c79737082bb604ab007a90a62e4fd2fdeeee6bd9",
+    "source_checkpoint_update_count": 250,
+    "source_policy_state_sha256": "c3bfcb5c42929293b62425f155b59ccb731f57c98e8852c7f1e97094525684af",
+    "source_lineage_sha256": "08bbd03d0df751328e449d3624d79167587b461d6835fa1f4a8742aad9ffa82a",
+    "source_checkpoint_use": "actor_weights_only",
+    "source_critic_reused": false,
+    "source_optimizer_reused": false,
+    "source_counters_reused": false,
+    "encoder_onnx_relative_path": "artifacts/g1_true23/causal_model_250_20260803/causal_model_250.encoder.onnx",
+    "encoder_onnx_sha256": "733353148bef1eb8dd83a96416b7a89f0b5c3530ceb9e0cec9c25fdb04f56ff2",
+    "v2_manifest_relative_path": "artifacts/g1_true23/sonic_native124_21204_bc_last_affine_ridge_seed20260805_v2.manifest.json",
+    "v2_manifest_sha256": "e43fb5e531fdccda46d2e28ce7a987c8d1d064e64ae58325e6caea4d758240db",
+    "v2_decoder_relative_path": "artifacts/g1_true23/sonic_native124_21204_bc_last_affine_ridge_seed20260805_v2.decoder.onnx",
+    "v2_decoder_sha256": "011740f86483323fc0f1c39ab25b784cf9411b401e56fee8b7a716664e921ee1",
+    "v2_final_weight_value_sha256": "de28d67d0968ad9018113f15b25c0ce0fea59fe8d044a005c4e3e768de7dc685",
+    "v2_final_bias_value_sha256": "1e503d0a047e1f7371349e45dddc549a1e9e89127677af81d854428a797f968d",
+    "trunk_equality": "source_checkpoint_encoder_and_decoder_layers_0_through_7_must_byte_match_bound_onnx",
+    "overlay_policy_state_sha256": "358310ececeff0177386ae28f60b513a94902465b7e99ac480d40ba21578af61"
+  },
+  "policy": {
+    "topology": "tokenizer267_to_fsq64_concat_h10_930_to_decoder994_to_raw_native23",
+    "reference_profile": "released_low_latency_step1_0p02s",
+    "encoder_input_dim": 267,
+    "token_dim": 64,
+    "policy_history_dim": 930,
+    "decoder_input_dim": 994,
+    "action_dim": 23,
+    "exploration_std": 0.1,
+    "exploration_std_trainable": false,
+    "frozen_actor_prefixes": [
+      "core.actor_module.encoders.teleop.module.",
+      "core.actor_module.decoders.g1_dyn.module.0.",
+      "core.actor_module.decoders.g1_dyn.module.2.",
+      "core.actor_module.decoders.g1_dyn.module.4.",
+      "core.actor_module.decoders.g1_dyn.module.6.",
+      "core.actor_module.decoders.g1_dyn.module.8.",
+      "core.actor_module.decoders.g1_dyn.module.10.",
+      "core.actor_module.decoders.g1_dyn.module.12.",
+      "distribution.std_param"
+    ],
+    "trainable_actor_parameters": [
+      "core.actor_module.decoders.g1_dyn.module.14.bias",
+      "core.actor_module.decoders.g1_dyn.module.14.weight",
+      "core.actor_module.decoders.g1_dyn.module.16.bias",
+      "core.actor_module.decoders.g1_dyn.module.16.weight"
+    ],
+    "trainable_actor_parameter_count": 274455,
+    "initial_frozen_actor_state_sha256": "14ed9fb20dc61e0847b6ef71e2bed3a8ce52ac8c2da5eeb876da8fd4c0896fae",
+    "initial_trainable_actor_state_sha256": "000d5ea094fe13a184aecafa8fc00868164591ba3de7ad5af36333656e415c67",
+    "all_23_output_rows_trainable": true
+  },
+  "environment": {
+    "motion_relative_path": "artifacts/g1_native124_multimotion/scaling_all61/feasible_v1/npz/B_DadDance.npz",
+    "motion_sha256": "a4962f1e4df45ca70ada473a962b52527b17ac667dfb17ef3cd37d4ed21c3bfb",
+    "anchor_q9": 9,
+    "last_action_q9": 518,
+    "transitions": 510,
+    "control_hz": 50.0,
+    "reference": "exact_q9_with_real_q10_forward_difference",
+    "history": "exact_applied_safe_native_h10_930",
+    "action_input": "plain_sonic_raw_native23",
+    "wrapper_action_clip": null,
+    "safe_target_transform": "v2_exactly_once",
+    "teacher_action_or_label_present": false,
+    "domain_randomization": false
+  },
+  "rewards": {
+    "inherited_task_space_and_physical_rewards": true,
+    "joint_target_imitation": false,
+    "alive_weight": 5.0,
+    "non_timeout_termination_weight": -5000.0,
+    "worst_ee_z_normalized_squared": {
+      "body_names": [
+        "left_ankle_roll_link",
+        "right_ankle_roll_link",
+        "left_wrist_roll_rubber_hand",
+        "right_wrist_roll_rubber_hand"
+      ],
+      "normalization_m": 0.25,
+      "weight": -20.0
+    },
+    "right_wrist_prethreshold_barrier": {
+      "body_name": "right_wrist_roll_rubber_hand",
+      "onset_m": 0.15,
+      "termination_m": 0.25,
+      "denominator_floor": 0.05,
+      "formula": "x=relu((abs_z_error-onset)/(termination-onset));x_squared/clamp(1-x,min=denominator_floor)",
+      "weight": -25.0
+    }
+  },
+  "ppo_pilot": {
+    "num_envs": 128,
+    "num_steps_per_env": 16,
+    "maximum_updates": 25,
+    "maximum_training_transitions": 51200,
+    "learning_rate": 0.00001,
+    "schedule": "fixed",
+    "clip_param": 0.1,
+    "num_learning_epochs": 2,
+    "num_mini_batches": 4,
+    "entropy_coef": 0.0,
+    "gamma": 0.99,
+    "lam": 0.95,
+    "max_grad_norm": 0.25,
+    "critic": "fresh_random_512_256_128",
+    "optimizer": "fresh_torch_adam_trainable_actor_plus_fresh_critic",
+    "training_start_update_count": 0,
+    "checkpoint_updates": [0, 5, 10, 25],
+    "evaluation_updates": [0, 5, 10, 25],
+    "random_episode_length_initialization": false
+  },
+  "pilot_gates": {
+    "baseline_update": 0,
+    "baseline_expected_completed_transitions": 155,
+    "baseline_expected_terminal_q9": 163,
+    "baseline_expected_termination_names": ["ee_body_pos"],
+    "update5_episode_length_regression_is_diagnostic_only": true,
+    "reward_divergence_relative_tolerance": 0.2,
+    "reward_divergence_absolute_tolerance": 50.0,
+    "q163_improvement_required_by_update": 10,
+    "minimum_completed_transitions_for_q163_improvement": 156,
+    "stop_before_update25_if_update10_gate_fails": true,
+    "required_zero_counts": [
+      "nonfinite_count",
+      "raw_clip_required_count",
+      "action_semantics_mismatch_count",
+      "q9_discontinuity_count"
+    ],
+    "single_pilot_pass_is_not_support_or_deployment_evidence": true
+  },
+  "checkpoint": {
+    "kind": "g1_true23_sonic_task_space_ppo_checkpoint_v1",
+    "filename_pattern": "sonic_task_space_model_N.pt",
+    "weights_only_reload_required": true,
+    "exclusive_no_overwrite": true,
+    "source_actor_lineage_embedded": true,
+    "fresh_critic_optimizer_and_counters_embedded": true,
+    "stock_export_forbidden": true
+  },
+  "boundaries": {
+    "simulator_training_only": true,
+    "teacher_labels_used": false,
+    "dagger_data": false,
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "schema_version": 4,
+  "kind": "g1_true23_selected_teacher_actuated_full_episode_contract_v1",
+  "source_student": {
+    "checkpoint_path": "/root/g1_true23_runs/sonic_survival_scale_extension_v1/checkpoints/sonic_survival_scale_extension_candidate.pt",
+    "checkpoint_sha256": "7c49c951b0a11536d12a68ab463f61111c5f8f483dc5fe820d6ec22137830613",
+    "policy_state_sha256": "a808df03d0badadf61d0a144aa016d2ee27a15c3c87661ade0c6465be74f3a9f",
+    "role": "shadow_query_only_never_actuated"
+  },
+  "teacher": {
+    "checkpoint_sha256": "9cb0a06db441b8ceb51404b45ba25a81bd4120114aa6b97d6f660cac3f742f81",
+    "actor_state_sha256": "17302f7076cb480fe4ffc253e7b8228fcbaa033ccb3bf7aac1ed34940b8648ec",
+    "onnx_sha256": "321504108e677fb4b70d1398ff9a20e168def2231eb574e6d8fc1f39385d7b9b",
+    "pt_onnx_parity_atol": 0.00001,
+    "action_composition": "selected_raw_to_plain_sonic_raw_then_v2_once",
+    "behavior": "actuated_from_reset_for_all_510_transitions"
+  },
+  "evidence_basis": {
+    "q175_failure_relative_path": "artifacts/g1_true23/g1_true23_sonic_scale2_teacher_recovery_q175_seed611723381_v3.json",
+    "q175_failure_sha256": "b7bb4396fee506b731e7d76a5dc1d09401a25204f17225864992a26692726b01",
+    "q175_failure_q9": 281,
+    "q175_teacher_actions_before_failure": 107,
+    "q175_terminal_body": "right_wrist_roll_rubber_hand",
+    "selected_teacher_nominal500_relative_path": "artifacts/g1_true23/selected_source_daddance_q9_9_nominal500_seed20260805_v1.json",
+    "selected_teacher_nominal500_sha256": "10684c42485a0526783405624526c42cbe903af4805c56a06646f3afd65b149b",
+    "selected_teacher_nominal500_qualified": true
+  },
+  "window": {
+    "anchor_q9": 9,
+    "last_q9": 518,
+    "transitions": 510,
+    "mode": "q9",
+    "student_transitions": 0,
+    "student_last_q9": 8,
+    "teacher_transitions": 510,
+    "teacher_first_q9": 9,
+    "handoff_resets_state": false,
+    "selected_previous_action_from_actual_student_final_target": false,
+    "selected_previous_action_exact_zero_at_reset": true
+  },
+  "gates": {
+    "exact_final_timeout_only": true,
+    "minimum_base_height_m": 0.45,
+    "maximum_base_tilt_rad": 1.0,
+    "maximum_joint_velocity_ratio": 1.0,
+    "maximum_tracking_rmse_rad": 0.75,
+    "strict_raw_native_abs_max": 10.0,
+    "required_zero_counts": [
+      "nonfinite_count",
+      "q9_discontinuity_count",
+      "raw_clip_required_count",
+      "action_semantics_mismatch_count",
+      "teacher_parity_violation_count",
+      "teacher_composite_mismatch_count",
+      "selected_state_mismatch_count",
+      "hard_safety_violation_count",
+      "soft_safety_warning_count"
+    ]
+  },
+  "stop_policy": {
+    "run_failed_seed_611723381_first": true,
+    "failed_run_admitted_label_count": 0,
+    "failed_run_stops_teacher_distillation_path": true
+  },
+  "boundaries": {
+    "diagnostic_only": true,
+    "recovery_claimed": false,
+    "teacher_labels_admitted": false,
+    "training_arrays_present": false,
+    "training_performed": false,
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false
+  }
+}

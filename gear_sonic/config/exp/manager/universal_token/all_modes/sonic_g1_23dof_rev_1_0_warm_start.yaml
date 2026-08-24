@@ -1,0 +1,156 @@
+# @package _global_
+# True 23-DoF physics/output with released canonical 29-slot actor history.
+# Artifact remains blocked until training and simulation validation pass.
+
+defaults:
+  - /algo: ppo_im_phc
+  - /manager_env: base_env
+  - /callbacks/read_eval
+  - /callbacks/im_resample
+  - override /trainer: trl_ppo_aux
+  - override /actor_critic: universal_token/teleop_mlp_v1
+  - override /manager_env/observations/tokenizer: unitoken_teleop_noz
+  - override /manager_env/observations/policy: local_dir_hist_g1_23dof_padded29
+  - override /manager_env/observations/critic: privileged_mf_hist
+  - override /manager_env/events: tracking/level0_4
+  - override /manager_env/terminations: tracking/base_adaptive_strict_ori_foot_xyz
+  - override /manager_env/rewards: tracking/base_5point_local_feet_acc
+
+use_manager_env: true
+
+exp_base: ${hydra:runtime.choices.exp}
+exp_var: warm_start
+experiment_name: ${exp_base}_${exp_var}
+experiment_dir: ${base_dir}/${project_name}/${experiment_name}-${timestamp}
+
+num_envs: 4096
+project_name: TRL_G1_23DOF_Track
+
+true23_warm_start:
+  source_family: sonic_release
+  source_hf_revision: null
+  source_checkpoint_sha256: e6bdab3f64a39336b3d41877d4f497d05f58af275f288ec0e6746c283ded8909
+  initialization_only: true
+
+actor_prop_history_length: 10
+actor_actions_history_length: 10
+critic_prop_history_length: 10
+critic_actions_history_length: 10
+
+manager_env:
+  config:
+    robot:
+      type: g1_23dof_rev_1_0
+      embodiment:
+        model: g1_23dof_rev_1_0
+        dof: 23
+        required_mode_machine: 4
+        hardware_joint_ids: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 16, 17, 18, 19, 22, 23, 24, 25, 26]
+        excluded_hardware_joint_ids: [13, 14, 20, 21, 27, 28]
+        observation_layout: canonical_il29_fixed_slots_v1
+        decoder_output_layout: native_physx_il23_bfs_v1
+        reference_profile: true23_step5_0p1s
+        reference_contract:
+          profile: true23_step5_0p1s
+          source_sample_rate_hz: 50
+          source_sample_period_s: 0.02
+          future_frame_count: 10
+          future_frame_step: 5
+          future_frame_offsets_s: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+          horizon_s: 0.9
+          command_layout: positions_120_then_velocities_120
+        deployment_ready: false
+    terrain_type: trimesh
+
+  rewards:
+    feet_acc:
+      weight: -2.5e-6
+    anti_shake_ang_vel:
+      params:
+        body_names:
+          ["left_wrist_roll_rubber_hand", "right_wrist_roll_rubber_hand", "head_link"]
+    undesired_contacts:
+      params:
+        sensor_cfg:
+          body_names:
+            - "^(?!left_ankle_roll_link$)(?!right_ankle_roll_link$)(?!left_wrist_roll_rubber_hand$)(?!right_wrist_roll_rubber_hand$)(?!left_elbow_link$)(?!right_elbow_link$).+$"
+
+  terminations:
+    ee_body_pos:
+      params:
+        body_names:
+          - "left_ankle_roll_link"
+          - "right_ankle_roll_link"
+          - "left_wrist_roll_rubber_hand"
+          - "right_wrist_roll_rubber_hand"
+
+  events:
+    randomize_rigid_body_mass:
+      params:
+        asset_cfg:
+          body_names: ".*wrist_roll_rubber_hand.*|torso_link"
+
+  commands:
+    motion:
+      vr_3point_body:
+        ["left_wrist_roll_rubber_hand", "right_wrist_roll_rubber_hand", "torso_link"]
+      vr_3point_body_offset:
+        [[0.18, -0.025, 0.0], [0.18, 0.025, 0.0], [0.0, 0.0, 0.35]]
+      reward_point_body:
+        ["torso_link", "left_wrist_roll_rubber_hand", "right_wrist_roll_rubber_hand"]
+      reward_point_body_offset:
+        [[0.0, 0.0, 0.5], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
+      body_names:
+        [
+          "pelvis",
+          "left_hip_roll_link",
+          "left_knee_link",
+          "left_ankle_roll_link",
+          "right_hip_roll_link",
+          "right_knee_link",
+          "right_ankle_roll_link",
+          "torso_link",
+          "left_shoulder_roll_link",
+          "left_elbow_link",
+          "left_wrist_roll_rubber_hand",
+          "right_shoulder_roll_link",
+          "right_elbow_link",
+          "right_wrist_roll_rubber_hand",
+        ]
+      num_future_frames: 10
+      dt_future_ref_frames: 0.1
+      freeze_frame_aug: true
+      motion_lib_cfg:
+        asset:
+          assetRoot: "gear_sonic/data/robots/g1/"
+          assetFileName: "g1_23dof_rev_1_0.xml"
+          urdfFileName: "g1_23dof_rev_1_0.urdf"
+        # Existing SONIC motion files are MuJoCo-29. Project before true-23 FK.
+        source_pose_aa_mujoco_dof_indices:
+          [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 16, 17, 18, 19, 22, 23, 24, 25, 26]
+        wrist_mujoco_dof_indices: [17, 22]
+        upper_body_augment_prefixes:
+          [
+            "2025",
+            "sonic_mixed_walking_running",
+            "sonic_squating_different_height_switching",
+            "sonic_running",
+            "sonic_walking",
+            "sonic_squating_different_height_hold",
+            "sonic_walking_other_style",
+            "balance",
+          ]
+        adaptive_sampling:
+          adp_samp_failure_rate_max_over_mean: 200
+        motion_file: data/motion_lib_bones_seed/robot_filtered
+
+algo:
+  config:
+    # Value/optimizer state is intentionally removed by init_g1_23dof_checkpoint.py.
+    load_optimizer: false
+    empty_cache_every_n_ppo_epoch: -1
+    num_steps_per_env: 24
+    use_clampped_std: true
+    std_clamp_min: 0.001
+    std_clamp_max: 0.5
+    max_grad_norm: 0.1

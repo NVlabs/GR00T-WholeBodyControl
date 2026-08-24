@@ -2,12 +2,13 @@
  * @file zmq_output_handler.hpp
  * @brief ZMQ PUB output handler for publishing robot state and configuration.
  *
- * Publishes two topic-prefixed streams over a single ZMQ PUB socket:
+ * Publishes three topic-prefixed streams over a single ZMQ PUB socket:
  *
- *   Topic Prefix    | Frequency       | Description
- *   ----------------|-----------------|-------------------------------------------
- *   {user_topic}    | Every tick      | Combined state + visualisation (msgpack).
- *   robot_config    | Every ~2 s      | Robot configuration (msgpack, always re-published).
+ *   Topic Prefix     | Frequency       | Description
+ *   -----------------|-----------------|-------------------------------------------
+ *   {user_topic}     | Every tick      | Combined state + visualisation (msgpack).
+ *   robot_config     | Every ~2 s      | Robot configuration (msgpack, re-published).
+ *   control_session  | Every ~100 ms   | Receiver epoch and claimed publisher.
  *
  * Wire format (single-part ZMQ message):
  *
@@ -21,7 +22,7 @@
  * ## `{user_topic}` (e.g. `g1_debug`) — published every tick
  * ---------------------------------------------------------------------------
  *
- * A single msgpack map with up to 30 keys (28 always-present + 2 conditional).
+ * A single msgpack map with up to 34 keys (32 always-present + 2 conditional).
  * All joints are in **MuJoCo order** (remapped from IsaacLab via
  * `isaaclab_to_mujoco`).
  *
@@ -30,52 +31,56 @@
  *      | **Metadata**           |              |
  *   1  | control_loop_type      | string       | Always "cpp".
  *   2  | index                  | int          | Monotonic state-logger entry index.
- *   3  | ros_timestamp          | double       | ROS 2 wall-clock (s); 0.0 if no ROS 2.
+ *   3  | timestamp_monotonic_ns | uint64       | Oldest required LowState/Dex3 source time (ns).
+ *   4  | ros_timestamp          | double       | ROS 2 wall-clock (s); 0.0 if no ROS 2.
  *      |                        |              |
  *      | **Base IMU**           |              |
- *   4  | base_quat              | double[4]    | Base IMU quaternion (w,x,y,z).
- *   5  | base_ang_vel           | double[3]    | Base angular velocity.
- *   6  | body_torso_quat        | double[4]    | Torso IMU quaternion.
- *   7  | body_torso_ang_vel     | double[3]    | Torso angular velocity.
+ *   5  | base_quat              | double[4]    | Base IMU quaternion (w,x,y,z).
+ *   6  | base_ang_vel           | double[3]    | Base angular velocity.
+ *   7  | body_torso_quat        | double[4]    | Torso IMU quaternion.
+ *   8  | body_torso_ang_vel     | double[3]    | Torso angular velocity.
  *      |                        |              |
  *      | **Body joints**        |              |
- *   8  | body_q                 | double[29]   | Joint positions (+ default offsets).
- *   9  | body_dq                | double[29]   | Joint velocities.
+ *   9  | body_q                 | double[29]   | Joint positions (+ default offsets).
+ *  10  | body_dq                | double[29]   | Joint velocities.
  *      |                        |              |
  *      | **Hand joints**        |              |
- *  10  | left_hand_q            | double[7]    | Left-hand joint positions (from state logger).
- *  11  | left_hand_dq           | double[7]    | Left-hand joint velocities.
- *  12  | right_hand_q           | double[7]    | Right-hand joint positions (from state logger).
- *  13  | right_hand_dq          | double[7]    | Right-hand joint velocities.
+ *  11  | left_hand_q            | double[7]    | Measured left-hand Dex3 positions.
+ *  12  | left_hand_dq           | double[7]    | Measured left-hand Dex3 velocities.
+ *  13  | left_hand_feedback_valid | bool       | Exact, finite state no older than 500 ms.
+ *  14  | right_hand_q           | double[7]    | Measured right-hand Dex3 positions.
+ *  15  | right_hand_dq          | double[7]    | Measured right-hand Dex3 velocities.
+ *  16  | right_hand_feedback_valid | bool      | Exact, finite state no older than 500 ms.
  *      |                        |              |
  *      | **Policy actions**     |              |
- *  14  | last_action            | double[29]   | Last body action (scaled + default offsets).
- *  15  | last_left_hand_action  | double[7]    | Last left-hand action.
- *  16  | last_right_hand_action | double[7]    | Last right-hand action.
+ *  17  | last_action            | double[29]   | Last body action (scaled + default offsets).
+ *  18  | last_left_hand_action  | double[7]    | Last left-hand action.
+ *  19  | last_right_hand_action | double[7]    | Last right-hand action.
  *      |                        |              |
  *      | **Encoder**            |              |
- *  17  | token_state            | double[N]    | Encoder token state (empty array if N/A).
+ *  20  | token_state            | double[N]    | Encoder token state (empty array if N/A).
+ *  21  | motor_temperature      | double[58]   | Winding/driver values in hardware order.
  *      |                        |              |
  *      | **Heading** *(conditional — only when heading state is available)* |
- *  18  | init_base_quat         | double[4]    | Initial base quaternion at heading init.
- *  19  | delta_heading          | double       | Accumulated heading delta (rad).
+ *  22  | init_base_quat         | double[4]    | Initial base quaternion at heading init.
+ *  23  | delta_heading          | double       | Accumulated heading delta (rad).
  *      |                        |              |
  *      | **Viz: targets** *(from current motion frame + heading correction)* |
- *  20  | base_trans_target      | double[3]    | Target base translation.
- *  21  | base_quat_target       | double[4]    | Target base quaternion.
- *  22  | body_q_target          | double[29]   | Target joint positions.
+ *  24  | base_trans_target      | double[3]    | Target base translation.
+ *  25  | base_quat_target       | double[4]    | Target base quaternion.
+ *  26  | body_q_target          | double[29]   | Target joint positions.
  *      |                        |              |
  *      | **Viz: measured**      |              |
- *  23  | base_trans_measured    | double[3]    | Measured base translation (fixed default).
- *  24  | base_quat_measured     | double[4]    | Measured base quaternion (= base_quat).
- *  25  | body_q_measured        | double[29]   | Measured joint positions (= body_q).
- *  26  | left_hand_q_measured   | double[7]    | Measured left-hand Dex3 positions.
- *  27  | right_hand_q_measured  | double[7]    | Measured right-hand Dex3 positions.
+ *  27  | base_trans_measured    | double[3]    | Measured base translation (fixed default).
+ *  28  | base_quat_measured     | double[4]    | Measured base quaternion (= base_quat).
+ *  29  | body_q_measured        | double[29]   | Measured joint positions (= body_q).
+ *  30  | left_hand_q_measured   | double[7]    | Alias of measured left_hand_q.
+ *  31  | right_hand_q_measured  | double[7]    | Alias of measured right_hand_q.
  *      |                        |              |
  *      | **Viz: VR 3-point**    |              |
- *  28  | vr_3point_position     | double[9]    | VR positions (3×xyz, target body frame).
- *  29  | vr_3point_orientation  | double[12]   | VR orientations (3×quat wxyz).
- *  30  | vr_3point_compliance   | double[3]    | VR compliance (left arm, right arm, head).
+ *  32  | vr_3point_position     | double[9]    | VR positions (3×xyz, target body frame).
+ *  33  | vr_3point_orientation  | double[12]   | VR orientations (3×quat wxyz).
+ *  34  | vr_3point_compliance   | double[3]    | VR compliance (left arm, right arm, head).
  *
  * ---------------------------------------------------------------------------
  * ## `robot_config` — re-published every ~2 s
@@ -85,6 +90,22 @@
  * as a msgpack map of string → string | int | double | bool.
  * Re-published on every `publish()` tick (throttled to ~2 s intervals) so
  * that late-joining subscribers always receive it (ZMQ PUB has no persistence).
+ *
+ * ---------------------------------------------------------------------------
+ * ## `control_session` - re-published every ~100 ms
+ * ---------------------------------------------------------------------------
+ *
+ * Msgpack map used by `zmq_manager` protocol v2 ownership handshake:
+ *   - `protocol`: integer 1
+ *   - `receiver_epoch`: nonzero 16-element byte array generated once per
+ *     native deployment process with `getrandom`
+ *   - `bound_publisher_session`: winning 16-element byte array, or an empty
+ *     array before the first successful claim
+ *
+ * Receiver epoch is immutable for process lifetime. Once the first claim sets
+ * publisher binding, that binding is also immutable. These values are replay
+ * boundaries, not secrets; this plaintext channel must remain on a trusted,
+ * firewall-scoped LAN.
  *
  * ---------------------------------------------------------------------------
  * ## Socket Options
@@ -102,6 +123,7 @@
 #include <memory>
 #include <iostream>
 #include <chrono>
+#include <cstdint>
 #include <cstring>
 #include <map>
 #include <vector>
@@ -109,8 +131,10 @@
 #include <stdexcept>
 #include <zmq.hpp>
 #include <msgpack.hpp>
+#include <utility>
 
 #include "output_interface.hpp"
+#include "../input_interface/control_session_state.hpp"
 #include "../policy_parameters.hpp"  // For isaaclab_to_mujoco, default_angles, g1_action_scale
 #include "../robot_parameters.hpp"   // For HeadingState
 #include "../utils.hpp"              // For DataBuffer
@@ -129,9 +153,15 @@ public:
      * @param port    TCP port to bind the PUB socket to (e.g. 5557).
      * @param topic   Topic prefix prepended to each published message.
      */
-    explicit ZMQOutputHandler(StateLogger& logger, int port, const std::string& topic) 
+    explicit ZMQOutputHandler(
+        StateLogger& logger,
+        int port,
+        const std::string& topic,
+        std::shared_ptr<ControlSessionState> control_session_state = nullptr)
         : OutputInterface(logger), realtime_debug_context_(1), topic_(topic),
-          robot_config_topic_("robot_config") {
+          robot_config_topic_("robot_config"),
+          control_session_topic_("control_session"),
+          control_session_state_(std::move(control_session_state)) {
 
         std::cout << "Initializing realtime debug socket" << std::endl;
         std::cout << "Binding to port: " << port << " and topic: " << topic_ << std::endl;
@@ -209,6 +239,8 @@ public:
      * control-loop tick from `publish()`.
      */
     void publish_config() override {
+        publish_control_session();
+
         // Lazy-init: serialise once, reuse forever.
         if (config_sbuf_cache_.size() == 0) {
             auto config_opt = state_logger_.GetConfig();
@@ -235,13 +267,17 @@ private:
 
     std::string topic_;              ///< User-provided topic name (e.g. "g1_debug") for combined state+viz.
     std::string robot_config_topic_; ///< Topic for robot config messages.
+    std::string control_session_topic_; ///< Receiver epoch and claimed publisher.
+    std::shared_ptr<ControlSessionState> control_session_state_;
 
     msgpack::sbuffer state_data_sbuf_;  ///< Reused each tick; cleared in pack_combined_state().
 
     // -- Config re-publish (ZMQ equivalent of ROS 2 transient_local) --
     static constexpr double CONFIG_REPUBLISH_INTERVAL_SEC = 2.0;
+    static constexpr double CONTROL_SESSION_REPUBLISH_INTERVAL_SEC = 0.1;
     msgpack::sbuffer config_sbuf_cache_;  ///< Serialised config (populated on first publish_config()).
     std::chrono::steady_clock::time_point config_last_publish_time_;
+    std::chrono::steady_clock::time_point control_session_last_publish_time_;
 
     /// Non-blocking send of [topic][msgpack payload] over the PUB socket.
     void send_zmq_message(const std::string& topic, const msgpack::sbuffer& sbuf) {
@@ -249,6 +285,44 @@ private:
         memcpy(msg.data(), topic.c_str(), topic.size());
         memcpy(static_cast<char*>(msg.data()) + topic.size(), sbuf.data(), sbuf.size());
         realtime_debug_socket_->send(msg, zmq::send_flags::dontwait);
+    }
+
+    void publish_control_session() {
+        if (!control_session_state_) {
+            return;
+        }
+        const auto now = std::chrono::steady_clock::now();
+        const double elapsed = std::chrono::duration<double>(
+                                   now - control_session_last_publish_time_)
+                                   .count();
+        if (elapsed < CONTROL_SESSION_REPUBLISH_INTERVAL_SEC) {
+            return;
+        }
+
+        msgpack::sbuffer sbuf;
+        msgpack::packer<msgpack::sbuffer> pk(&sbuf);
+        const auto receiver_epoch = control_session_state_->ReceiverEpoch();
+        const auto claimed_publisher =
+            control_session_state_->ClaimedPublisher();
+        pk.pack_map(3);
+        pk.pack("protocol");
+        pk.pack(1);
+        pk.pack("receiver_epoch");
+        pk.pack_array(receiver_epoch.size());
+        for (const auto value : receiver_epoch) {
+            pk.pack(value);
+        }
+        pk.pack("bound_publisher_session");
+        if (claimed_publisher.has_value()) {
+            pk.pack_array(claimed_publisher->size());
+            for (const auto value : *claimed_publisher) {
+                pk.pack(value);
+            }
+        } else {
+            pk.pack_array(0);
+        }
+        send_zmq_message(control_session_topic_, sbuf);
+        control_session_last_publish_time_ = now;
     }
 
     /**
@@ -279,9 +353,9 @@ private:
             has_heading_state = true;
         }
 
-        // State-logger fields: 18 base + 2 optional heading
+        // State-logger fields: 21 base + 2 optional heading
         // Visualisation fields: output_data_map_.size() (typically 11)
-        int num_state_fields = has_heading_state ? 20 : 18;
+        int num_state_fields = has_heading_state ? 23 : 21;
         int num_viz_fields = static_cast<int>(output_data_map_.size());
         pk.pack_map(num_state_fields + num_viz_fields);
 
@@ -292,6 +366,15 @@ private:
 
         pk.pack("index");
         pk.pack(state.index);
+
+        pk.pack("timestamp_monotonic_ns");
+        const auto timestamp_monotonic_ns =
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                state.feedback_source_timestamp_monotonic.time_since_epoch())
+                .count();
+        pk.pack(timestamp_monotonic_ns < 0
+                    ? uint64_t{0}
+                    : static_cast<uint64_t>(timestamp_monotonic_ns));
 
         pk.pack("ros_timestamp");
         pk.pack(state.ros_timestamp);
@@ -356,6 +439,9 @@ private:
         pk.pack_array(state.left_hand_dq.size());
         for (const auto& val : state.left_hand_dq) pk.pack(val);
 
+        pk.pack("left_hand_feedback_valid");
+        pk.pack(state.left_hand_feedback_valid);
+
         pk.pack("right_hand_q");
         pk.pack_array(state.right_hand_q.size());
         for (const auto& val : state.right_hand_q) pk.pack(val);
@@ -363,6 +449,9 @@ private:
         pk.pack("right_hand_dq");
         pk.pack_array(state.right_hand_dq.size());
         for (const auto& val : state.right_hand_dq) pk.pack(val);
+
+        pk.pack("right_hand_feedback_valid");
+        pk.pack(state.right_hand_feedback_valid);
 
         pk.pack("last_left_hand_action");
         pk.pack_array(state.last_left_hand_action.size());

@@ -12,6 +12,7 @@ Usage:
     python download_from_hf.py --sample            # Sample data only (quick start)
     python download_from_hf.py --output-dir /path  # custom output directory
     python download_from_hf.py --no-planner        # skip planner model
+    python download_from_hf.py --revision main     # intentionally use another revision
 """
 
 import argparse
@@ -22,6 +23,7 @@ import sys
 from pathlib import Path
 
 REPO_ID = "nvidia/GEAR-SONIC"
+DEFAULT_REVISION = "7c90a56cfe04788c4f041daeef5b1e12930675ad"
 
 # (filename in HF repo, local destination relative to output_dir)
 POLICY_FILES = [
@@ -128,6 +130,14 @@ def parse_args():
         default=None,
         help="Hugging Face token (or set HF_TOKEN env var / run `hf auth login`)",
     )
+    parser.add_argument(
+        "--revision",
+        default=DEFAULT_REVISION,
+        help=(
+            "Hugging Face branch, tag, or commit. Defaults to the known-good "
+            f"model snapshot {DEFAULT_REVISION}."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -141,20 +151,34 @@ def _ensure_huggingface_hub():
         sys.exit(1)
 
 
-def download_file(hf_hub_download, repo_id, hf_filename, local_dest, token=None):
+def download_file(
+    hf_hub_download,
+    repo_id,
+    hf_filename,
+    local_dest,
+    token=None,
+    revision=DEFAULT_REVISION,
+):
     """Download hf_filename from the Hub and place it at local_dest."""
     print(f"  Downloading {hf_filename} ...", flush=True)
     cached = hf_hub_download(
         repo_id=repo_id,
         filename=hf_filename,
         token=token,
+        revision=revision,
     )
     local_dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(cached, local_dest)
     print(f"  -> {local_dest}")
 
 
-def download_and_extract_smpl(hf_hub_download, repo_id, output_dir, token=None):
+def download_and_extract_smpl(
+    hf_hub_download,
+    repo_id,
+    output_dir,
+    token=None,
+    revision=DEFAULT_REVISION,
+):
     """Download split tar parts and extract SMPL data."""
     parts_dir = output_dir / "bones_seed_smpl"
     parts_dir.mkdir(parents=True, exist_ok=True)
@@ -168,7 +192,12 @@ def download_and_extract_smpl(hf_hub_download, repo_id, output_dir, token=None):
             print(f"  (cached) {local_name}")
             part_paths.append(local_dest)
             continue
-        cached = hf_hub_download(repo_id=repo_id, filename=hf_filename, token=token)
+        cached = hf_hub_download(
+            repo_id=repo_id,
+            filename=hf_filename,
+            token=token,
+            revision=revision,
+        )
         shutil.copy2(cached, local_dest)
         part_paths.append(local_dest)
         print(f"  Downloaded {local_name}")
@@ -204,7 +233,13 @@ def download_and_extract_smpl(hf_hub_download, repo_id, output_dir, token=None):
     shutil.rmtree(parts_dir)
 
 
-def download_sample_data(snapshot_download, repo_id, output_dir, token=None):
+def download_sample_data(
+    snapshot_download,
+    repo_id,
+    output_dir,
+    token=None,
+    revision=DEFAULT_REVISION,
+):
     """Download sample motion data (1 walking sequence)."""
     print("  Downloading sample data ...", flush=True)
     snapshot_download(
@@ -212,6 +247,7 @@ def download_sample_data(snapshot_download, repo_id, output_dir, token=None):
         allow_patterns="sample_data/*",
         local_dir=str(output_dir),
         token=token,
+        revision=revision,
     )
     sample_dir = output_dir / "sample_data"
     if sample_dir.exists():
@@ -246,6 +282,7 @@ def main():
     print("=" * 60)
     print("  GEAR-SONIC — Hugging Face Model Downloader")
     print(f"  Repository : {REPO_ID}")
+    print(f"  Revision   : {args.revision}")
     print(f"  Output dir : {output_dir}")
     if args.training:
         print(f"  Mode       : {variant.replace('_', '-')} training checkpoint")
@@ -257,7 +294,13 @@ def main():
 
     if args.sample:
         print("\n[Sample Data]")
-        download_sample_data(snapshot_download, REPO_ID, output_dir, token=args.token)
+        download_sample_data(
+            snapshot_download,
+            REPO_ID,
+            output_dir,
+            token=args.token,
+            revision=args.revision,
+        )
 
     elif args.training:
         print("\n[Checkpoint]")
@@ -269,14 +312,22 @@ def main():
         for hf_filename, local_rel in training_files:
             download_file(
                 hf_hub_download, REPO_ID, hf_filename,
-                output_dir / local_rel, token=args.token,
+                output_dir / local_rel,
+                token=args.token,
+                revision=args.revision,
             )
 
         if args.low_latency:
             print("\n[SMPL Motion Data] Skipped (not part of low-latency checkpoint download)")
         elif not args.no_smpl:
             print("\n[SMPL Motion Data]")
-            download_and_extract_smpl(hf_hub_download, REPO_ID, output_dir, token=args.token)
+            download_and_extract_smpl(
+                hf_hub_download,
+                REPO_ID,
+                output_dir,
+                token=args.token,
+                revision=args.revision,
+            )
         else:
             print("\n[SMPL Motion Data] Skipped (--no-smpl)")
 
@@ -290,7 +341,9 @@ def main():
         for hf_filename, local_rel in policy_files:
             download_file(
                 hf_hub_download, REPO_ID, hf_filename,
-                output_dir / local_rel, token=args.token,
+                output_dir / local_rel,
+                token=args.token,
+                revision=args.revision,
             )
 
         if not args.no_planner:
@@ -298,7 +351,9 @@ def main():
             hf_filename, local_rel = PLANNER_FILE
             download_file(
                 hf_hub_download, REPO_ID, hf_filename,
-                output_dir / local_rel, token=args.token,
+                output_dir / local_rel,
+                token=args.token,
+                revision=args.revision,
             )
 
     print("\n" + "=" * 60)

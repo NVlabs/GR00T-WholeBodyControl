@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_rank256_two_direction_screen_contract_v1",
+  "role": "simulator_only_fine_interpolation_at_coarse_survival_reward_tradeoff",
+  "inputs": {
+    "survival_result": {
+      "path": "/root/g1_true23_runs/sonic_rank256_fresh_exact_survival_direction_v1/fresh_exact_survival_direction_result.json",
+      "sha256": "88a831d681a1239134dbad6ff3de4f35b9ed7fab2464994e78dcf134fccf8141"
+    },
+    "survival_direction": {
+      "path": "/root/g1_true23_runs/sonic_rank256_fresh_exact_survival_direction_v1/checkpoints/fresh_exact_survival_direction.pt",
+      "sha256": "ab9cc0d9e94110577671ad68a0986c46db485e2bc6fa995d58da2a74285d20e3",
+      "state_sha256": "9d456c1ff22b84fef2377d9d08fcf36f08f7e6a8faae64c23646a84dc367cece"
+    },
+    "reward_result": {
+      "path": "/root/g1_true23_runs/sonic_rank256_post_impulse_reward_to_go_score_v1/rank256_post_impulse_reward_to_go_score_result.json",
+      "sha256": "f5ef9cdd5e8129f8115f257f14ece6778bafe9eb8fad74a3044c3144fdee7581"
+    },
+    "reward_direction": {
+      "path": "/root/g1_true23_runs/sonic_rank256_post_impulse_reward_to_go_score_v1/checkpoints/rank256_post_impulse_reward_to_go_score_direction.pt",
+      "sha256": "e739e7b95d4e6c85266579aac7a52255e4e743112becc944e59be38a4b449a4c",
+      "state_sha256": "66b436693054f9cebd713eb4ac3e768206a5193cd9d9ea54e31c110e7f7563f0"
+    },
+    "coarse_result": {
+      "path": "/root/g1_true23_runs/sonic_rank256_two_direction_screen_v1_retry1/rank256_two_direction_screen_result.json",
+      "sha256": "e5d4afa4f3e3611b375997123ef9892709340a065ee95a0ff1e7b381decd2ec2"
+    }
+  },
+  "screen": {
+    "coefficients": [
+      [0.0, 0.0],
+      [0.0, 1.0],
+      [0.25, 1.0],
+      [0.5, 0.75],
+      [0.5, 1.0],
+      [0.5, 1.25],
+      [0.75, 1.0]
+    ],
+    "scenario_order": ["nominal", "disturbance"],
+    "candidate_requires_nominal_not_below_baseline": true,
+    "candidate_requires_disturbance_above_baseline": true
+  },
+  "boundaries": {
+    "training_transitions": 0,
+    "optimizer_steps": 0,
+    "critic_updates": 0,
+    "teacher_labels_used": false,
+    "support_qualified": false,
+    "deployment_ready": false,
+    "robot_or_network_commands_permitted": false,
+    "hardware_authorized": false
+  }
+}

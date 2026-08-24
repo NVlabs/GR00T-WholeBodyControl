@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_seed835_failure_prefix_dagger_round3_contract_v1",
+  "role": "third_student_on_policy_failure_prefix_with_exact_same_state_teacher_labels",
+  "inputs": {
+    "candidate_manifest": {"path": "artifacts/g1_true23/sonic_seed835_counterexample_round2_bc_last_affine_v1.manifest.json", "sha256": "c2112088fdcaee58ca848285adb833bd4413f29369dbae21e34b47d698ec73af"},
+    "candidate_decoder": {"path": "artifacts/g1_true23/sonic_seed835_counterexample_round2_bc_last_affine_v1.decoder.onnx", "sha256": "c9795977810999659fd3c24d287fa6cf3b73ed25566031d21c360810baea7459"},
+    "student_failure": {"path": "artifacts/g1_true23/sonic_seed835_counterexample_round2_bc_last_affine_v1.seed835868017.initial510.json", "sha256": "5f6d5083ea6f23644f5d75bb2d85e9263d2d3436eef2c5ddd3002a83ce8cdf67"},
+    "recovery_contract": {"path": "gear_sonic/config/sim_validation/g1_true23_sonic_student_teacher_recovery_v4.json", "sha256": "2b70f24f07619ad586a93f0e9c465e5d9647143d198f124c2568e4dd7e357581"},
+    "round1_counterexample_npz": {"path": "artifacts/g1_true23/sonic_seed835_failure_prefix_dagger_v1.npz", "sha256": "d5006903e926f2f3bce97701b8293b94814a6b5aead39c10fceb91da27db3bf8"},
+    "round1_counterexample_manifest": {"path": "artifacts/g1_true23/sonic_seed835_failure_prefix_dagger_v1.manifest.json", "sha256": "ebeb4209950743503140fd83cb706114d3d2a95a0b84f3db3d81e876932d7fe7"},
+    "round2_counterexample_npz": {"path": "artifacts/g1_true23/sonic_seed835_failure_prefix_dagger_round2_v1.npz", "sha256": "20b1473e959a7a1dcb098fafed782f0895c86e66c63d1adc8f97917e53c8aa2a"},
+    "round2_counterexample_manifest": {"path": "artifacts/g1_true23/sonic_seed835_failure_prefix_dagger_round2_v1.manifest.json", "sha256": "c2038a580b34dde77b7895b5c657b56065687f9c63c135b7b7c1cc69be8b78e1"}
+  },
+  "rows": {
+    "total": 466,
+    "student_on_policy": 466,
+    "teacher_actuated": 0,
+    "q9_first": 9,
+    "q9_last": 474,
+    "terminal_causing_pre_action_row_included": true,
+    "post_action_terminal_state_included": false
+  },
+  "admission": {
+    "dynamic_recovery_mode": "cutoff510",
+    "student_transition_count": 510,
+    "teacher_transition_count": 0,
+    "expected_verdict": "mixed_controller_recovery_failed",
+    "expected_attempted_transitions": 466,
+    "expected_terminal_transition": 465,
+    "expected_terminal_q9": 474,
+    "expected_termination_names": ["ee_body_pos"],
+    "expected_controller_counts": {"student": 466, "teacher": 0},
+    "teacher_pt_cpu_onnx_parity_required_every_row": true,
+    "student_action_chain_required_every_row": true
+  },
+  "boundaries": {
+    "simulator_only": true,
+    "classification": "failure_prefix_counterexample_dagger_round3_bc_only",
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

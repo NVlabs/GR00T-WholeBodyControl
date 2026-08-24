@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_pico_retargeter_protocol",
+  "source_kind": "retargeted_g1_delayed_reference",
+  "raw_capture": {
+    "kind": "xrobotoolkit_pico_xr24_bodytracking_ankle_fused_raw_capture",
+    "frame_kind": "xrobotoolkit_pico_xr24_bodytracking_ankle_fused_atomic_frame",
+    "atomic_snapshot_contract": "xrt_xr24_body_tracker_fused_ankles_atomic_v1",
+    "binding_getter": "get_body_snapshot",
+    "required_derivative_layout_contract": "linear_xyz_then_angular_xyz_v1",
+    "required_source_coherence_contract": "same_packet_xr24_body_tracking_v1",
+    "independent_body_motion_getter_pairing_allowed": false,
+    "raw_motion_tracking_mode_allowed": false,
+    "raw_motion_tracker_data_required": false,
+    "bodytracking_fused_ankle_roles_required": true,
+    "ankle_role_semantics": "bodytracking_fused_roles_7_8_from_calibrated_ankle_bands_v1",
+    "ankle_role_indices": {
+      "left_ankle": 7,
+      "right_ankle": 8
+    },
+    "current_hardened_client_compatible": true,
+    "body_joint_count": 24,
+    "body_pose_shape": [
+      24,
+      7
+    ],
+    "body_velocity_shape": [
+      24,
+      6
+    ],
+    "body_velocity_semantics": "linear_xyz_then_angular_xyz",
+    "body_acceleration_shape": [
+      24,
+      6
+    ],
+    "body_acceleration_semantics": "linear_xyz_then_angular_xyz",
+    "body_joint_timestamp_count": 24,
+    "health_requirements": {
+      "health_supported": true,
+      "health_available": true,
+      "health_valid": true,
+      "health_schema_version": 1,
+      "health_client_build": "xrobotoolkit-pico-health-v1",
+      "health_calibration_result": 0,
+      "health_calibrated": true,
+      "health_tracking_mode": 0,
+      "health_connect_state_result": 0,
+      "minimum_tracker_count": 2,
+      "minimum_unique_tracker_count": 2,
+      "health_body_state_result": 0,
+      "health_is_tracking": true,
+      "health_tracking_state_code": 0,
+      "health_body_state_code": 1,
+      "health_body_error_code": 0,
+      "minimum_connected_band_count": 2,
+      "health_body_data_result": 0,
+      "health_body_role_count": 24
+    },
+    "source_timestamp_rule": "advancing_body_timestamp_plus_matching_body_health_sample_sequence"
+  },
+  "retargeter": {
+    "kind": "nvidia_soma_retargeter_xr24_adapter",
+    "repository": "https://github.com/NVIDIA/soma-retargeter.git",
+    "commit": "b3ef2708d84bfd1314ddb52d0db6c9c211df1f57",
+    "package_version": "0.1.0",
+    "python_requires": ">=3.12",
+    "newton_version": "1.0.0",
+    "warp_version": "1.12.0",
+    "config_hash_semantics": "utf8_lf_normalized_sha256",
+    "target": "unitree_g1_29dof",
+    "solver": "Newton",
+    "uses_pelvis": true,
+    "uses_hips": true,
+    "uses_knees": true,
+    "uses_ankles": true,
+    "uses_feet_stabilizer": true,
+    "uses_joint_limits": true,
+    "uses_all_29_output_dofs": true,
+    "ankle_input_semantics": "bodytracking_fused_roles_7_8_from_calibrated_ankle_bands_v1"
+  },
+  "output": {
+    "trace_kind": "g1_il29_soma_retargeted_trace",
+    "source_joint_order": "official_soma_unitree_g1_mj29_csv_order",
+    "output_joint_order": "canonical_isaaclab_il29",
+    "output_joint_count": 29,
+    "position_semantics": "all_29_values_from_exact_solver_then_name_permutation",
+    "velocity_semantics": "50hz_forward_difference_from_next_exact_position",
+    "sample_period_ns": 20000000,
+    "normal_profile_required_position_samples": 48,
+    "normal_profile_derivable_semantic_frames": 47,
+    "low_latency_profile_required_position_samples": 12,
+    "low_latency_profile_derivable_semantic_frames": 11,
+    "terminal_fill_allowed": false,
+    "zero_fill_allowed": false
+  },
+  "promotion": {
+    "enabled": false,
+    "requires_raw_capture_hash": true,
+    "requires_adapter_hash": true,
+    "requires_exact_backend_replay": true,
+    "requires_full_il29_equality": true,
+    "requires_process_bound_producer_evidence": true
+  },
+  "authorization": {
+    "read_only": true,
+    "dds_opened": false,
+    "robot_channel_opened": false,
+    "actuation_authorized": false,
+    "robot_commands_published": false
+  }
+}

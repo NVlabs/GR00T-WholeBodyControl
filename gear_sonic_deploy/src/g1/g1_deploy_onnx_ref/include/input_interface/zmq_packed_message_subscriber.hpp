@@ -49,6 +49,7 @@
 #include <cstring>
 #include <iostream>
 #include <memory>
+#include <limits>
 #include <string>
 #include <thread>
 #include <functional>
@@ -97,6 +98,11 @@ class ZMQPackedMessageSubscriber {
   public:
     /// Fixed size (in bytes) of the JSON header block at the start of each packed message.
     static constexpr size_t HEADER_SIZE = 1280;
+    static constexpr size_t MAX_BINARY_PAYLOAD_SIZE = 8 * 1024 * 1024;
+    static constexpr size_t MAX_PACKED_MESSAGE_SIZE =
+        HEADER_SIZE + MAX_BINARY_PAYLOAD_SIZE;
+    static constexpr size_t MAX_DECODED_FIELDS = 64;
+    static constexpr size_t MAX_TOPIC_SIZE = 256;
 
     /**
      * @brief Construct a subscriber (does NOT connect or start yet).
@@ -147,15 +153,33 @@ class ZMQPackedMessageSubscriber {
         if (dtype == "f32" || dtype == "i32") return 4;
         if (dtype == "i16" || dtype == "f16") return 2;
         if (dtype == "i8" || dtype == "u8" || dtype == "bool") return 1;
-        return 4; // default
+        return 0;
       }
-      
-      // Compute total byte size for this field
-      size_t ComputeByteSize() const {
-        if (shape.empty()) return 0;
+
+      bool TryComputeByteSize(size_t& byte_size) const {
+        byte_size = 0;
+        const size_t element_size = GetElementSize();
+        if (shape.empty() || element_size == 0) return false;
         size_t total_elements = 1;
-        for (auto dim : shape) total_elements *= dim;
-        return total_elements * GetElementSize();
+        for (auto dim : shape) {
+          if (dim == 0 ||
+              total_elements > std::numeric_limits<size_t>::max() / dim) {
+            return false;
+          }
+          total_elements *= dim;
+        }
+        if (total_elements >
+            std::numeric_limits<size_t>::max() / element_size) {
+          return false;
+        }
+        byte_size = total_elements * element_size;
+        return true;
+      }
+
+      // Compute total byte size for diagnostics. Zero means invalid metadata.
+      size_t ComputeByteSize() const {
+        size_t byte_size = 0;
+        return TryComputeByteSize(byte_size) ? byte_size : 0;
       }
     };
 
@@ -187,10 +211,18 @@ class ZMQPackedMessageSubscriber {
       if (socket_) return true;
 
       try {
+        if (topic_.size() > MAX_TOPIC_SIZE) {
+          std::cerr << "[ZMQPackedMessageSubscriber] Topic is too long"
+                    << std::endl;
+          return false;
+        }
         socket_ = std::make_unique<zmq::socket_t>(context_, zmq::socket_type::sub);
 
         socket_->set(zmq::sockopt::rcvtimeo, timeout_ms_);
         socket_->set(zmq::sockopt::linger, 0);
+        socket_->set(
+            zmq::sockopt::maxmsgsize,
+            static_cast<int64_t>(MAX_PACKED_MESSAGE_SIZE + topic_.size()));
         if (rcv_hwm_ > 0) {
           socket_->set(zmq::sockopt::rcvhwm, rcv_hwm_);
         }
@@ -279,10 +311,12 @@ class ZMQPackedMessageSubscriber {
           packed_size -= topic_.size();
         }
 
-        if (packed_size < HEADER_SIZE) {
+        if (packed_size < HEADER_SIZE ||
+            packed_size > MAX_PACKED_MESSAGE_SIZE) {
           if (verbose_) {
-            std::cerr << "[ZMQPackedMessageSubscriber] Packed frame too small: " << packed_size 
-                      << " < " << HEADER_SIZE << std::endl;
+            std::cerr
+                << "[ZMQPackedMessageSubscriber] Packed frame size is invalid: "
+                << packed_size << std::endl;
           }
           return false;
         }
@@ -333,16 +367,38 @@ class ZMQPackedMessageSubscriber {
         
         size_t offset = 0;
         for (const auto& field : decoded.fields) {
-          size_t field_bytes = field.ComputeByteSize();
-          if (offset + field_bytes > data_size) {
+          size_t field_bytes = 0;
+          if (!field.TryComputeByteSize(field_bytes) ||
+              offset > data_size ||
+              field_bytes > data_size - offset) {
             if (verbose_) {
               std::cerr << "[ZMQPackedMessageSubscriber] Field " << field.name 
-                        << " exceeds data bounds" << std::endl;
+                        << " has invalid metadata or exceeds data bounds"
+                        << std::endl;
             }
             return false;
           }
           buffers.push_back(BufferView{data_start + offset, field_bytes});
           offset += field_bytes;
+        }
+
+        if (offset != data_size) {
+          if (verbose_) {
+            std::cerr
+                << "[ZMQPackedMessageSubscriber] Payload contains "
+                << (data_size - offset)
+                << " trailing byte(s) not described by the header"
+                << std::endl;
+          }
+          return false;
+        }
+        if (decoded.fields.empty() ||
+            decoded.fields.size() > MAX_DECODED_FIELDS) {
+          if (verbose_) {
+            std::cerr << "[ZMQPackedMessageSubscriber] Invalid field count: "
+                      << decoded.fields.size() << std::endl;
+          }
+          return false;
         }
 
         if (verbose_) {
@@ -393,24 +449,88 @@ class ZMQPackedMessageSubscriber {
     bool DecodeHeaderJSON(const std::string& header_json, DecodedHeader& out) const {
       try {
         auto j = nlohmann::json::parse(header_json);
-        if (j.contains("v")) out.version = j["v"].get<int>();
-        if (j.contains("endian")) out.endian = j["endian"].get<std::string>();
-        if (j.contains("count")) out.count = j["count"].get<int>();
+        if (!j.is_object()) return false;
+        const auto get_bounded_int =
+            [](const nlohmann::json& value,
+               int64_t minimum,
+               int64_t maximum,
+               int64_t& decoded) {
+              if (value.is_number_unsigned()) {
+                const auto unsigned_value = value.get<uint64_t>();
+                if (unsigned_value >
+                    static_cast<uint64_t>(maximum)) {
+                  return false;
+                }
+                decoded = static_cast<int64_t>(unsigned_value);
+                return decoded >= minimum;
+              }
+              if (!value.is_number_integer()) return false;
+              const auto signed_value = value.get<int64_t>();
+              if (signed_value < minimum || signed_value > maximum) {
+                return false;
+              }
+              decoded = signed_value;
+              return true;
+            };
+
+        if (j.contains("v")) {
+          int64_t version = 0;
+          if (!get_bounded_int(
+                  j.at("v"), 0, std::numeric_limits<int>::max(), version)) {
+            return false;
+          }
+          out.version = static_cast<int>(version);
+        }
+        if (j.contains("endian")) {
+          if (!j.at("endian").is_string()) return false;
+          out.endian = j.at("endian").get<std::string>();
+          if (out.endian != "le" && out.endian != "be" &&
+              !out.endian.empty()) {
+            return false;
+          }
+        }
+        if (j.contains("count")) {
+          int64_t count = -1;
+          if (!get_bounded_int(
+                  j.at("count"), -1,
+                  std::numeric_limits<int>::max(), count)) {
+            return false;
+          }
+          out.count = static_cast<int>(count);
+        }
         out.fields.clear();
         if (j.contains("fields") && j["fields"].is_array()) {
           for (const auto& f : j["fields"]) {
+            if (!f.is_object() || !f.contains("name") ||
+                !f.at("name").is_string() || !f.contains("dtype") ||
+                !f.at("dtype").is_string() || !f.contains("shape") ||
+                !f.at("shape").is_array()) {
+              return false;
+            }
             FieldInfo fi;
-            if (f.contains("name")) fi.name = f["name"].get<std::string>();
-            if (f.contains("dtype")) fi.dtype = f["dtype"].get<std::string>();
-            if (f.contains("optional")) fi.optional = f["optional"].get<bool>();
+            fi.name = f.at("name").get<std::string>();
+            fi.dtype = f.at("dtype").get<std::string>();
+            if (f.contains("optional")) {
+              if (!f.at("optional").is_boolean()) return false;
+              fi.optional = f.at("optional").get<bool>();
+            }
             fi.shape.clear();
-            if (f.contains("shape") && f["shape"].is_array()) {
-              for (const auto& dim : f["shape"]) {
-                fi.shape.push_back(dim.get<size_t>());
+            for (const auto& dim : f.at("shape")) {
+              int64_t decoded_dimension = 0;
+              if (!get_bounded_int(
+                      dim, 1,
+                      static_cast<int64_t>(
+                          std::numeric_limits<int>::max()),
+                      decoded_dimension)) {
+                return false;
               }
+              fi.shape.push_back(
+                  static_cast<std::size_t>(decoded_dimension));
             }
             out.fields.push_back(std::move(fi));
           }
+        } else {
+          return false;
         }
         return true;
       } catch (...) {

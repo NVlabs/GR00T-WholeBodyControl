@@ -1,0 +1,165 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_mujoco_sim2sim_config",
+  "robot_model": "g1_23dof_rev_1_0",
+  "control_hz": 50,
+  "initial_state": {
+    "base_position_m": [0.0, 0.0, 0.76],
+    "base_quaternion_wxyz": [1.0, 0.0, 0.0, 0.0],
+    "joint_position_hardware_rad": [
+      -0.312, 0.0, 0.0, 0.669, -0.363, 0.0,
+      -0.312, 0.0, 0.0, 0.669, -0.363, 0.0,
+      0.0, 0.2, 0.2, 0.0, 0.6, 0.0,
+      0.2, -0.2, 0.0, 0.6, 0.0
+    ],
+    "joint_velocity_hardware_radps": [
+      0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+      0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    ]
+  },
+  "physics": {
+    "timestep_s": 0.002,
+    "control_decimation": 10,
+    "integrator": "Euler",
+    "gravity_mps2": [0.0, 0.0, -9.81],
+    "soft_joint_pos_limit_factor": 0.9,
+    "action_clip_value": 20.0,
+    "armature_hardware": [
+      0.01017752,
+      0.025101925,
+      0.01017752,
+      0.025101925,
+      0.00721945,
+      0.00721945,
+      0.01017752,
+      0.025101925,
+      0.01017752,
+      0.025101925,
+      0.00721945,
+      0.00721945,
+      0.01017752,
+      0.003609725,
+      0.003609725,
+      0.003609725,
+      0.003609725,
+      0.003609725,
+      0.003609725,
+      0.003609725,
+      0.003609725,
+      0.003609725,
+      0.003609725
+    ],
+    "joint_damping_hardware": [
+      0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+      0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    ],
+    "joint_frictionloss_hardware": [
+      0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+      0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    ],
+    "kp_hardware": [
+      40.179238474,
+      99.098427782,
+      40.179238474,
+      99.098427782,
+      28.501246197,
+      28.501246197,
+      40.179238474,
+      99.098427782,
+      40.179238474,
+      99.098427782,
+      28.501246197,
+      28.501246197,
+      40.179238474,
+      14.250623099,
+      14.250623099,
+      14.250623099,
+      14.250623099,
+      14.250623099,
+      14.250623099,
+      14.250623099,
+      14.250623099,
+      14.250623099,
+      14.250623099
+    ],
+    "kd_hardware": [
+      2.557889765,
+      6.308801854,
+      2.557889765,
+      6.308801854,
+      1.814445687,
+      1.814445687,
+      2.557889765,
+      6.308801854,
+      2.557889765,
+      6.308801854,
+      1.814445687,
+      1.814445687,
+      2.557889765,
+      0.907222843,
+      0.907222843,
+      0.907222843,
+      0.907222843,
+      0.907222843,
+      0.907222843,
+      0.907222843,
+      0.907222843,
+      0.907222843,
+      0.907222843
+    ],
+    "effort_limit_hardware_nm": [
+      88.0, 139.0, 88.0, 139.0, 35.0, 35.0, 88.0, 139.0, 88.0,
+      139.0, 35.0, 35.0, 88.0, 25.0, 25.0, 25.0, 25.0, 25.0,
+      25.0, 25.0, 25.0, 25.0, 25.0
+    ],
+    "velocity_limit_hardware_radps": [
+      32.0, 20.0, 32.0, 20.0, 30.0, 30.0, 32.0, 20.0, 32.0,
+      20.0, 30.0, 30.0, 32.0, 37.0, 37.0, 37.0, 37.0, 37.0,
+      37.0, 37.0, 37.0, 37.0, 37.0
+    ]
+  },
+  "coverage": {
+    "deterministic_seeds": [1729, 2718, 3141],
+    "episodes_per_seed": 22,
+    "seconds_per_episode": 5.0,
+    "steps_per_episode": 250
+  },
+  "disturbance_schedule": {
+    "apply_step": 50,
+    "recovery_baseline_steps": 10,
+    "recovery_stable_steps": 5,
+    "recovery_margin": 0.1
+  },
+  "disturbance_envelope": {
+    "linear_velocity_delta_mps": {
+      "x": [-0.5, 0.5],
+      "y": [-0.5, 0.5],
+      "z": [-0.2, 0.2]
+    },
+    "angular_velocity_delta_radps": {
+      "roll": [-0.52, 0.52],
+      "pitch": [-0.52, 0.52],
+      "yaw": [-0.78, 0.78]
+    }
+  },
+  "scenarios": {
+    "nominal": {"disturbance_scale": 0.0},
+    "disturbance_50": {"disturbance_scale": 0.5},
+    "disturbance_100": {"disturbance_scale": 1.0}
+  },
+  "termination": {
+    "minimum_base_height_m": 0.45,
+    "maximum_tilt_rad": 1.0,
+    "maximum_joint_velocity_ratio": 1.0
+  },
+  "promotion_thresholds": {
+    "termination_count": 0,
+    "nonfinite_count": 0,
+    "joint_limit_violation_count": 0,
+    "minimum_recovery_fraction": 1.0,
+    "maximum_recovery_time_s": 2.0,
+    "maximum_tracking_rmse_rad": 0.75,
+    "maximum_native_action_abs": 20.0,
+    "maximum_action_saturation_fraction": 0.1
+  }
+}

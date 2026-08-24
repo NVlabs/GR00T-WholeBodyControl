@@ -1,0 +1,18 @@
+# PICO/VR-only tokenizer.  Avoids 29-DoF G1/SMPL wrist observation terms.
+
+defaults:
+  - ../terms/encoder_index@_here_
+  - ../terms/command_multi_future_lower_body@_here_
+  - ../terms/vr_3point_local_target@_here_
+  - ../terms/vr_3point_local_orn_target@_here_
+  - ../terms/motion_anchor_ori_b@_here_
+
+_target_: gear_sonic.envs.manager_env.mdp.observations.TokenizerCfg
+enable_corruption: true
+concatenate_terms: false
+
+motion_anchor_ori_b:
+  noise:
+    _target_: isaaclab.utils.noise.AdditiveUniformNoiseCfg
+    n_min: -0.05
+    n_max: 0.05

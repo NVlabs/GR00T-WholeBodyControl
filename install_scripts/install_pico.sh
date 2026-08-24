@@ -17,6 +17,11 @@
 # Optional env vars:
 #   SKIP_SIM_AND_UNITREE=1   Skip the mujoco sim extra and unitree_sdk2_python.
 #                            On aarch64 also skips the CycloneDDS C-lib build.
+#   SKIP_ISAAC_TELEOP=1      Skip Isaac Teleop / CloudXR dependencies. Use this
+#                            for PICO + XRoboToolkit on a regular G1 without a
+#                            Thor backpack.
+#   PICO_TORCH_VERSION=...    x86_64 PyTorch pin (default: 2.9.1).
+#   PICO_TORCH_INDEX_URL=...  x86_64 wheel index (default: official CUDA 12.8).
 #   CYCLONEDDS_HOME=<path>   Override the CycloneDDS install prefix on aarch64
 #                            (default: ~/cyclonedds/install). Not used on
 #                            x86_64 because prebuilt cyclonedds wheels exist.
@@ -73,6 +78,12 @@ echo "[INFO] Creating .venv_teleop with uv-managed Python 3.10 …"
 uv venv .venv_teleop --python "$MANAGED_PY" --prompt gear_sonic_teleop
 # shellcheck disable=SC1091
 source .venv_teleop/bin/activate
+if [ "$ARCH" = "x86_64" ]; then
+    PICO_TORCH_VERSION="${PICO_TORCH_VERSION:-2.9.1}"
+    PICO_TORCH_INDEX_URL="${PICO_TORCH_INDEX_URL:-https://download.pytorch.org/whl/cu128}"
+    echo "[INFO] Installing driver-compatible torch $PICO_TORCH_VERSION (CUDA 12.8) …"
+    uv pip install "torch==$PICO_TORCH_VERSION" --index-url "$PICO_TORCH_INDEX_URL"
+fi
 echo "[INFO] Installing gear_sonic[teleop] …"
 uv pip install -e "gear_sonic[teleop]"
 
@@ -116,17 +127,21 @@ uv pip install --no-build-isolation -e external_dependencies/XRoboToolkit-PC-Ser
 #       (--input-source isaac-teleop in pico_manager_thread_server.py).
 # Hosted on pypi.nvidia.com (public index, no auth). Replaces the legacy
 # multi-container path (./scripts/run_cloudxr_via_docker.sh + teleop_ros2_ref).
-echo "[INFO] Installing isaacteleop[cloudxr]~=1.3.0 from pypi.nvidia.com …"
-uv pip install 'isaacteleop[cloudxr]~=1.3.0' --prerelease=allow \
-    --extra-index-url https://pypi.nvidia.com
-
-# Seed ~/cloudxr.env with the device profile CloudXRLauncher negotiates against.
-# Skip if the file already exists.
-if [ ! -f "$HOME/cloudxr.env" ]; then
-    echo "NV_DEVICE_PROFILE=Quest3" > "$HOME/cloudxr.env"
-    echo "[OK] Seeded $HOME/cloudxr.env with NV_DEVICE_PROFILE=Quest3"
+if [ "${SKIP_ISAAC_TELEOP:-0}" = "1" ]; then
+    echo "[SKIP] Skipping Isaac Teleop / CloudXR dependencies"
 else
-    echo "[OK] $HOME/cloudxr.env already exists (leaving as-is)"
+    echo "[INFO] Installing isaacteleop[cloudxr]~=1.3.0 from pypi.nvidia.com …"
+    uv pip install 'isaacteleop[cloudxr]~=1.3.0' --prerelease=allow \
+        --extra-index-url https://pypi.nvidia.com
+
+    # Seed ~/cloudxr.env with the device profile CloudXRLauncher negotiates
+    # against. Skip if the file already exists.
+    if [ ! -f "$HOME/cloudxr.env" ]; then
+        echo "NV_DEVICE_PROFILE=Quest3" > "$HOME/cloudxr.env"
+        echo "[OK] Seeded $HOME/cloudxr.env with NV_DEVICE_PROFILE=Quest3"
+    else
+        echo "[OK] $HOME/cloudxr.env already exists (leaving as-is)"
+    fi
 fi
 
 # ── 5b, 6, 7: CycloneDDS C lib (aarch64) + sim extra + unitree_sdk2_python ────

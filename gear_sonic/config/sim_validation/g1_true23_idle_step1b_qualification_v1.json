@@ -1,0 +1,186 @@
+{
+  "schema": "g1_true23_idle_step1b_qualification_contract_v1",
+  "schema_version": 1,
+  "declared_categories": ["idle"],
+  "frozen_clips": [
+    {
+      "clip_id": "idle__220721__hands_on_back_loop_a036m",
+      "source_csv": "220721/idle_hands_on_back_loop_001__A036_M.csv",
+      "source_frame_count": 547,
+      "reference_continuation": "terminal_hold_last"
+    },
+    {
+      "clip_id": "idle__220713__change_idle_left_a021",
+      "source_csv": "220713/change_idle_to_idle_left_003__A021.csv",
+      "source_frame_count": 362,
+      "reference_continuation": "terminal_hold_last"
+    }
+  ],
+  "control_hz": 50,
+  "horizon_steps": 500,
+  "episodes_per_clip": 1,
+  "robustness_coverage": "nominal_only_one_episode_per_clip_robustness_untested",
+  "min_timeout_fraction": 0.95,
+  "post_termination_policy": "physics_no_reset_v1",
+  "controller_semantics": {
+    "teacher_reference": "neural_state_feedback_29dof_low_latency_policy",
+    "true23_expert": "schema_v6_action_target_native_with_live_joint_pd_v1"
+  },
+  "selected_termination_gate": {
+    "stack": "unitree_rl_mjlab_g1_23dof_tracking",
+    "config_relpaths": [
+      "artifacts/external/unitree_rl_mjlab/src/tasks/tracking/tracking_env_cfg.py",
+      "artifacts/external/unitree_rl_mjlab/src/tasks/tracking/mdp/terminations.py",
+      "artifacts/external/unitree_rl_mjlab/src/tasks/tracking/config/g1_23dof/env_cfgs.py"
+    ],
+    "config_sha256": {
+      "artifacts/external/unitree_rl_mjlab/src/tasks/tracking/tracking_env_cfg.py": "33f058321a7f8a0e66dbdae3d3a9cd3ea87abd7bf8eecee54daa3c6bf541a0cb",
+      "artifacts/external/unitree_rl_mjlab/src/tasks/tracking/mdp/terminations.py": "fbb26adf35e8cb3af9e465615f110fc09f297d5859865603279695f16026f443",
+      "artifacts/external/unitree_rl_mjlab/src/tasks/tracking/config/g1_23dof/env_cfgs.py": "58ba2ee91857467913be13d40469845294b6cb3260f5c13d4d6124a6808aefc3"
+    },
+    "terms": {
+      "time_out": {
+        "function": "mdp.time_out",
+        "time_out": true
+      },
+      "anchor_pos": {
+        "function": "mdp.bad_anchor_pos_z_only",
+        "threshold": 0.25
+      },
+      "anchor_ori": {
+        "function": "mdp.bad_anchor_ori",
+        "projected_gravity_z_threshold": 0.8
+      },
+      "ee_body_pos": {
+        "function": "mdp.bad_motion_body_pos_z_only",
+        "threshold": 0.25,
+        "body_names": [
+          "left_ankle_roll_link",
+          "right_ankle_roll_link",
+          "left_wrist_roll_rubber_hand",
+          "right_wrist_roll_rubber_hand"
+        ]
+      }
+    }
+  },
+  "campaign_schedule": {
+    "reference_start_frame": 0,
+    "disturbance_delta": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    "seeds_by_clip": {
+      "idle__220721__hands_on_back_loop_a036m": [1729],
+      "idle__220713__change_idle_left_a021": [2729]
+    }
+  },
+  "stance_foot_thresholds": {
+    "position_error_max_m": 0.005,
+    "orientation_error_max_rad": 0.005,
+    "contact_mismatch_fraction_max": 0.0
+  },
+  "stance_foot_metric_definition": {
+    "position_frame": "world",
+    "orientation_metric": "quaternion_geodesic_abs_dot",
+    "stance_mask": "teacher_reference_contact_true",
+    "contact_mismatch": "foot_contact_state_xor_all_steps"
+  },
+  "semantic_point_bindings": {
+    "left_foot": {
+      "source_body": "left_ankle_roll_link",
+      "target_body": "left_ankle_roll_link",
+      "local_offset_m": [0.0, 0.0, 0.0]
+    },
+    "right_foot": {
+      "source_body": "right_ankle_roll_link",
+      "target_body": "right_ankle_roll_link",
+      "local_offset_m": [0.0, 0.0, 0.0]
+    },
+    "left_hand": {
+      "source_body": "left_wrist_yaw_link",
+      "target_body": "left_wrist_roll_rubber_hand",
+      "local_offset_m": [0.18, -0.025, 0.0]
+    },
+    "right_hand": {
+      "source_body": "right_wrist_yaw_link",
+      "target_body": "right_wrist_roll_rubber_hand",
+      "local_offset_m": [0.18, 0.025, 0.0]
+    },
+    "head_proxy": {
+      "source_body": "torso_link",
+      "target_body": "torso_link",
+      "local_offset_m": [0.0, 0.0, 0.35]
+    }
+  },
+  "required_contact_links": ["left_foot", "right_foot"],
+  "required_semantic_points": [
+    "left_foot",
+    "right_foot",
+    "left_hand",
+    "right_hand",
+    "head_proxy"
+  ],
+  "required_semantic_orientations": ["left_foot", "right_foot"],
+  "required_link_velocities": [
+    "pelvis",
+    "left_foot",
+    "right_foot",
+    "left_hand",
+    "right_hand",
+    "head_proxy"
+  ],
+  "diagnostic_thresholds": {
+    "pelvis_position_error_max_m": null,
+    "pelvis_orientation_error_max_rad": null,
+    "com_position_error_max_m": null,
+    "semantic_position_error_max_m": {
+      "left_hand": null,
+      "right_hand": null,
+      "head_proxy": null
+    },
+    "link_linear_velocity_error_max_mps": null,
+    "link_angular_velocity_error_max_radps": null
+  },
+  "trusted_identity_bindings": {
+    "step1a": {
+      "support_manifest_sha256": "1d72a7afd944ed0a9b2fdf0ac814f79ae0d314e744a6bfb212bbe0219ca70cb4",
+      "support_manifest_payload_sha256": "740d898fe330cd2c726223616b27a9e2b09e604ed6d5897f19e7184419f1eeb5",
+      "qualification_sha256": "83469eacdd6082f821e6866d55dfcf59f87216140c60920922ad6ec98ea2ccb2",
+      "qualification_payload_sha256": "007ffda02815eca79968f27b40c3d6de850458fe5c1d7983aca9cc3fb022f478",
+      "batch_sha256": "90ad21a1f24f1d062fe6a3ff77dad21310d42131fd1248b18281f74bf94c8a07",
+      "batch_payload_sha256": "8ac92156ed25adacda21b47503913ae1bc2cd03d3f2548187cabaee2b4aec21f"
+    },
+    "teacher_reference": {
+      "model_sha256": "386b1bb9ea5b69ccd6fd0283a73ffea1ee052df95564e23a780125fbcbe2c645",
+      "checkpoint_sha256": "0031ae7db24747445d6eb7c27697640973a837546f0b8763e775143c47d4507c",
+      "controller_config_payload_sha256": "2d3c3a3bc11091018f81086a1e8d406d6745df05ea1ed210c759e23685e6ed87",
+      "input_action_law_payload_sha256": "de8cbc0d816e1675eed0593aed261a0d80f69135bd8669fecacf600e7c8796d3",
+      "semantic_reference_payload_sha256": "f615ce465c7a990a53463b18a5ea971da7da1e728903db8b95ec5678a3f3d8bf"
+    },
+    "true23_expert": {
+      "target_model_sha256": "16e304c970bfc68783ea69d01d05192e6bd9d83d62f6ee4aac0ac72ff18db612",
+      "controller_sha256": "ef91cf01a5430ee04a9136e675b25071a8be59a320ebc22da71bfd9e06918c96",
+      "controller_config_payload_sha256": "4c3401be854ad05bed8414b6057da15553def810f93700dc53fc305046285037",
+      "input_action_law_payload_sha256": "7362d1442fbfb4323525b8d3aff0507c31763bb5dd8aaf464a1655cf26783071",
+      "action_law": "schema_v6_action_target_native_with_live_joint_pd_v1",
+      "clips": {
+        "idle__220721__hands_on_back_loop_a036m": {
+          "motion_sha256": "03465b7668773c6390b9424b39bd6cdb8adda1bd89dc07a440fda06d661570b2",
+          "expert_sha256": "c8e6e837f6c8720cbac7e081581307b42bfd312b4c0c55abeef00fedde7ebf43",
+          "report_payload_sha256": "69ea6ee0d1414879e687436674d95fc127cd16af3a84162d1274d4f3c4536551"
+        },
+        "idle__220713__change_idle_left_a021": {
+          "motion_sha256": "2b1f3fa0a47f2d301d7dafd1826e2833b7902c13c7ed8c975f2d01bd9e6ef703",
+          "expert_sha256": "e816ad2f56a349241afe43eaf810eecb9d585f01bc2dd79453bbea02a0c46397",
+          "report_payload_sha256": "cd7c8c5614f2c9112bc7a88e2b83d2f79c3acc3ebdc09c5f2129ae3b47b8cc63"
+        }
+      }
+    },
+    "runtime": {
+      "simulator_name": "MuJoCo",
+      "simulator_version": "3.5.0",
+      "runner_sha256": "ef91cf01a5430ee04a9136e675b25071a8be59a320ebc22da71bfd9e06918c96",
+      "runtime_config_payload_sha256": "f2d284c723b87e968fcde04742859de52a74b176fe75c554f78595db277541da",
+      "robot_assets": {
+        "true23_model": "16e304c970bfc68783ea69d01d05192e6bd9d83d62f6ee4aac0ac72ff18db612"
+      }
+    }
+  }
+}

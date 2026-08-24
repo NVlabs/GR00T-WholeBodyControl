@@ -1,0 +1,39 @@
+{
+  "schema_version": 2,
+  "kind": "g1_true23_sonic_nominal_dagger_cutoff140_collection_contract_v2",
+  "role": "mixed_student_shadow_and_teacher_actuated_nominal_intervention_bc_collection_only",
+  "inputs": {
+    "candidate_manifest": {"path": "artifacts/g1_true23/sonic_nominal_dagger_bc_last_affine_ridge_v1.manifest.json", "sha256": "1bdf87f653d047ee45284a1d2e55efca8582013b1f51c80597ef7f78a1d1f9a9"},
+    "candidate_decoder": {"path": "artifacts/g1_true23/sonic_nominal_dagger_bc_last_affine_ridge_v1.decoder.onnx", "sha256": "e725fbdef73a087c9e4ea789b4442c0812f09e1ee96f098af574b29949d38ebf"},
+    "failed_student_report": {"path": "artifacts/g1_true23/sonic_nominal_dagger_bc_last_affine_ridge_v1.seed20260805.initial510.json", "sha256": "7751da3348bc0992dea47f0a3e5fef869e8dad00c903dd20beefbd528e375de5"},
+    "cutoff50_dataset": {"path": "artifacts/g1_true23/sonic_nominal_dagger_cutoff50_seed20260805_v1.npz", "sha256": "7c331f4c566d1bbf0a0be59e81c7b8851483184914b1dca783d822f6d6e32e28"},
+    "base_recovery_contract": {"path": "gear_sonic/config/sim_validation/g1_true23_sonic_student_teacher_recovery_v4.json", "sha256": "2b70f24f07619ad586a93f0e9c465e5d9647143d198f124c2568e4dd7e357581"}
+  },
+  "runtime": {
+    "seed": 20260805,
+    "mode": "cutoff140",
+    "anchor_q9": 9,
+    "last_q9": 518,
+    "total_transitions": 510,
+    "student_controlled_transitions": 140,
+    "teacher_controlled_transitions": 370,
+    "teacher_queried_every_transition": true,
+    "v2_transform_application_count": 1
+  },
+  "rows": {
+    "published_total": 510,
+    "student_on_policy_shadow_label_rows": 140,
+    "teacher_actuated_recovery_rows": 370,
+    "whole_rollout_must_pass_before_any_rows_publish": true
+  },
+  "boundaries": {
+    "classification": "nominal_mixed_intervention_behavior_cloning_only",
+    "support_qualified": false,
+    "support_admitted": false,
+    "disturbance_robustness_claimed": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

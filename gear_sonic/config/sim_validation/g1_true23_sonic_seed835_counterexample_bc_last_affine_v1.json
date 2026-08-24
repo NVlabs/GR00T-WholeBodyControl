@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_seed835_counterexample_bc_last_affine_contract_v1",
+  "role": "targeted_student_on_policy_counterexample_final_affine_bc_simulator_candidate_only",
+  "inputs": {
+    "nominal_npz": {"path": "artifacts/g1_true23/selected_teacher_nominal_multiseed_train8_heldout2_v2.npz", "sha256": "db25cc9c1e1ee79b8078b2dd35011b0d794c013db6516d4c97d4e4ac0383122a"},
+    "nominal_manifest": {"path": "artifacts/g1_true23/selected_teacher_nominal_multiseed_train8_heldout2_v2.manifest.json", "sha256": "c415b8acb31fc1eff818daedc88cf549fa08ab6840fee29b6d0f81115a11d0e1"},
+    "intervention_npz": {"path": "artifacts/g1_true23/sonic_nominal_dagger_cutoff50_seed20260805_v1.npz", "sha256": "7c331f4c566d1bbf0a0be59e81c7b8851483184914b1dca783d822f6d6e32e28"},
+    "intervention_manifest": {"path": "artifacts/g1_true23/sonic_nominal_dagger_cutoff50_seed20260805_v1.manifest.json", "sha256": "eb03fcdc02f6cc7b1ce65e17b162feeaa6c9d2eddb4ea0673cecf14e95c80914"},
+    "seed835_teacher_npz": {"path": "artifacts/g1_true23/sonic_teacher_bootstrap_seed835868017_v1.npz", "sha256": "957fe8fe8c240252e94834f137bbfa6592d10750727676cb3f25cbe66b7307d8"},
+    "seed835_teacher_manifest": {"path": "artifacts/g1_true23/sonic_teacher_bootstrap_seed835868017_v1.manifest.json", "sha256": "1621b907522e4d8f9431d5e437b4f9901a2d33ed2405b9964fb75c5a64f39320"},
+    "counterexample_npz": {"path": "artifacts/g1_true23/sonic_seed835_failure_prefix_dagger_v1.npz", "sha256": "d5006903e926f2f3bce97701b8293b94814a6b5aead39c10fceb91da27db3bf8"},
+    "counterexample_manifest": {"path": "artifacts/g1_true23/sonic_seed835_failure_prefix_dagger_v1.manifest.json", "sha256": "ebeb4209950743503140fd83cb706114d3d2a95a0b84f3db3d81e876932d7fe7"},
+    "base_decoder": {"path": "artifacts/g1_true23/sonic_nominal_dagger_bc_last_affine_ridge_v1.decoder.onnx", "sha256": "e725fbdef73a087c9e4ea789b4442c0812f09e1ee96f098af574b29949d38ebf"},
+    "base_manifest": {"path": "artifacts/g1_true23/sonic_nominal_dagger_bc_last_affine_ridge_v1.manifest.json", "sha256": "1bdf87f653d047ee45284a1d2e55efca8582013b1f51c80597ef7f78a1d1f9a9"},
+    "bootstrap_npz": {"path": "artifacts/g1_true23/native124_selected_21204_teacher_bootstrap_seed20260805_v1.npz", "sha256": "136768fd1595265d9743d5a9e5f7ef38e431de9a57f9ff85246123a7d649f475"},
+    "bootstrap_manifest": {"path": "artifacts/g1_true23/native124_selected_21204_teacher_bootstrap_seed20260805_v1.manifest.json", "sha256": "5ab761c3b82d62c3a4524f1f195f6f187b91e56b41e854d186339ddcca86f4a1"}
+  },
+  "rows": {
+    "nominal_train8": 4080,
+    "prior_intervention": 510,
+    "seed835_teacher_reset": 510,
+    "seed835_student_counterexample": 89,
+    "total": 5189
+  },
+  "fit": {
+    "base": "accepted_nominal_dagger_e725_candidate",
+    "only_final_affine_may_change": true,
+    "pca_variance_fraction": 0.999,
+    "pca_min_rank": 8,
+    "pca_max_rank": 128,
+    "fixed_ridge_lambda": 0.0001,
+    "nominal_reset_prefix_weight": 2.0,
+    "nominal_real_h10_weight": 1.0,
+    "prior_intervention_shadow_weight": 8.0,
+    "prior_intervention_recovery_weight": 2.0,
+    "seed835_teacher_first100_weight": 4.0,
+    "seed835_teacher_tail410_weight": 1.0,
+    "counterexample_first50_weight": 16.0,
+    "counterexample_last39_weight": 64.0,
+    "weights_normalized_to_mean_one": true,
+    "bias_regularized": true
+  },
+  "gates": {
+    "maximum_ridge_condition_number": 100000000.0,
+    "maximum_counterexample_all_rmse_ratio_to_base": 0.5,
+    "maximum_counterexample_last39_rmse_ratio_to_base": 0.4,
+    "maximum_seed835_teacher_rmse_regression": 0.005,
+    "maximum_nominal_rmse_regression": 0.005,
+    "maximum_prior_intervention_rmse_regression": 0.005,
+    "maximum_bootstrap_rmse_regression": 0.01,
+    "maximum_training_absolute_error": 0.75,
+    "plain_raw_absolute_strict_max": 10.0,
+    "maximum_export_reference_absolute_error": 0.00001
+  },
+  "boundaries": {
+    "offline_behavior_cloning_only": true,
+    "final_supervised_counterexample_attempt": true,
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_rank256_relaxed_tracking_diagnostic_contract_v1",
+  "role": "simulator_only_physical_recoverability_diagnostic_not_policy_qualification",
+  "candidate": {
+    "manifest_path": "artifacts/g1_true23/sonic_seed835_counterexample_round3_rank256_bc_last_affine_v1.manifest.json",
+    "manifest_sha256": "ad8a779e7867c88fdd6e9d60b6e85584a24f30368c32908b27f2274378c0b213",
+    "decoder_sha256": "d1a20a098ccc9f1d96df2fd279873d8df43a46ff3aff58db543fc57508730119"
+  },
+  "parent_evidence": {
+    "grouped_result_path": "/root/g1_true23_runs/sonic_rank256_grouped_multiobjective_survival_score_v1/rank256_grouped_multiobjective_survival_score_result.json",
+    "grouped_result_sha256": "5a2336687d79965f4a4a0e4a5556d4aab68eb1250c6c35581cb68f48697a69bb"
+  },
+  "scenario": {
+    "seed": 2069156915,
+    "steps": 510,
+    "impulse_transition": 241,
+    "impulse_q9": 250,
+    "exact_vector": [-0.109284965708, 0.348842165152, -0.026012141987, 0.137065557322, -0.499675156302, -0.717607152875]
+  },
+  "tracking_abort_override": {
+    "disabled_only": ["anchor_pos", "anchor_ori", "ee_body_pos"],
+    "preserved": ["time_out", "v2_raw_clip"],
+    "would_abort_thresholds": {
+      "anchor_position_m": 0.25,
+      "anchor_orientation_gravity_z_difference": 0.8,
+      "end_effector_z_m": 0.25
+    },
+    "stable_recovery_steps": 10
+  },
+  "physical_pull_plug": {
+    "minimum_base_height_m": 0.45,
+    "maximum_base_tilt_rad": 1.0,
+    "maximum_joint_velocity_ratio": 1.0,
+    "hard_safety_violation_count": 0,
+    "raw_clip_required_count": 0
+  },
+  "boundaries": {
+    "policy_mutations": 0,
+    "optimizer_steps": 0,
+    "critic_updates": 0,
+    "training_performed": false,
+    "qualification_claim": false,
+    "support_qualified": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

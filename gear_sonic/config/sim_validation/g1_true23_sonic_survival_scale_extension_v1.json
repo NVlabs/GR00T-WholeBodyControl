@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_survival_scale_extension_contract_v1",
+  "role": "offline_mjlab_deterministic_extension_of_admitted_survival_score_direction",
+  "seed": 20260805,
+  "baseline_checkpoint": {
+    "linux_path": "/root/g1_true23_runs/sonic_task_space_ppo_full_support_v1_seed20260805/checkpoints/sonic_task_space_full_support_model_0.pt",
+    "sha256": "83682858ed907f7353668bf9c35088b2619824ce6491cd6542871202457cc344",
+    "policy_state_sha256": "358310ececeff0177386ae28f60b513a94902465b7e99ac480d40ba21578af61"
+  },
+  "survival_result": {
+    "linux_path": "/root/g1_true23_runs/sonic_survival_score_line_search_v1_seed20260805/survival_score_result.json",
+    "sha256": "22874a8a3271b778c3d2d0f36d8813835c0c1b9b58e20165c016b3a70496aed7",
+    "selected_scale": 1.0,
+    "selected_policy_state_sha256": "e846f3d08595dbb383c6a524caa4f551ff26e958792ac48c5b13e1f643f7d1a2"
+  },
+  "survival_checkpoint": {
+    "linux_path": "/root/g1_true23_runs/sonic_survival_score_line_search_v1_seed20260805/checkpoints/sonic_survival_score_candidate.pt",
+    "sha256": "60dc4affcdb8f5874650eed976b30a1558159f2ceb3c683fece4725eac82f8cf"
+  },
+  "construction": {
+    "direction": "scale1_policy_minus_baseline_policy",
+    "changed_tensors": [
+      "actor_module.decoders.g1_dyn.module.14.bias",
+      "actor_module.decoders.g1_dyn.module.14.weight",
+      "actor_module.decoders.g1_dyn.module.16.bias",
+      "actor_module.decoders.g1_dyn.module.16.weight"
+    ],
+    "scales": [1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0]
+  },
+  "evaluation_gate": {
+    "minimum_completed_transitions": 182,
+    "minimum_terminal_q9": 190,
+    "allowed_termination_names": ["ee_body_pos", "anchor_pos", "anchor_ori", "time_out"],
+    "required_zero_counts": [
+      "nonfinite_count",
+      "raw_clip_required_count",
+      "action_semantics_mismatch_count",
+      "q9_discontinuity_count"
+    ],
+    "selection": "maximum_completed_transitions_then_same_horizon_episode_return_then_smallest_scale"
+  },
+  "boundaries": {
+    "diagnostic_candidate_only": true,
+    "training_transitions": 0,
+    "gradient_computations": 0,
+    "optimizer_steps": 0,
+    "teacher_labels_used": false,
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

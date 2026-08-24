@@ -1,0 +1,202 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_task_space_ppo_full_support_contract_v1",
+  "role": "offline_mjlab_genuine_sonic_single_full_support_rollout_single_update_only",
+  "seed": 20260805,
+  "base_task_space_contract": {
+    "relative_path": "gear_sonic/config/sim_validation/g1_true23_sonic_task_space_ppo_v1.json",
+    "sha256": "a42d661e68e583e9f7e750e7fd8211ba36747172b8ff9be031414b2fe0f03044"
+  },
+  "diagnostic_evidence": {
+    "trace_linux_path": "/root/g1_true23_runs/sonic_task_space_ckpt0_vs_ckpt5_trace_v3.json",
+    "trace_sha256": "608e126d61d14225149706d90a876445489982c7d88a49a02088d76f453fb22d",
+    "trace_kind": "g1_true23_sonic_task_space_checkpoint_trace_v1",
+    "trace_training_updates": 0,
+    "update0": {
+      "policy_state_sha256": "358310ececeff0177386ae28f60b513a94902465b7e99ac480d40ba21578af61",
+      "completed_transitions": 155,
+      "terminal_q9": 163,
+      "termination_names": ["ee_body_pos"],
+      "right_wrist_barrier_first_q9": 154
+    },
+    "failed_update5": {
+      "policy_state_sha256": "fd0ea210bec6c403eb18fa0466ae11030b075ba1a5aa028cef94a458905c6f18",
+      "completed_transitions": 125,
+      "terminal_q9": 133,
+      "termination_names": ["ee_body_pos"],
+      "right_wrist_barrier_first_q9": 126,
+      "terminal_worst_ee_body_name": "right_wrist_roll_rubber_hand"
+    },
+    "measured_temporal_support_mismatch": {
+      "old_steps_per_update": 16,
+      "old_updates_before_failure_evaluation": 5,
+      "old_sequential_prefix_q9_first": 9,
+      "old_sequential_prefix_q9_last": 88,
+      "raw_action_delta_at_least_0p25_first_q9": 90,
+      "raw_action_delta_at_least_0p5_first_q9": 106,
+      "raw_action_delta_at_least_1p0_first_q9": 111,
+      "ee_z_delta_at_least_0p05_first_q9": 115,
+      "right_foot_contact_divergence_first_q9": 115
+    }
+  },
+  "failed_parent_pilot": {
+    "run_dir_linux_path": "/root/g1_true23_runs/sonic_task_space_ppo_seed20260805_v2",
+    "artifact_sha256": {
+      "checkpoints/sonic_task_space_model_0.pt": "c448882d753f6a594dee578fac437ed5cc17889378a037d47095e9a1958ec8f2",
+      "checkpoints/sonic_task_space_model_5.pt": "99b9a19d26f9a1ae9d685bde73faaf2842983b64551d447c65879ba97071cdbd",
+      "environment_prime.json": "1ea82fc1425508208830b9ae085f3e8ea9395e27fe1b91cac2450e810c0fb9bc",
+      "evaluations/evaluation_update_0.json": "8c983b4c8e0a6cfa65d5b548e35842afb172a0f5f1cffabcc71c4e079ba7866f",
+      "evaluations/evaluation_update_5.json": "a530f448314fb3d71d01bd95676413f504e1e7e03283b627d0947159e88fcea5",
+      "initialization.json": "f6534b75122ed7f213b396a09eab9778b7c40e4b55a1eb33b574e53d74daaca9",
+      "material_manifest.json": "c84e7196ea2d7e83598b4dfaf0e2bf28bf2ae3f6ea4b7eaea8f4fea02a73bee4",
+      "pilot_result.json": "f78ee6758fd7e947339422a51e1ebb85fe0de5200d9b75bd04ac962847d74d0e",
+      "preflight.json": "32988f296dc7ce956b4475d845d8991fd9010b84fff418076c2686dc32982aab",
+      "resolved_training.json": "cc7643d2b71d455896ff0615078fc2c7341c29cd95f48e21647aa831a92f4b47",
+      "sonic_task_space_ppo_runtime.json": "c174db0c926728d1466ec98b070001a22fd3967be0af2ea99eaaa5afe4ffd8e3"
+    },
+    "model0_is_evidence_only": true,
+    "model5_is_failed_evidence_only": true,
+    "checkpoint_resume_permitted": false,
+    "critic_reused": false,
+    "optimizer_reused": false,
+    "counters_reused": false
+  },
+  "actor_initialization": {
+    "source": "fresh_reconstruction_from_base_model250_actor_plus_v2_final_affine",
+    "overlay_policy_state_sha256": "358310ececeff0177386ae28f60b513a94902465b7e99ac480d40ba21578af61",
+    "initial_frozen_actor_state_sha256": "14ed9fb20dc61e0847b6ef71e2bed3a8ce52ac8c2da5eeb876da8fd4c0896fae",
+    "initial_trainable_actor_state_sha256": "000d5ea094fe13a184aecafa8fc00868164591ba3de7ad5af36333656e415c67",
+    "initial_fresh_critic_state_sha256": "95d31b41ec92194cee23490695c0f052e74df169d640612f9d55e176540eccf0",
+    "failed_model5_loaded": false,
+    "failed_model5_resumed": false,
+    "exploration_std": 0.1,
+    "exploration_std_trainable": false,
+    "trainable_actor_parameters": [
+      "core.actor_module.decoders.g1_dyn.module.14.bias",
+      "core.actor_module.decoders.g1_dyn.module.14.weight",
+      "core.actor_module.decoders.g1_dyn.module.16.bias",
+      "core.actor_module.decoders.g1_dyn.module.16.weight"
+    ]
+  },
+  "single_update": {
+    "num_envs": 128,
+    "num_steps_per_env": 160,
+    "training_transitions": 20480,
+    "maximum_updates": 1,
+    "num_learning_epochs": 2,
+    "num_mini_batches": 4,
+    "mini_batch_size": 5120,
+    "optimizer_steps": 8,
+    "learning_rate": 0.00001,
+    "schedule": "fixed",
+    "clip_param": 0.1,
+    "entropy_coef": 0.0,
+    "gamma": 0.99,
+    "lam": 0.95,
+    "max_grad_norm": 0.25,
+    "fresh_critic": "random_512_256_128",
+    "fresh_optimizer": "torch_adam_trainable_actor_plus_fresh_critic",
+    "rollout_must_complete_before_optimizer": true,
+    "rng_sequence": "exact_parent_runner_construction_then_rng_preserving_update0_evaluation_then_rollout",
+    "rollout_reseeded_after_runner_construction": false,
+    "pre_rollout_cpu_and_cuda_rng_state_hashes_published": true,
+    "coverage_and_memory_probes_may_consume_rng": false,
+    "random_episode_length_initialization": false
+  },
+  "pre_optimizer_coverage_gate": {
+    "histogram_scope": "first_episode_per_env_only",
+    "autoreset_repeats_may_not_satisfy_gate": true,
+    "anchor_q9": 9,
+    "rollout_action_q9_last_if_uninterrupted": 168,
+    "required_exact_survivors_through_q9": {
+      "88": 128
+    },
+    "required_minimum_survivors_at_q9": {
+      "126": 96,
+      "133": 64,
+      "154": 32,
+      "163": 16
+    },
+    "required_storage_step": 160,
+    "required_training_transitions": 20480,
+    "required_optimizer_steps": 0,
+    "required_optimizer_state_entries": 0,
+    "required_completed_update_count": 0,
+    "required_current_learning_iteration": 0,
+    "required_actor_policy_state_unchanged": true,
+    "required_frozen_actor_state_unchanged": true,
+    "required_trainable_actor_state_unchanged": true,
+    "required_critic_mlp_state_unchanged": true,
+    "required_critic_observation_normalizer_sample_count": 20480,
+    "required_critic_observation_normalizer_before_after_hashes": true,
+    "required_first_episode_right_wrist_barrier_active_count_minimum": 1,
+    "required_first_episode_right_wrist_barrier_raw_sum_positive": true,
+    "required_first_episode_right_wrist_barrier_weighted_sum_negative": true,
+    "required_first_episode_worst_ee_raw_sum_finite": true,
+    "required_first_episode_ee_body_pos_terminal_count_minimum": 1,
+    "required_pre_rollout_pre_probe_rng_equals_pre_rollout_rng": true,
+    "required_post_rollout_pre_probe_rng_equals_post_probe_rng": true,
+    "required_zero_counts": [
+      "nonfinite_count",
+      "q9_discontinuity_count",
+      "action_semantics_mismatch_count"
+    ],
+    "failed_gate_optimizer_steps": 0,
+    "failed_gate_candidate": false
+  },
+  "pre_optimizer_memory_gate": {
+    "device_name": "NVIDIA GeForce RTX 3070 Laptop GPU",
+    "device_total_memory_bytes": 8589410304,
+    "mini_batch_size": 5120,
+    "maximum_frozen_decoder_width": 4096,
+    "minimum_free_cuda_bytes_before_update": 2147483648,
+    "cuda_cache_released_before_measurement": true,
+    "out_of_memory_is_fatal": true,
+    "out_of_memory_candidate": false
+  },
+  "evaluation_gates": {
+    "baseline_update": 0,
+    "baseline_expected_completed_transitions": 155,
+    "baseline_expected_terminal_q9": 163,
+    "baseline_expected_termination_names": ["ee_body_pos"],
+    "historical_parent_absolute_episode_return_is_diagnostic_only": true,
+    "paired_current_run_update0_return_used_for_relative_catastrophe_floor": true,
+    "candidate_update": 1,
+    "candidate_minimum_completed_transitions": 156,
+    "candidate_minimum_terminal_q9": 164,
+    "allowed_termination_names": ["time_out", "anchor_pos", "anchor_ori", "ee_body_pos"],
+    "required_zero_counts": [
+      "nonfinite_count",
+      "raw_clip_required_count",
+      "action_semantics_mismatch_count",
+      "q9_discontinuity_count"
+    ],
+    "candidate_reward_floor": "baseline_episode_return_minus_max_0p2_abs_baseline_or_50",
+    "candidate_reward_relative_tolerance": 0.2,
+    "candidate_reward_absolute_tolerance": 50.0,
+    "single_update_pass_is_not_support_or_deployment_evidence": true
+  },
+  "checkpoint": {
+    "kind": "g1_true23_sonic_task_space_ppo_full_support_checkpoint_v1",
+    "updates": [0, 1],
+    "filename_pattern": "sonic_task_space_full_support_model_N.pt",
+    "weights_only_reload_validation_required": true,
+    "exclusive_no_overwrite": true,
+    "resume_permitted": false,
+    "update1_actor_and_trainable_hash_must_differ_from_update0": true,
+    "update1_frozen_actor_and_std_must_equal_update0": true,
+    "update1_adam_state_entry_count": 12,
+    "update1_adam_step_per_entry": 8,
+    "stock_export_forbidden": true
+  },
+  "boundaries": {
+    "simulator_training_only": true,
+    "teacher_labels_used": false,
+    "dagger_data": false,
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_rank256_exact_impulse_survival_score_contract_v1",
+  "role": "offline_mjlab_rank256_exact_failed_impulse_survival_score_experiment_only",
+  "parent": {
+    "contract_path": "gear_sonic/config/sim_validation/g1_true23_sonic_rank256_disturbance_survival_score_v1.json",
+    "contract_sha256": "82e65b98e20bd4070a904cdb14e779ed63a8ea639ff81a2cedbd90aa0b681d2d",
+    "result_path": "/root/g1_true23_runs/sonic_rank256_disturbance_survival_score_v1_retry2/rank256_disturbance_survival_score_result.json",
+    "result_sha256": "aa6d25c8f6ec4d5e14b9ea7789bbd77d4353dda7269d5b0264c08cf32fdd7b7c"
+  },
+  "collection": {
+    "num_envs": 128,
+    "steps": 510,
+    "total_transitions": 65280,
+    "impulse_global_transition": 241,
+    "impulse_q9": 250,
+    "all_envs_receive_exact_vector": true,
+    "exact_vector": [-0.109284965708, 0.348842165152, -0.026012141987, 0.137065557322, -0.499675156302, -0.717607152875],
+    "exploration_std": 0.05,
+    "first_episode_only": true,
+    "autoreset_rows_excluded": true
+  },
+  "gradient": {
+    "outcome": "first_episode_length_divided_by_510",
+    "direction_l2": 0.000591382415,
+    "scales": [-2.0, -1.0, -0.5, 0.0, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0]
+  },
+  "evaluation": {
+    "nominal_seed": 835868017,
+    "disturbance_seed": 2069156915,
+    "candidate_requires_nominal_not_worse_than_baseline": true,
+    "candidate_requires_disturbance_strictly_better_than_baseline": true,
+    "zero_faults_required": true
+  },
+  "boundaries": {
+    "simulator_only": true,
+    "optimizer_steps": 0,
+    "critic_updates": 0,
+    "teacher_labels_used": false,
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

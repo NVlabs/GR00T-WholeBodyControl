@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_survival_length_multibatch_contract_v1",
+  "seed": 20260805,
+  "source": {
+    "checkpoint_path": "/root/g1_true23_runs/sonic_survival_scale_extension_v1/checkpoints/sonic_survival_scale_extension_candidate.pt",
+    "checkpoint_sha256": "7c49c951b0a11536d12a68ab463f61111c5f8f483dc5fe820d6ec22137830613",
+    "policy_state_sha256": "a808df03d0badadf61d0a144aa016d2ee27a15c3c87661ade0c6465be74f3a9f"
+  },
+  "collection": {
+    "batch_count": 4,
+    "num_envs_per_batch": 128,
+    "steps_per_batch": 360,
+    "total_transitions": 184320,
+    "action_seeds": [20260805, 20260806, 20260807, 20260808],
+    "autoreset_rows_excluded": true,
+    "outcome": "first_episode_active_action_count_divided_by_360"
+  },
+  "gradient": {
+    "per_batch_estimator": "centered_population_std_scaled_score_function",
+    "aggregation": "equal_mean_of_per_batch_l2_normalized_negative_gradients_then_l2_renormalize",
+    "parameters": [
+      "core.actor_module.decoders.g1_dyn.module.14.bias",
+      "core.actor_module.decoders.g1_dyn.module.14.weight",
+      "core.actor_module.decoders.g1_dyn.module.16.bias",
+      "core.actor_module.decoders.g1_dyn.module.16.weight"
+    ],
+    "direction_l2_target": 0.002365529660531515,
+    "screen_scales": [-0.25, -0.1, -0.05, 0.0, 0.05, 0.1, 0.25, 0.5, 1.0]
+  },
+  "evaluation_gate": {
+    "baseline_policy_sha256": "a808df03d0badadf61d0a144aa016d2ee27a15c3c87661ade0c6465be74f3a9f",
+    "baseline_completed_transitions_min": 355,
+    "baseline_completed_transitions_max": 360,
+    "baseline_termination_names": ["anchor_pos"],
+    "screen_improvement_actions_min": 10,
+    "confirmation_improvement_actions_min": 8,
+    "required_zero_counts": [
+      "nonfinite_count",
+      "raw_clip_required_count",
+      "action_semantics_mismatch_count",
+      "q9_discontinuity_count"
+    ],
+    "allowed_termination_names": ["ee_body_pos", "anchor_pos", "anchor_ori", "time_out"]
+  },
+  "boundaries": {
+    "simulator_only": true,
+    "teacher_labels_used": false,
+    "optimizer_steps": 0,
+    "critic_updates": 0,
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false
+  }
+}

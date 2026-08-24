@@ -1,0 +1,238 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_pico_sonic_mode_registry_v1",
+  "physical_dof": 23,
+  "decoder_output_dof": 23,
+  "source_29dof_physics_used": false,
+  "hardware_authorized": false,
+  "encoder": {
+    "path": "artifacts/g1_true23/causal_model_250_20260803/causal_model_250.encoder.onnx",
+    "sha256": "733353148bef1eb8dd83a96416b7a89f0b5c3530ceb9e0cec9c25fdb04f56ff2"
+  },
+  "transport_evidence": {
+    "kind": "timed_saved_pico_packets_over_localhost_zmq",
+    "consumer": {
+      "path": "artifacts/g1_true23/pico_native23_profile_v1/upright.zmq.json",
+      "sha256": "54e212ce49433a5ae0f839daafe45c54db46e3ff3ee811d075a085f040425075"
+    },
+    "publisher": {
+      "path": "artifacts/g1_true23/pico_native23_profile_v1/upright.zmq.publisher.json",
+      "sha256": "694bfd8e5802a5d18842ce77e841fa630fbefecb5b6bd8599419d1a0f25ab838"
+    },
+    "real_saved_pico_values": true,
+    "timestamps_rebased": true,
+    "live_headset_source_proven": false
+  },
+  "profiles": {
+    "pico_fullbody": {
+      "purpose": "native23_fullbody_pico_saved_or_live_zmq_simulator",
+      "decoder": {
+        "path": "artifacts/g1_true23/pico_fullbody_multimotion_v14_100_eval/model_50.decoder.onnx",
+        "sha256": "43fbbb3030b37691a525d6c747a10cffc6a68148054f495e3f9b760a43f3b375"
+      },
+      "simulator_modes": [
+        "saved",
+        "zmq"
+      ],
+      "minimum_base_height_m": 0.30,
+      "maximum_base_tilt_rad": 1.0,
+      "evidence": [
+        {
+          "path": "artifacts/g1_true23/pico_native23_profile_v1/upright.saved.final.json",
+          "sha256": "18f452e7d59839435827d2d866c4bd1727be473d60f16778e34286d050e313d1",
+          "minimum_completed_transitions": 41
+        },
+        {
+          "path": "artifacts/g1_true23/pico_native23_profile_v1/standing.saved.final.json",
+          "sha256": "343f00762090d41a81ff76c30e1383bc18ef56de3810aea86bcadaf76265fa24",
+          "minimum_completed_transitions": 38
+        },
+        {
+          "path": "artifacts/g1_true23/pico_native23_profile_v1/crouch.saved.retry3.json",
+          "sha256": "429bdf394917a4fdf45c7298f604b4f34ed9b18e95a4f88c5db01ae9a79949d0",
+          "minimum_completed_transitions": 62
+        },
+        {
+          "path": "artifacts/g1_true23/pico_fullbody_multimotion_v14_100_eval/model_50/pico_upright_hold500.json",
+          "sha256": "b889d6dfce70b5bbf9756d56c579337b22951c9b65275357a696e4d2985cc1c7",
+          "minimum_completed_transitions": 500
+        },
+        {
+          "path": "artifacts/g1_true23/pico_fullbody_multimotion_v14_100_eval/model_50/pico_standing_hold500.json",
+          "sha256": "d2c2a5b89f0c7331027d6c690d5ff9ac78f9141546227be9e00119a228dce4d5",
+          "minimum_completed_transitions": 500
+        },
+        {
+          "path": "artifacts/g1_true23/pico_fullbody_multimotion_v14_100_eval/model_50/pico_crouch.json",
+          "sha256": "2808b438b9f533a1135f92f589e04c4b07773ed6510127979b553eeb20bcc688",
+          "minimum_completed_transitions": 61
+        }
+      ],
+      "live_transport_proven": true,
+      "live_headset_source_proven": false,
+      "sustained_deep_crouch_authorized": false
+    },
+    "pico_internet_fullbody_walk": {
+      "purpose": "authentic_pico_twist2_fullbody_walk_native23_simulator",
+      "decoder": {
+        "path": "artifacts/g1_true23/pico_internet_fullbody_v14_100_eval/model_100.decoder.onnx",
+        "sha256": "f66408ae9a10720a3aff717269d0e2a4e07ab471e449a6fe8f5bae5e8607ef63"
+      },
+      "simulator_modes": [
+        "saved",
+        "zmq"
+      ],
+      "minimum_base_height_m": 0.30,
+      "maximum_base_tilt_rad": 1.0,
+      "evidence": [
+        {
+          "path": "artifacts/g1_true23/pico_internet_fullbody_v14_100_eval/model_100/walk001.json",
+          "sha256": "89d638c863a2ca4a77734106211dc02bc23f15b347b38ebdba5cfef579818923",
+          "minimum_completed_transitions": 684
+        },
+        {
+          "path": "artifacts/g1_true23/pico_internet_fullbody_v14_100_eval/model_100/walk010.json",
+          "sha256": "72b804b825d591ebdeda821791690fe25b07a44c9f21ad0723a6254ad8b7801a",
+          "minimum_completed_transitions": 499
+        },
+        {
+          "path": "artifacts/g1_true23/pico_internet_fullbody_teleop_v1/walk001.saved.json",
+          "sha256": "1b515abc6616e2323b7ed2b7dc0f4e01a0f7b23552e7612328bb1264937ab58e",
+          "minimum_completed_transitions": 684
+        },
+        {
+          "path": "artifacts/g1_true23/pico_internet_fullbody_teleop_v1/walk001.zmq.retry2.json",
+          "sha256": "2d644f6dfd29b89a1f535e56922d32122a88c8c4567d225e05daa79fd6e300e2",
+          "minimum_completed_transitions": 684
+        },
+        {
+          "path": "artifacts/g1_true23/pico_internet_fullbody_teleop_v1/walk010.saved.json",
+          "sha256": "c224acd8858dd207ac8ba19b35e119e240653cba39a6c296e0dc3d883c56a5dc",
+          "minimum_completed_transitions": 499
+        },
+        {
+          "path": "artifacts/g1_true23/pico_internet_fullbody_teleop_v1/walk010.zmq.json",
+          "sha256": "0f32a155f324963211977d3cf03e2fbd6d3c950184ff36bd51451a6653982916",
+          "minimum_completed_transitions": 499
+        },
+        {
+          "path": "artifacts/g1_true23/pico_internet_fullbody_teleop_v1/real_pico_upright.saved.json",
+          "sha256": "a4bf6a7b5a391a50c5f7c16a03aa20f4c5b231acec462c37173895ef245456f4",
+          "minimum_completed_transitions": 41
+        },
+        {
+          "path": "artifacts/g1_true23/pico_internet_fullbody_teleop_v1/real_pico_standing.saved.json",
+          "sha256": "58c56f99656377677dbe37e4658bd800fb175367bc20177802965d0ac92d943a",
+          "minimum_completed_transitions": 38
+        }
+      ],
+      "profile_transport_evidence": [
+        {
+          "expected_packet_count": 684,
+          "packet_bundle": {
+            "path": "artifacts/g1_true23/pico_internet_fullbody_teleop_v1/walk001.causal_packets.json",
+            "sha256": "dfa84d4d5515fc8de4b9d71532ec4f9cb92a90d184b58acc24ee36597b27f4ed"
+          },
+          "consumer": {
+            "path": "artifacts/g1_true23/pico_internet_fullbody_teleop_v1/walk001.zmq.retry2.json",
+            "sha256": "2d644f6dfd29b89a1f535e56922d32122a88c8c4567d225e05daa79fd6e300e2"
+          },
+          "publisher": {
+            "path": "artifacts/g1_true23/pico_internet_fullbody_teleop_v1/walk001.zmq.publisher.retry2.json",
+            "sha256": "ccb2188b9f386b2051010131f6df58c3ade7fafd1bc54273e97e312a449266a9"
+          }
+        },
+        {
+          "expected_packet_count": 499,
+          "packet_bundle": {
+            "path": "artifacts/g1_true23/pico_internet_fullbody_teleop_v1/walk010.causal_packets.json",
+            "sha256": "851010b5f4a752fc3bce9adad316c7afbde69340a05beb1a88fa82c29183b44c"
+          },
+          "consumer": {
+            "path": "artifacts/g1_true23/pico_internet_fullbody_teleop_v1/walk010.zmq.json",
+            "sha256": "0f32a155f324963211977d3cf03e2fbd6d3c950184ff36bd51451a6653982916"
+          },
+          "publisher": {
+            "path": "artifacts/g1_true23/pico_internet_fullbody_teleop_v1/walk010.zmq.publisher.json",
+            "sha256": "8ebe0fff102783d4db7f412fe7337ebf8dcf7bb664af22708bb59ae0aae933f8"
+          }
+        }
+      ],
+      "live_transport_proven": true,
+      "live_headset_source_proven": false,
+      "sustained_deep_crouch_authorized": false
+    },
+    "sonic_hand_crawl": {
+      "purpose": "original_sonic_hand_crawl_native23_simulator",
+      "decoder": {
+        "path": "artifacts/g1_true23/sonic_crawl_native_head_v2/hand_crawl.decoder.onnx",
+        "sha256": "f895650962f2e104e4f058c7b3cdc5571d7f14cf85a0b99e2c56ec65baab7f8e"
+      },
+      "simulator_modes": [
+        "library_replay"
+      ],
+      "minimum_base_height_m": 0.12,
+      "maximum_base_tilt_rad": 2.2,
+      "evidence": [
+        {
+          "path": "artifacts/g1_true23/sonic_crawl_native_final_v1/report.json",
+          "sha256": "94d7a44c7455d30f1b3b3373d26ee97f23684e6e66303bc474a5ae10a4bd0969",
+          "minimum_completed_transitions": 595
+        },
+        {
+          "path": "artifacts/g1_true23/pico_sonic_mode_router_v1/hand_crawl.library.json",
+          "sha256": "0fb3f2cb304747e641f1aa6594e7b7fc2868f39c9b8ea85e04b7173343289980",
+          "minimum_completed_transitions": 595
+        }
+      ],
+      "live_transport_proven": false,
+      "live_headset_source_proven": false,
+      "sustained_deep_crouch_authorized": false
+    },
+    "sonic_elbow_crawl": {
+      "purpose": "sonic_elbow_crawl_native23_simulator",
+      "decoder": {
+        "path": "artifacts/g1_true23/sonic_native23_multimotion_head_v1/candidate.alpha010.decoder.onnx",
+        "sha256": "7b31a07c3f02b38820ee43224c5746fffccab43add4c303b2c66ea6a093aba6b"
+      },
+      "simulator_modes": [
+        "library_replay"
+      ],
+      "minimum_base_height_m": 0.12,
+      "maximum_base_tilt_rad": 2.2,
+      "evidence": [
+        {
+          "path": "artifacts/g1_true23/sonic_native23_multimotion_head_v1/alpha010_eval/sonic_elbow_crawl.json",
+          "sha256": "37cb4a35b700da9243132cb6afdb6b4737fd0ec4db96db8570b24051f93efe23",
+          "minimum_completed_transitions": 595
+        },
+        {
+          "path": "artifacts/g1_true23/pico_sonic_mode_router_v1/elbow_crawl.library.json",
+          "sha256": "b23bf0de5aea496dbc347cc8fab475112afa0253e517c7b58f95b3f8808056b8",
+          "minimum_completed_transitions": 595
+        }
+      ],
+      "live_transport_proven": false,
+      "live_headset_source_proven": false,
+      "sustained_deep_crouch_authorized": false
+    }
+  },
+  "excluded_modes": {
+    "pico_sustained_deep_crouch": {
+      "reason": "two native23 decoders failed the 500-step reachable crouch hold",
+      "evidence": [
+        {
+          "path": "artifacts/g1_true23/pico_fullbody_motion_reachable_v1/model50.crouch500.json",
+          "sha256": "7cb426602bbe40a39f1e47707527f2b67fd50abc7dade24bdeee14c6d5f0291a"
+        },
+        {
+          "path": "artifacts/g1_true23/pico_fullbody_motion_reachable_v1/alpha010.crouch500.json",
+          "sha256": "be53e802dbc0a50a1cf7d5305926bca350bbb764459248dd974400a93c9fcd06"
+        }
+      ]
+    },
+    "sonic_happy_dance": {
+      "reason": "no native23 decoder has completed the physical motion gate"
+    }
+  }
+}

@@ -18,8 +18,10 @@
 
 #include <array>
 #include <chrono>
+#include <cstdint>
 #include <optional>
 
+#include "control_session_state.hpp"
 #include "../localmotion_kplanner.hpp"  // For LocomotionMode enum
 
 // ---------------------------------------------------------------------------
@@ -28,14 +30,25 @@
 /**
  * @brief Wire format for the ZMQ "command" topic.
  *
- * Packed binary layout sent by the remote controller:
- *   { start: bool, stop: bool, planner: bool, delta_heading?: f32/f64 }
+ * Packed-message protocol v2 fields sent by the remote controller:
+ *   - receiver_epoch: u8[16] - current native deployment challenge
+ *   - publisher_session: u8[16] - nonzero publisher-process identifier
+ *   - command_index: i64[1] - nonnegative replay sequence; an identical
+ *     claim retry may repeat, while accepted control actions strictly advance
+ *   - claim: bool[1] - claim deployment; mutually exclusive with start/stop
+ *   - start: bool[1] - start selected mode; mutually exclusive with stop/claim
+ *   - stop: bool[1] - terminal stop; mutually exclusive with start/claim
+ *   - planner: bool[1] - select planner or streamed-motion mode
  *
- * Multiple messages between two update() calls are accumulated using OR logic
- * for start/stop (so a transient pulse is never lost), while the planner flag
- * is overwritten with the latest value.
+ * The manager must claim the receiver epoch before start. It permanently
+ * binds to the first publisher session for process lifetime; stop, deadman,
+ * mode changes, and disconnects never reset binding or replay sequences.
  */
 struct CommandMessage {
+  ControlSessionToken receiver_epoch{};    ///< Native process challenge.
+  ControlSessionToken publisher_session{}; ///< Publisher process identifier.
+  int64_t command_index = -1;              ///< Monotonic command replay sequence.
+  bool claim = false;                      ///< Request permanent ownership.
   bool start = false;     ///< When true, request the control system to start.
   bool stop = false;      ///< When true, request an emergency / graceful stop.
   bool planner = false;   ///< true  → planner mode  (use planner topic for locomotion)
@@ -52,7 +65,10 @@ struct CommandMessage {
 /**
  * @brief Wire format for the ZMQ "planner" topic.
  *
- * Required fields (must be present in every message):
+ * Required fields (must be present in every protocol-v2 message):
+ *   - receiver_epoch: u8[16] - current native deployment challenge
+ *   - publisher_session: u8[16] - permanently claimed publisher identifier
+ *   - frame_index: int64 – strictly increasing publisher sequence
  *   - mode      : int32  – LocomotionMode enum cast (IDLE, WALK, RUN, …)
  *   - movement  : float[3] – desired movement direction unit vector (x, y, z)
  *   - facing    : float[3] – desired facing direction unit vector  (x, y, z)
@@ -65,11 +81,17 @@ struct CommandMessage {
  *   - left_hand_joints   : float[7]  – Dex3 left-hand joint positions
  *   - right_hand_joints  : float[7]  – Dex3 right-hand joint positions
  *
- * The `timestamp` field is set locally on receipt and used for timeout
- * detection (planner messages older than ~1 s are considered stale).
+ * The `timestamp` field is set only after full validation and backs the
+ * manager's 500 ms active-input lease.
  */
 struct PlannerMessage {
   bool valid = false;  ///< True once this struct contains a successfully decoded message.
+
+  ControlSessionToken receiver_epoch{};
+  ControlSessionToken publisher_session{};
+
+  /// Strictly increasing publisher sequence used to reject replayed packets.
+  int64_t frame_index = -1;
 
   /// Locomotion mode (cast of LocomotionMode enum). Defaults to IDLE.
   int mode = static_cast<int>(LocomotionMode::IDLE);
@@ -95,14 +117,23 @@ struct PlannerMessage {
   /// Optional right-hand Dex3 joint positions (7 DOF).
   std::optional<std::array<double, 7>> right_hand_joints;
 
+  /// Optional VR 3-point positions (left wrist, right wrist, head).
+  std::optional<std::array<double, 9>> vr_position;
+
+  /// Optional VR 3-point orientations (three quaternions).
+  std::optional<std::array<double, 12>> vr_orientation;
+
+  /// Optional VR 3-point compliance values.
+  std::optional<std::array<double, 3>> vr_compliance;
+
   /// Desired locomotion speed.  -1.0 means "use the default for the current mode".
   double speed = -1.0;
 
   /// Desired body height.  -1.0 means "use the default for the current mode".
   double height = -1.0;
 
-  /// Local steady-clock timestamp recorded when the message was received.
-  /// Used to detect planner timeouts (stale data → fallback to IDLE).
+  /// Local steady-clock timestamp recorded after full message validation.
+  /// Used by the manager's active-input lease.
   std::chrono::steady_clock::time_point timestamp{};
 };
 

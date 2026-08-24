@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_scale2_clean_cross_seed_probe_contract_v1",
+  "role": "offline_mjlab_clean_observation_seed_sensitivity_diagnostic_only",
+  "prerequisites": {
+    "observation_probe_relative_path": "artifacts/g1_true23/g1_true23_sonic_scale2_observation_corruption_probe_v1_retry1.json",
+    "observation_probe_sha256": "98caae05af518822e5f3f24cb503295deca64b9d4dded4c5ff0d265599b6fba6",
+    "required_verdict": "observation_corruption_not_sufficiently_proven",
+    "failed_clean_completed_transitions": 236,
+    "failed_clean_terminal_q9": 244,
+    "failed_clean_termination_names": ["anchor_pos"]
+  },
+  "policy": {
+    "checkpoint_sha256": "7c49c951b0a11536d12a68ab463f61111c5f8f483dc5fe820d6ec22137830613",
+    "policy_state_sha256": "a808df03d0badadf61d0a144aa016d2ee27a15c3c87661ade0c6465be74f3a9f",
+    "deterministic_mean": true
+  },
+  "runs": [
+    {
+      "name": "reference_clean",
+      "seed": 20260805,
+      "tokenizer_corruption_enabled": false,
+      "policy_corruption_enabled": false,
+      "required_minimum_completed_transitions": 241
+    },
+    {
+      "name": "failed_seed_clean",
+      "seed": 611723381,
+      "tokenizer_corruption_enabled": false,
+      "policy_corruption_enabled": false,
+      "required_completed_transitions": 236,
+      "required_terminal_q9": 244,
+      "required_termination_names": ["anchor_pos"]
+    }
+  ],
+  "comparison": {
+    "run_order": ["reference_clean", "failed_seed_clean"],
+    "common_q9_alignment": true,
+    "raw_action_linf_thresholds": [0.001, 0.01, 0.05, 0.1],
+    "ee_z_linf_thresholds_m": [0.001, 0.01, 0.025],
+    "initial_encoder_and_policy_hashes_required": true,
+    "seed_sensitivity_proven_when": "failed_seed_reproduces_and_reference_survives_beyond_q244_with_clean_observations"
+  },
+  "boundaries": {
+    "training_performed": false,
+    "optimizer_steps": 0,
+    "teacher_queries": 0,
+    "teacher_labels": 0,
+    "support_qualified": false,
+    "promotion_or_deployment": false,
+    "hardware_authorized": false,
+    "network_or_external_actuation": false
+  }
+}

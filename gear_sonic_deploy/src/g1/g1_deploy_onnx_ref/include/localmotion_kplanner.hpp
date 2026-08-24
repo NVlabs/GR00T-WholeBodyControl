@@ -27,6 +27,7 @@
 #ifndef LOCALMOTION_KPLANNER_HPP
 #define LOCALMOTION_KPLANNER_HPP
 
+#include <atomic>
 #include <memory>
 #include <vector>
 #include <array>
@@ -47,8 +48,8 @@
 
 /// Planner lifecycle flags (set by input interfaces, read by planner thread).
 struct PlannerState {
-    bool enabled = false;       ///< True when the planner should be running.
-    bool initialized = false;   ///< True after the first successful inference.
+    std::atomic<bool> enabled{false};      ///< True when the planner should run.
+    std::atomic<bool> initialized{false};  ///< True after first successful inference.
 };
 
 /**

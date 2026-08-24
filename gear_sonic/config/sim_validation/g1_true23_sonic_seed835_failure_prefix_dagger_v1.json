@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_seed835_failure_prefix_dagger_contract_v1",
+  "role": "student_on_policy_failure_prefix_with_exact_same_state_teacher_labels",
+  "inputs": {
+    "candidate_manifest": {"path": "artifacts/g1_true23/sonic_nominal_dagger_bc_last_affine_ridge_v1.manifest.json", "sha256": "1bdf87f653d047ee45284a1d2e55efca8582013b1f51c80597ef7f78a1d1f9a9"},
+    "candidate_decoder": {"path": "artifacts/g1_true23/sonic_nominal_dagger_bc_last_affine_ridge_v1.decoder.onnx", "sha256": "e725fbdef73a087c9e4ea789b4442c0812f09e1ee96f098af574b29949d38ebf"},
+    "cutoff100_failure": {"path": "artifacts/g1_true23/sonic_hybrid_cutoff100.seed835868017.v1.json", "sha256": "c3171d31830c163fb4b4a9defeb9d88eed16474bbde99a19679971544a3799cd"},
+    "cutoff100_contract": {"path": "gear_sonic/config/sim_validation/g1_true23_sonic_hybrid_cutoff100_qualification_v1.json", "sha256": "31012c1af892e6fdeed0c9d8427a6165e8198751cca1d0eaa4767308659110bd"},
+    "recovery_contract": {"path": "gear_sonic/config/sim_validation/g1_true23_sonic_student_teacher_recovery_v4.json", "sha256": "2b70f24f07619ad586a93f0e9c465e5d9647143d198f124c2568e4dd7e357581"}
+  },
+  "rows": {
+    "total": 89,
+    "student_on_policy": 89,
+    "teacher_actuated": 0,
+    "q9_first": 9,
+    "q9_last": 97,
+    "terminal_causing_pre_action_row_included": true,
+    "post_action_terminal_state_included": false
+  },
+  "admission": {
+    "exact_reproduction_required": true,
+    "expected_verdict": "mixed_controller_recovery_failed",
+    "expected_attempted_transitions": 89,
+    "expected_terminal_transition": 88,
+    "expected_terminal_q9": 97,
+    "expected_termination_names": ["ee_body_pos"],
+    "expected_controller_counts": {"student": 89, "teacher": 0},
+    "teacher_pt_cpu_onnx_parity_required_every_row": true,
+    "student_action_chain_required_every_row": true,
+    "plain_teacher_label_absolute_strict_max": 10.0
+  },
+  "boundaries": {
+    "simulator_only": true,
+    "classification": "failure_prefix_counterexample_dagger_bc_only",
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

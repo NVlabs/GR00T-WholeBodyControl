@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_rank256_constrained_recovery_mix_contract_v1",
+  "role": "fresh_process_constrained_mix_of_push_and_nominal_restoration_directions",
+  "parents": {
+    "reward_direction_path": "/root/g1_true23_runs/sonic_rank256_post_impulse_reward_to_go_score_v1/checkpoints/rank256_post_impulse_reward_to_go_score_direction.pt",
+    "reward_direction_sha256": "e739e7b95d4e6c85266579aac7a52255e4e743112becc944e59be38a4b449a4c",
+    "reward_direction_state_sha256": "66b436693054f9cebd713eb4ac3e768206a5193cd9d9ea54e31c110e7f7563f0",
+    "grouped_direction_path": "/root/g1_true23_runs/sonic_rank256_iterative_grouped_survival_score_v2/checkpoints/rank256_disturbance_survival_score_direction.pt",
+    "grouped_direction_sha256": "ae42123a0b23934ef03bdc912226fd8f8310b5f2c5dde5d817c5d215b1671550",
+    "grouped_direction_state_sha256": "a882d3b2fac697160da01406140c19ccaadca467719bd70685c8db8592e4e64b",
+    "causal_direction_path": "/root/g1_true23_runs/sonic_rank256_causal_recovery_score_v2/checkpoints/rank256_causal_recovery_score_direction_v2.pt",
+    "causal_direction_sha256": "aa6c3f960816e72e2e2c463e5bbad19750c9811c1e796cf1ad140969afd42728",
+    "causal_direction_state_sha256": "345d11aaf5ddbf92c8feaaa644cb1e30c204ef5b25ac33af5790f93bdcbf4474",
+    "iterative_screen_path": "/root/g1_true23_runs/sonic_rank256_iterative_grouped_screen_v3/rank256_iterative_grouped_screen_result.json",
+    "iterative_screen_sha256": "1fb26e030112f700b55e4f5b2edee0caf39000e15926583ed08e034446c3762b",
+    "causal_screen_path": "/root/g1_true23_runs/sonic_rank256_causal_recovery_screen_v1/rank256_causal_recovery_screen_result.json",
+    "causal_screen_sha256": "fc7cc14d18e6cd6655e370f11dc60771346d52110c6ad2f7d710919ae5c388c4"
+  },
+  "screen": {
+    "reward_coefficient": 1.0,
+    "grouped_coefficients": [0.5, 1.0, 2.0],
+    "causal_coefficients": [0.0, 4.0, 8.0],
+    "scenario_order": ["nominal", "disturbance"],
+    "one_fresh_process_per_evaluation": true,
+    "original_policy_nominal_minimum_transitions": 486,
+    "original_policy_disturbance_strictly_above_transitions": 287,
+    "zero_faults_required": true
+  },
+  "boundaries": {
+    "additional_training_transitions": 0,
+    "optimizer_steps": 0,
+    "critic_updates": 0,
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

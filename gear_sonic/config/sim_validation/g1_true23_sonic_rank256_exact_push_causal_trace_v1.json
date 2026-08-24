@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_rank256_exact_push_causal_trace_contract_v1",
+  "role": "simulator_only_paired_nominal_vs_exact_push_causal_diagnostic",
+  "parents": {
+    "fine_direction_screen": {
+      "path": "/root/g1_true23_runs/sonic_rank256_two_direction_fine_screen_v1/rank256_two_direction_screen_result.json",
+      "sha256": "037debaa08ca8eb5fc1b30720e267101180b2adc898290278f055f94c266bffd"
+    },
+    "relaxed_tracking_diagnostic": {
+      "path": "artifacts/g1_true23/sonic_rank256_relaxed_tracking_exact_push_v1.json",
+      "sha256": "dd0ef2e37854e03a03be1112811508748d1900a9f92681e132f546785047da7a"
+    }
+  },
+  "scenario": {
+    "seed": 2069156915,
+    "steps": 510,
+    "impulse_transition": 241,
+    "impulse_q9": 250,
+    "exact_vector": [-0.109284965708, 0.348842165152, -0.026012141987, 0.137065557322, -0.499675156302, -0.717607152875],
+    "scenario_order": ["nominal", "disturbance"]
+  },
+  "thresholds": {
+    "raw_action_linf": [0.001, 0.01, 0.05],
+    "anchor_position_error_m": [0.01, 0.05, 0.1, 0.2, 0.25],
+    "gravity_xy_norm": [0.05, 0.1, 0.25, 0.5],
+    "root_angular_velocity_norm_radps": [0.25, 0.5, 1.0]
+  },
+  "boundaries": {
+    "training_transitions": 0,
+    "optimizer_steps": 0,
+    "critic_updates": 0,
+    "candidate_selected": false,
+    "support_qualified": false,
+    "deployment_ready": false,
+    "robot_or_network_commands_permitted": false,
+    "hardware_authorized": false
+  }
+}

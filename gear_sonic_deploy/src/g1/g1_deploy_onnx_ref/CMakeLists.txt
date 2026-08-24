@@ -40,6 +40,11 @@ endif()
 
 file(GLOB_RECURSE PROJECT_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 list(REMOVE_ITEM PROJECT_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/src/g1_deploy_onnx_ref.cpp)
+list(REMOVE_ITEM PROJECT_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/src/g1_true23_shadow_gate.cpp)
+list(REMOVE_ITEM PROJECT_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/src/g1_true23_live_shadow.cpp)
+list(REMOVE_ITEM PROJECT_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/src/g1_true23_active_gantry.cpp)
+list(REMOVE_ITEM PROJECT_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/src/g1_true23_native124_active_gantry.cpp)
+list(REMOVE_ITEM PROJECT_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/src/g1_true23_gantry_hold_smoke.cpp)
 
 
 # Optional AddressSanitizer support
@@ -216,6 +221,282 @@ set_target_properties(
              CXX_STANDARD_REQUIRED ON
              CXX_EXTENSIONS OFF)
 
+# Read-only native 23-DoF artifact/embodiment probe. Keep this target isolated
+# from g1_deploy_shared and all command, TensorRT, audio, input, and output
+# surfaces. Its translation unit includes only the Unitree subscriber API.
+add_executable(
+  g1_true23_shadow_gate
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/g1_true23_shadow_gate.cpp)
+target_include_directories(
+  g1_true23_shadow_gate
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/)
+target_link_libraries(
+  g1_true23_shadow_gate
+  PRIVATE unitree_sdk2 onnxruntime::onnxruntime Threads::Threads)
+target_compile_options(
+  g1_true23_shadow_gate
+  PRIVATE -fno-fast-math -fno-finite-math-only)
+set_target_properties(
+  g1_true23_shadow_gate
+  PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/target/release/"
+    OUTPUT_NAME g1_true23_shadow_gate
+    # Windows checkouts preserve Linux SONAME symlinks as tiny text files.
+    # Prefer the installer-staged native libraries before transitive vendored
+    # link directories so the read-only probe remains runnable from WSL.
+    BUILD_RPATH "/usr/local/lib;/usr/local/lib64"
+    INSTALL_RPATH "/usr/local/lib;/usr/local/lib64"
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF)
+
+# Dependency-free fail-closed contract harness. This never initializes DDS.
+add_executable(
+  true23_shadow_gate_harness
+  ${CMAKE_CURRENT_SOURCE_DIR}/tests/true23_shadow_gate_harness.cpp)
+target_include_directories(
+  true23_shadow_gate_harness
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/)
+target_compile_options(
+  true23_shadow_gate_harness
+  PRIVATE -fno-fast-math -fno-finite-math-only)
+set_target_properties(
+  true23_shadow_gate_harness
+  PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/target/release/"
+    OUTPUT_NAME true23_shadow_gate_harness
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF)
+enable_testing()
+add_test(
+  NAME true23_shadow_gate_harness
+  COMMAND true23_shadow_gate_harness)
+add_test(
+  NAME true23_mujoco_promotion_harness
+  COMMAND true23_shadow_gate_harness)
+add_test(
+  NAME true23_shadow_gate_help
+  COMMAND g1_true23_shadow_gate --help)
+add_test(
+  NAME true23_shadow_gate_forbidden_surface
+  COMMAND
+    ${CMAKE_COMMAND}
+    -DBINARY=$<TARGET_FILE:g1_true23_shadow_gate>
+    -P
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_true23_shadow_binary.cmake)
+
+# Read-only causal PICO + LowState ONNX inference. This target links only the
+# subscriber/runtime dependencies and is audited for absence of command APIs.
+add_executable(
+  g1_true23_live_shadow
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/g1_true23_live_shadow.cpp)
+target_include_directories(
+  g1_true23_live_shadow
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/
+    ${ZMQ_INCLUDE_DIR})
+target_link_libraries(
+  g1_true23_live_shadow
+  PRIVATE
+    unitree_sdk2
+    onnxruntime::onnxruntime
+    Threads::Threads
+    ${ZMQ_LIBRARY})
+target_compile_options(
+  g1_true23_live_shadow
+  PRIVATE -fno-fast-math -fno-finite-math-only)
+set_target_properties(
+  g1_true23_live_shadow
+  PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/target/release/"
+    OUTPUT_NAME g1_true23_live_shadow
+    BUILD_RPATH "/usr/local/lib;/usr/local/lib64"
+    INSTALL_RPATH "/usr/local/lib;/usr/local/lib64"
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF)
+
+add_executable(
+  true23_live_shadow_core_harness
+  ${CMAKE_CURRENT_SOURCE_DIR}/tests/true23_live_shadow_core_harness.cpp)
+target_include_directories(
+  true23_live_shadow_core_harness
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/)
+target_compile_options(
+  true23_live_shadow_core_harness
+  PRIVATE -fno-fast-math -fno-finite-math-only)
+set_target_properties(
+  true23_live_shadow_core_harness
+  PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/target/release/"
+    OUTPUT_NAME true23_live_shadow_core_harness
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF)
+add_test(
+  NAME true23_live_shadow_core_harness
+  COMMAND true23_live_shadow_core_harness)
+add_test(
+  NAME true23_live_shadow_help
+  COMMAND g1_true23_live_shadow --help)
+add_test(
+  NAME true23_live_shadow_forbidden_surface
+  COMMAND
+    ${CMAKE_COMMAND}
+    -DBINARY=$<TARGET_FILE:g1_true23_live_shadow>
+    -DREQUIRE_SAFE_OUTPUT=ON
+    -P
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_true23_shadow_binary.cmake)
+
+# Native True23 first-actuation runtime.  Unlike shadow targets this contains
+# LowCmd by design, but creates that mutation surface only after its internal
+# five-sample CRC/mode/telemetry gate.  It intentionally does not link the
+# generic 29-DoF deployment stack.
+add_executable(
+  g1_true23_active_gantry
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/g1_true23_active_gantry.cpp)
+target_include_directories(
+  g1_true23_active_gantry
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/
+    ${ZMQ_INCLUDE_DIR})
+target_link_libraries(
+  g1_true23_active_gantry
+  PRIVATE
+    unitree_sdk2
+    onnxruntime::onnxruntime
+    Threads::Threads
+    ${ZMQ_LIBRARY})
+target_compile_options(
+  g1_true23_active_gantry
+  PRIVATE -fno-fast-math -fno-finite-math-only)
+set_target_properties(
+  g1_true23_active_gantry
+  PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/target/release/"
+    OUTPUT_NAME g1_true23_active_gantry
+    BUILD_RPATH "/usr/local/lib;/usr/local/lib64"
+    INSTALL_RPATH "/usr/local/lib;/usr/local/lib64"
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF)
+
+# Separate pinned native124 stage-one gantry runtime. It reuses the reviewed
+# active safety core but cannot accept causal-pair promotion artifacts.
+add_executable(
+  g1_true23_native124_active_gantry
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/g1_true23_native124_active_gantry.cpp)
+target_include_directories(
+  g1_true23_native124_active_gantry
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/ ${ZMQ_INCLUDE_DIR})
+target_link_libraries(
+  g1_true23_native124_active_gantry
+  PRIVATE unitree_sdk2 onnxruntime::onnxruntime Threads::Threads ${ZMQ_LIBRARY})
+target_compile_options(
+  g1_true23_native124_active_gantry
+  PRIVATE -fno-fast-math -fno-finite-math-only)
+set_target_properties(
+  g1_true23_native124_active_gantry
+  PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/target/release/"
+    OUTPUT_NAME g1_true23_native124_active_gantry
+    BUILD_RPATH "/usr/local/lib;/usr/local/lib64"
+    INSTALL_RPATH "/usr/local/lib;/usr/local/lib64"
+    CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
+
+# Keep exact ORT used at link time beside standalone true23 binaries. Robot
+# test hosts may have an older system ORT that cannot load current exports.
+foreach(TRUE23_ORT_TARGET
+    g1_true23_shadow_gate
+    g1_true23_live_shadow
+    g1_true23_active_gantry
+    g1_true23_native124_active_gantry)
+  set_property(
+    TARGET ${TRUE23_ORT_TARGET}
+    APPEND PROPERTY BUILD_RPATH "\$ORIGIN/lib")
+  add_custom_command(
+    TARGET ${TRUE23_ORT_TARGET}
+    POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+            "${PROJECT_SOURCE_DIR}/target/release/lib"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${onnxruntime_LIBRARY}"
+            "${PROJECT_SOURCE_DIR}/target/release/lib/libonnxruntime.so.1"
+    VERBATIM)
+endforeach()
+
+add_executable(
+  true23_active_gantry_core_harness
+  ${CMAKE_CURRENT_SOURCE_DIR}/tests/true23_active_gantry_core_harness.cpp)
+target_include_directories(
+  true23_active_gantry_core_harness
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/)
+target_compile_options(
+  true23_active_gantry_core_harness
+  PRIVATE -fno-fast-math -fno-finite-math-only)
+set_target_properties(
+  true23_active_gantry_core_harness
+  PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/target/release/"
+    OUTPUT_NAME true23_active_gantry_core_harness
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF)
+add_test(
+  NAME true23_active_gantry_core_harness
+  COMMAND true23_active_gantry_core_harness)
+add_test(
+  NAME true23_active_gantry_help
+  COMMAND g1_true23_active_gantry --help)
+add_test(
+  NAME true23_native124_active_gantry_help
+  COMMAND g1_true23_native124_active_gantry --help)
+add_test(
+  NAME true23_active_gantry_forbidden_surface
+  COMMAND
+    ${CMAKE_COMMAND}
+    -DBINARY=$<TARGET_FILE:g1_true23_active_gantry>
+    -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/src/g1_true23_active_gantry.cpp
+    -P
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_true23_active_gantry_binary.cmake)
+
+# Policy-free, fixed-gain, five-second gantry hold smoke.  This provides a
+# truthful first DDS/motor contact test when no policy is promotion-eligible.
+add_executable(
+  g1_true23_gantry_hold_smoke
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/g1_true23_gantry_hold_smoke.cpp)
+target_include_directories(
+  g1_true23_gantry_hold_smoke
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/)
+target_link_libraries(
+  g1_true23_gantry_hold_smoke
+  PRIVATE unitree_sdk2 Threads::Threads)
+target_compile_options(
+  g1_true23_gantry_hold_smoke
+  PRIVATE -fno-fast-math -fno-finite-math-only)
+set_target_properties(
+  g1_true23_gantry_hold_smoke
+  PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/target/release/"
+    OUTPUT_NAME g1_true23_gantry_hold_smoke
+    BUILD_RPATH "/usr/local/lib;/usr/local/lib64"
+    INSTALL_RPATH "/usr/local/lib;/usr/local/lib64"
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF)
+add_test(
+  NAME true23_gantry_hold_smoke_help
+  COMMAND g1_true23_gantry_hold_smoke --help)
+add_test(
+  NAME true23_gantry_hold_smoke_forbidden_surface
+  COMMAND
+    ${CMAKE_COMMAND}
+    -DBINARY=$<TARGET_FILE:g1_true23_gantry_hold_smoke>
+    -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/src/g1_true23_gantry_hold_smoke.cpp
+    -P
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_true23_hold_smoke_binary.cmake)
+
 # Optional ROS2 support for main executable and tests
 if(rclcpp_FOUND AND std_msgs_FOUND)
   # Load ROS2 configuration (handles both main executable and tests)
@@ -250,6 +531,9 @@ add_executable(run_tests ${TEST_SRCS})
 target_link_directories(run_tests PRIVATE ${CUDA_LINK_DIRS})
 target_link_libraries(run_tests GTest::GTest GTest::Main ${EXE_LIBS})
 target_include_directories(run_tests PUBLIC ${EXE_INCLUDES})
+target_compile_definitions(
+  run_tests
+  PRIVATE GEAR_SONIC_DEPLOY_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 
 # Setting our output directory and C++ standard
 set_target_properties(

@@ -167,6 +167,22 @@ def main(config: OmegaConf):
     elif config.get("checkpoint", None) is not None:
         resume_checkpoint(config)
 
+    from gear_sonic.utils.g1_23dof_artifact import is_true23_training_config
+
+    true23_training_report = None
+    if is_true23_training_config(config):
+        from gear_sonic.scripts.preflight_g1_23dof_training import (
+            require_true23_training_ready,
+        )
+
+        # Check exact config, assets, motion data, runtime and genuine 23-row
+        # checkpoint before AppLauncher allocates any simulator state.
+        true23_training_report = require_true23_training_ready(
+            config,
+            repo_root=Path(_repo_root),
+            smoke=bool(config.get("true23_smoke", False)),
+        )
+
     config.algo.trl.output_dir = str(Path(config.experiment_dir))
 
     script_args, training_args, model_args = parser.parse_dict(config.algo.trl)
@@ -319,6 +335,10 @@ def main(config: OmegaConf):
     env_config.config.experiment_dir = str(Path(config.experiment_dir))
 
     env = create_manager_env(config, device, args_cli)
+    if true23_training_report is not None:
+        env._g1_23dof_training_material = true23_training_report.details[
+            "training_material"
+        ]
     if config.get("replay", False):
         _save_video_path = config.get("replay_save_video", None)
         env.run_replay(

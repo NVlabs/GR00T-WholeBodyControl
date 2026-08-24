@@ -1,0 +1,43 @@
+# Released SONIC 29-slot actor-history layout on true 23-DoF simulation.
+# q-relative, dq and prior-action phantom slots stay fixed in both fine-tuning
+# and deployment. Joint noise is disabled because generic noise would corrupt
+# those six fixed slots.
+
+defaults:
+  - ../terms/gravity_dir@_here_
+  - ../terms/base_ang_vel@_here_
+  - ../terms/joint_pos@_here_
+  - ../terms/joint_vel@_here_
+  - ../terms/actions@_here_
+
+_target_: gear_sonic.envs.manager_env.mdp.observations.PolicyCfg
+enable_corruption: true
+concatenate_terms: true
+
+gravity_dir:
+  history_length: ${actor_prop_history_length}
+  noise:
+    _target_: isaaclab.utils.noise.AdditiveUniformNoiseCfg
+    n_min: -0.05
+    n_max: 0.05
+
+base_ang_vel:
+  history_length: ${actor_prop_history_length}
+  noise:
+    _target_: isaaclab.utils.noise.AdditiveUniformNoiseCfg
+    n_min: -0.2
+    n_max: 0.2
+
+joint_pos:
+  func: gear_sonic.envs.manager_env.mdp:g1_23dof_padded_joint_pos_rel
+  history_length: ${actor_prop_history_length}
+  params:
+    excluded_q_rel: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+joint_vel:
+  func: gear_sonic.envs.manager_env.mdp:g1_23dof_padded_joint_vel_rel
+  history_length: ${actor_prop_history_length}
+
+actions:
+  func: gear_sonic.envs.manager_env.mdp:g1_23dof_padded_last_action
+  history_length: ${actor_actions_history_length}

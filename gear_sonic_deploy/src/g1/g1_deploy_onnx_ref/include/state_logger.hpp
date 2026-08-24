@@ -80,6 +80,7 @@ class StateLogger {
     uint64_t index = 0;
     std::chrono::system_clock::time_point timestamp; // wall-clock time (for CSV logging)
     std::chrono::steady_clock::time_point timestamp_monotonic; // monotonic time (for CSV logging)
+    std::chrono::steady_clock::time_point feedback_source_timestamp_monotonic;
     double ros_timestamp = 0.0;  // ROS time in seconds (for ROS message publishing)
 
     std::array<double, 4> base_quat {0, 0, 0, 0};         // qw, qx, qy, qz
@@ -108,6 +109,8 @@ class StateLogger {
     std::vector<double> left_hand_dq;      // size = 7 (dq velocities)
     std::vector<double> right_hand_q;      // size = 7 (q positions)
     std::vector<double> right_hand_dq;     // size = 7 (dq velocities)
+    bool left_hand_feedback_valid = false;  // true only for an exact, finite 7-motor state
+    bool right_hand_feedback_valid = false; // true only for an exact, finite 7-motor state
     std::vector<double> last_left_hand_action;  // size = 7
     std::vector<double> last_right_hand_action; // size = 7
 
@@ -168,6 +171,9 @@ class StateLogger {
                         const std::span<double>& left_hand_dq,
                         const std::span<double>& right_hand_q,
                         const std::span<double>& right_hand_dq,
+                        bool left_hand_feedback_valid,
+                        bool right_hand_feedback_valid,
+                        std::chrono::steady_clock::time_point feedback_source_timestamp_monotonic,
                         const std::span<double>& last_left_hand_action,
                         const std::span<double>& last_right_hand_action,
                         double ros_timestamp = 0.0);

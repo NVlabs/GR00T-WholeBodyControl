@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_selected_teacher_nominal_multiseed_collection_contract_v1",
+  "role": "teacher_actuated_nominal_multiseed_behavior_cloning_collection_only",
+  "prerequisites": {
+    "teacher_q9_pass_report_relative_path": "artifacts/g1_true23/g1_true23_selected_teacher_actuated_q9_seed611723381_v1.json",
+    "teacher_q9_pass_report_sha256": "ed83dcb60eb372bfe4c7e11d0a8da5613aff66239de463162b388ad9d7c87846",
+    "teacher_campaign_failure_relative_path": "artifacts/g1_true23/g1_true23_selected_teacher_actuated_campaign_v1.json",
+    "teacher_campaign_failure_sha256": "e41df911cfed897283d29ecd8c01150ef08da7994292b3a3b56fc92a764f34fe",
+    "bootstrap_contract_relative_path": "gear_sonic/config/sim_validation/g1_true23_native124_21204_bootstrap_v1.json",
+    "bootstrap_contract_sha256": "38952e2459437c7a19e062384a8f587f0e3b69f2ada8eef223c63bdb0f9e2ce9",
+    "bootstrap_npz_relative_path": "artifacts/g1_true23/native124_selected_21204_teacher_bootstrap_seed20260805_v1.npz",
+    "bootstrap_npz_sha256": "136768fd1595265d9743d5a9e5f7ef38e431de9a57f9ff85246123a7d649f475",
+    "bootstrap_manifest_relative_path": "artifacts/g1_true23/native124_selected_21204_teacher_bootstrap_seed20260805_v1.manifest.json",
+    "bootstrap_manifest_sha256": "5ab761c3b82d62c3a4524f1f195f6f187b91e56b41e854d186339ddcca86f4a1"
+  },
+  "cohort": {
+    "nominal_seeds": [
+      611723381,
+      519990690,
+      1277059621,
+      677255333,
+      1807192292,
+      874120590,
+      446813377,
+      801834496,
+      835868017,
+      921108064
+    ],
+    "training_run_indices": [0, 1, 2, 3, 4, 5, 6, 7],
+    "heldout_run_indices": [8, 9],
+    "rows_per_run": 510,
+    "published_training_run_count": 8,
+    "published_training_row_count": 4080,
+    "heldout_run_count": 2,
+    "heldout_teacher_label_rows_published": 0,
+    "environment_rebuilt_per_run": true,
+    "fail_fast": true
+  },
+  "runtime": {
+    "inner_collector": "g1_true23_native124_21204_teacher_bootstrap_v1",
+    "seed_override_scope": "random_numpy_torch_cuda_and_env_cfg_only",
+    "inner_preflight_cached_once": true,
+    "model_output_validation": "hash_bound_live_per_row_outputs_plus_full_nonmodel_reassessment_without_duplicate_cpu_replay",
+    "teacher_controlled_from_q9": 9,
+    "actions_per_run": 510,
+    "post_collection_q9": 519,
+    "autoreset_permitted": false,
+    "teacher_pt_onnx_parity_required": true,
+    "v2_applied_once": true
+  },
+  "admission": {
+    "all_ten_nominal_runs_must_pass": true,
+    "each_run_must_pass_full_bootstrap_array_assessment": true,
+    "published_rows_are_nominal_behavior_cloning_only": true,
+    "support_qualified": false,
+    "disturbance_robustness_claimed": false,
+    "dagger_data": false,
+    "on_policy_data": false
+  },
+  "publication": {
+    "npz_then_manifest_atomic_noreplace": true,
+    "manifest_required_for_loader": true,
+    "overwrite_permitted": false,
+    "failure_publishes_no_npz": true,
+    "heldout_arrays_published": false,
+    "teacher_labels_admitted_if_all_nominal_pass": 4080
+  },
+  "boundaries": {
+    "simulator_only": true,
+    "training_performed": false,
+    "optimizer_steps": 0,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

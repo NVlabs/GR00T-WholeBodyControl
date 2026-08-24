@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_native124_21204_tracker_manifest_v1",
+  "role": "offline_simulator_causal_tracker_teacher_candidate_only",
+  "identity": {
+    "iteration": 21204,
+    "selection": {
+      "path": "artifacts/g1_native124_multimotion/scaling_all61/feasible_v1/selected_alpha25/selection.json",
+      "sha256": "8a0c2658ad0b366c210189ebf87c7c9487c3531ea36b12654ca4d4dc8ffa04cb"
+    },
+    "export_report": {
+      "path": "artifacts/g1_native124_multimotion/scaling_all61/feasible_v1/selected_alpha25/export_report.json",
+      "sha256": "21faa01eacd13b66f7ccc4c7a40c67f6a12777d0b4d6e94390cc50807d54c66b"
+    },
+    "checkpoint": {
+      "path": "artifacts/g1_native124_multimotion/scaling_all61/feasible_v1/interpolated/model21204_alpha25.pt",
+      "sha256": "9cb0a06db441b8ceb51404b45ba25a81bd4120114aa6b97d6f660cac3f742f81",
+      "actor_state_sha256": "17302f7076cb480fe4ffc253e7b8228fcbaa033ccb3bf7aac1ed34940b8648ec"
+    },
+    "onnx": {
+      "path": "artifacts/g1_native124_multimotion/scaling_all61/feasible_v1/selected_alpha25/policy.onnx",
+      "sha256": "321504108e677fb4b70d1398ff9a20e168def2231eb574e6d8fc1f39385d7b9b"
+    },
+    "resolved_env_evidence": {
+      "path": "artifacts/g1_dad_dance_23/short_package_contract_test/params/deploy.yaml",
+      "sha256": "40fdcadb3096842414d6e5307d50ef69bec42f696d0866a40cc487f1ae7103b8"
+    }
+  },
+  "actor_contract": {
+    "input": {
+      "name": "obs",
+      "dtype": "float32",
+      "shape": [1, 124]
+    },
+    "output": {
+      "name": "actions",
+      "dtype": "float32",
+      "shape": [1, 23],
+      "joint_order": "unitree_mjlab_hardware_compact_23"
+    },
+    "activation": "ELU",
+    "hidden_dims": [512, 256, 128],
+    "normalization_epsilon": 0.01
+  },
+  "observation_contract": {
+    "control_hz": 50,
+    "layout": [
+      ["q_ref_hardware_q9", 23],
+      ["qd_ref_hardware_q9_to_q10", 23],
+      ["torso_motion_anchor_ori_b_q9", 6],
+      ["base_angular_velocity_q10", 3],
+      ["joint_position_hardware_q10_minus_home", 23],
+      ["joint_velocity_hardware_q10", 23],
+      ["previous_applied_raw_action_hardware", 23]
+    ],
+    "home_q_hardware": [
+      -0.1, 0.0, 0.0, 0.3, -0.2, 0.0,
+      -0.1, 0.0, 0.0, 0.3, -0.2, 0.0,
+      0.0, 0.35, 0.18, 0.0, 0.87, 0.0,
+      0.35, -0.18, 0.0, 0.87, 0.0
+    ],
+    "action_scale_hardware": [
+      0.5475464629911068,
+      0.35066146637882434,
+      0.5475464629911068,
+      0.35066146637882434,
+      0.43857731392336724,
+      0.43857731392336724,
+      0.5475464629911068,
+      0.35066146637882434,
+      0.5475464629911068,
+      0.35066146637882434,
+      0.43857731392336724,
+      0.43857731392336724,
+      0.5475464629911068,
+      0.43857731392336724,
+      0.43857731392336724,
+      0.43857731392336724,
+      0.43857731392336724,
+      0.43857731392336724,
+      0.43857731392336724,
+      0.43857731392336724,
+      0.43857731392336724,
+      0.43857731392336724,
+      0.43857731392336724
+    ],
+    "external_reference_joint_order": "native_il23",
+    "external_reference_conversion": "native_il23_to_unitree_mjlab_hardware_compact_23",
+    "robot_anchor": "torso_quaternion_at_q9",
+    "simulator_robot_anchor_source": "robot.data.body_link_quat_w[torso_link]_snapshotted_before_q9_to_q10_transition",
+    "live_robot_anchor_source": "torso_imu_quaternion_interpolated_at_pico_q9",
+    "robot_state": "q10_current",
+    "q_measured_source": "robot.data.joint_pos_biased_q10",
+    "joint_position_encoder_bias_semantics": "match_stock_mjlab_actor_joint_pos_rel_biased_true",
+    "previous_action_source": "physical_hardware_target_at_transition_q9_to_q10_inverted_through_checkpoint21204_home_and_scale"
+  },
+  "evidence": {
+    "onnx_parity_cases": 82,
+    "onnx_parity_max_absolute_error": 9.5367431640625e-06,
+    "all61_clips_retained": 61,
+    "all61_rollouts_per_clip": 10,
+    "all61_steps_per_rollout": 500
+  },
+  "boundaries": {
+    "cpu_only": true,
+    "diagnostic_only": true,
+    "actuation_permitted": false,
+    "deployment_ready": false,
+    "teacher_label_admitted": false,
+    "promotion_eligible": false,
+    "legacy_two_input_abi_may_change": false,
+    "causal_observation_parity_claimed": false,
+    "causal_distribution_shift_requires_support_gate": true
+  }
+}

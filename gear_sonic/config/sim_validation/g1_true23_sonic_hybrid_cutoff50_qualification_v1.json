@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_hybrid_cutoff50_qualification_contract_v1",
+  "role": "early_student_prefix_plus_exact_selected_teacher_recovery_simulator_qualification",
+  "inputs": {
+    "candidate_manifest": {"path": "artifacts/g1_true23/sonic_nominal_dagger_bc_last_affine_ridge_v1.manifest.json", "sha256": "1bdf87f653d047ee45284a1d2e55efca8582013b1f51c80597ef7f78a1d1f9a9"},
+    "candidate_decoder": {"path": "artifacts/g1_true23/sonic_nominal_dagger_bc_last_affine_ridge_v1.decoder.onnx", "sha256": "e725fbdef73a087c9e4ea789b4442c0812f09e1ee96f098af574b29949d38ebf"},
+    "recovery_contract": {"path": "gear_sonic/config/sim_validation/g1_true23_sonic_student_teacher_recovery_v4.json", "sha256": "2b70f24f07619ad586a93f0e9c465e5d9647143d198f124c2568e4dd7e357581"},
+    "cutoff100_qualification_contract": {"path": "gear_sonic/config/sim_validation/g1_true23_sonic_hybrid_cutoff100_qualification_v1.json", "sha256": "31012c1af892e6fdeed0c9d8427a6165e8198751cca1d0eaa4767308659110bd"},
+    "seed611_cutoff100_pass": {"path": "artifacts/g1_true23/sonic_hybrid_cutoff100.seed611723381.v1.json", "sha256": "adb53eff7eeae4030416ab1ab04ba6f646960f713e66b378f3623a3b676b142b"},
+    "known_seed_cutoff100_pass": {"path": "artifacts/g1_true23/sonic_hybrid_cutoff100.seed20260805.v1.json", "sha256": "a47ae251cccc82e0f17b96ab4040a79ae7c54c9aa5f1172f357b57df1dd7522a"},
+    "heldout835_cutoff100_failure": {"path": "artifacts/g1_true23/sonic_hybrid_cutoff100.seed835868017.v1.json", "sha256": "c3171d31830c163fb4b4a9defeb9d88eed16474bbde99a19679971544a3799cd"}
+  },
+  "runtime": {
+    "mode": "cutoff50",
+    "anchor_q9": 9,
+    "last_q9": 518,
+    "total_transitions": 510,
+    "student_transitions": 50,
+    "teacher_transitions": 460,
+    "student_last_q9": 58,
+    "teacher_first_q9": 59,
+    "allowed_seeds": [20260805, 611723381, 835868017, 921108064],
+    "teacher_queried_every_transition": true,
+    "teacher_substitution_before_cutoff": false,
+    "safe_target_transform_application_count": 1
+  },
+  "decision": {
+    "reason": "cutoff100 failed heldout835 before handoff at q9 97 from left-wrist z error",
+    "heldout835_cutoff100_terminal_q9": 97,
+    "heldout835_cutoff100_student_actions_completed": 89,
+    "heldout835_cutoff100_teacher_actions_completed": 0,
+    "heldout835_cutoff100_terminal_body": "left_wrist_roll_rubber_hand",
+    "heldout835_cutoff100_terminal_abs_z_error_m": 0.2576730251312256,
+    "stop_if_cutoff50_fails_heldout835": true
+  },
+  "gates": {
+    "exact_final_timeout_only": true,
+    "minimum_base_height_m": 0.45,
+    "maximum_base_tilt_rad": 1.0,
+    "maximum_joint_velocity_ratio": 1.0,
+    "maximum_tracking_rmse_rad": 0.75,
+    "plain_raw_absolute_strict_max": 10.0,
+    "zero_action_parity_history_state_and_semantic_mismatches": true
+  },
+  "boundaries": {
+    "simulator_only": true,
+    "mixed_controller_teleop_candidate": true,
+    "pure_student_qualified": false,
+    "teacher_labels_admitted": false,
+    "training_performed": false,
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

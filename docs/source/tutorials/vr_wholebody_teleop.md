@@ -82,6 +82,30 @@ See [Installation (Deployment) → Docker (ROS2 Development Environment)](../get
 The `--zmq-host` flag defaults to `localhost`, which is correct when both C++ deployment scripts and teleop scripts (Terminal 3) run on the same machine. If the teleop script runs on a different machine, pass `--zmq-host <IP-of-teleop-machine>`.
 ```
 
+```{admonition} Control-session ownership
+:class: important
+`--input-type zmq_manager` uses a fail-closed protocol-v2 handshake. Each
+native deployment generates a random 128-bit receiver epoch and advertises it
+on feedback port 5557. The PICO manager waits for that epoch, creates a random
+publisher session, claims the deployment, and requires native acknowledgement
+before sending actuation, planner, or pose frames. The first publisher claim is
+permanent until native process exit; a second manager is rejected. After
+acknowledgement, the manager continuously verifies the receiver epoch, bound
+owner, and feedback heartbeat. A mismatch, native restart, or 500 ms feedback
+loss fails closed and sends STOP when control is active.
+
+STOP and the native 500 ms deadman are terminal. After an operator STOP,
+manager crash, tracking-loss STOP, or deadman, stop any surviving manager,
+restart the native deployment first, then start a new manager. Do not try to
+clear ownership by reconnecting or changing modes.
+
+Standalone `--input-type zmq` remains legacy-compatible, but lacks this
+`zmq_manager` protocol-v2 ownership boundary. Session tokens scope replay and
+prevent accidental publisher overlap; they do not encrypt or authenticate
+traffic. Keep ports 5556/5557 on a trusted, firewall-scoped private LAN or a
+trusted VPN.
+```
+
 ### Terminal 3 — PICO Teleop Streamer
 
 From the **repo root**:
@@ -117,7 +141,8 @@ When you turn on the visualization, wait for a window to pop up showing a Unitre
 2. Press **A + B + X + Y** simultaneously to engage the control policy and run the initial full calibration (`CALIB_FULL`).
 3. Align your arms with the robot's current pose, then press **A + X** to enter full-body SMPL teleop (**POSE** mode). Move your arms and legs — the robot follows.
 4. Press **A + X** again to fall back to **PLANNER** (idle) mode.
-5. Press **A + B + X + Y** again to stop the robot.
+5. Press **A + B + X + Y** again for terminal STOP. The native deployment
+   exits; restart the deployment first, then the manager, for another session.
 
 <figure style="margin: 1em 0;">
 <video width="100%" autoplay loop muted playsinline style="border-radius: 8px;">
@@ -159,7 +184,7 @@ There are 4 modes and 2 control chains. Each chain forms a triangle: **A+X** (or
 
 ```text
   ┌──────────────────────────────────────┐
-  │  A+B+X+Y (any mode) ──► OFF          │
+  │  A+B+X+Y (any mode) ──► TERMINAL STOP│
   └──────────────────────────────────────┘
 
   Startup:
@@ -252,7 +277,7 @@ Below is the **recovery procedure** — if you accidentally enter a badly calibr
 
 | Action | Button | Notes |
 |---|---|---|
-| **Start / Stop policy** | **A+B+X+Y** | First press: engage + CALIB_FULL. Again: emergency stop → OFF. |
+| **Start / Stop policy** | **A+B+X+Y** | First press: engage + CALIB_FULL. Again: terminal STOP; native deployment exits. |
 | **Toggle POSE** | **A+X** | Switches between PLANNER ↔ POSE. OR from VR_3PT (entered via PLANNER) → POSE. |
 | **Toggle PLANNER_FROZEN_UPPER** | **B+Y** | Switches between POSE ↔ PLANNER_FROZEN_UPPER. OR from VR_3PT (entered via PLANNER_FROZEN_UPPER) → POSE. |
 | **Toggle VR_3PT** | **Left Stick Click** | From any Planner mode → VR_3PT (triggers CALIB). Click again to return. |
@@ -315,10 +340,14 @@ From `gear_sonic_deploy/`:
 cd gear_sonic_deploy
 source scripts/setup_env.sh
 
-# 'real' auto-detects the robot network interface (192.168.123.x).
-# If auto-detection fails, pass the G1's IP directly:
-#   ./deploy.sh --input-type zmq_manager <G1-IP>
+# 'real' auto-detects the host's robot-facing interface (192.168.123.x).
+# If auto-detection fails, pass that local interface name directly:
+#   ./deploy.sh --input-type zmq_manager eth0
+# Do not pass the G1's IP; DDS binds to a local host interface.
 ./deploy.sh --input-type zmq_manager real
+
+# Type the full word "yes" at the real-robot confirmation prompt.
+# Enter alone cancels; invoking deploy.sh without a mode defaults to simulation.
 
 # Wait until you see "Init done"
 ```
@@ -366,3 +395,8 @@ Update the IP in the PICO's XRoboToolKit app to match this machine before starti
 ```
 
 Follow the same start sequence: calibration pose → **A+B+X+Y** → **A+X** for POSE mode. See [Complete PICO Controls](#pico-controls) for all available commands.
+
+The manager waits for and claims the native receiver epoch automatically. A
+missing challenge, rejected claim, or already-bound publisher is a hard
+failure. After any STOP or deadman, restart Terminal 1 first and Terminal 2
+second before another session.

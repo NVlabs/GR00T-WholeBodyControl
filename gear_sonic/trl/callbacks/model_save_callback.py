@@ -47,7 +47,11 @@ class ModelSaveCallback(TrainerCallback):
                 if wandb_run_exists():
                     wandb.alert(
                         title="Disk usage warning",
-                        text=f"Directory size {size_tb:.2f}TB > {self.max_disk_usage}TB, setting save_last_only=True",
+                        text=(
+                            f"Directory size {size_tb:.2f}TB > "
+                            f"{self.max_disk_usage}TB, setting "
+                            "save_last_only=True"
+                        ),
                         level="WARN",
                     )
         except Exception as e:
@@ -72,6 +76,7 @@ class ModelSaveCallback(TrainerCallback):
                     env_state_dict,
                     args,
                     f"{self.save_dir}/model_step_{state.global_step:06d}.pt",
+                    env=env,
                 )
 
             # Always save last checkpoint every 50 steps
@@ -85,6 +90,7 @@ class ModelSaveCallback(TrainerCallback):
                     env_state_dict,
                     args,
                     f"{self.save_dir}/last.pt",
+                    env=env,
                 )
                 # self.export_policy_to_onnx(env, state, model)
 
@@ -107,7 +113,7 @@ class ModelSaveCallback(TrainerCallback):
             "+headless=true",
             "+export_onnx_only=true",
         ]
-        result = subprocess.run(cmd, capture_output=False, text=True, cwd=os.getcwd())
+        subprocess.run(cmd, capture_output=False, text=True, cwd=os.getcwd())
         onnx_last_path = os.path.join(env.config.experiment_dir, "exported", "last.onnx")
         onnx_step_path = os.path.join(
             env.config.experiment_dir, "exported", f"model_step_{state.global_step:06d}.onnx"
@@ -116,7 +122,15 @@ class ModelSaveCallback(TrainerCallback):
 
     @classmethod
     def save_checkpoint(
-        cls, model, optimizer, lr_scheduler, state, env_state_dict, args, save_path
+        cls,
+        model,
+        optimizer,
+        lr_scheduler,
+        state,
+        env_state_dict,
+        args,
+        save_path,
+        env=None,
     ):
         if model is not None:
             # Save model, optimizer, scheduler and training state
@@ -137,6 +151,89 @@ class ModelSaveCallback(TrainerCallback):
                 "env_state_dict": env_state_dict,
             }
 
+            from gear_sonic.utils.g1_23dof_artifact import (
+                inspect_true23_policy_state,
+                is_true23_training_config,
+                make_training_checkpoint_records,
+                true23_reference_profile_from_config,
+                validate_true23_policy_module,
+            )
+
+            if is_true23_training_config(getattr(env, "config", None)):
+                from gear_sonic.utils.g1_23dof_checkpoint_io import (
+                    build_safe_promotion_checkpoint,
+                    promotion_checkpoint_path,
+                )
+
+                lineage = getattr(
+                    model.policy,
+                    "_g1_23dof_training_lineage",
+                    None,
+                )
+                if not isinstance(lineage, dict):
+                    raise ValueError(
+                        "true23 policy lacks verified warm-start lineage"
+                    )
+                reference_profile = true23_reference_profile_from_config(
+                    getattr(env, "config", None)
+                )
+                if lineage.get("reference_profile") != reference_profile:
+                    raise ValueError(
+                        "true23 training config changed reference profile"
+                    )
+                validate_true23_policy_module(
+                    model.policy,
+                    reference_profile=reference_profile,
+                )
+                policy_state_sha256 = inspect_true23_policy_state(
+                    checkpoint,
+                    reference_profile=reference_profile,
+                )
+                motion_dataset = lineage.get("motion_dataset")
+                if not isinstance(motion_dataset, dict):
+                    raise ValueError(
+                        "true23 lineage lacks start-of-training motion "
+                        "dataset provenance"
+                    )
+                training_material = lineage.get("training_material")
+                if not isinstance(training_material, dict):
+                    raise ValueError(
+                        "true23 lineage lacks start-of-training config/source "
+                        "material provenance"
+                    )
+                metadata, training_evidence = make_training_checkpoint_records(
+                    global_step=int(_state.global_step),
+                    history_length=10,
+                    observation_layout="canonical_il29_fixed_slots_v1",
+                    policy_state_sha256=policy_state_sha256,
+                    reference_profile=reference_profile,
+                    source_family=lineage["source_family"],
+                    source_revision=lineage["source_revision"],
+                    source_checkpoint_sha256=lineage[
+                        "source_checkpoint_sha256"
+                    ],
+                    initial_policy_state_sha256=lineage[
+                        "initial_policy_state_sha256"
+                    ],
+                    motion_dataset=motion_dataset,
+                    training_material=training_material,
+                    training_start_global_step=lineage[
+                        "training_start_global_step"
+                    ],
+                )
+                checkpoint["g1_23dof_metadata"] = metadata
+                checkpoint["g1_23dof_training_evidence"] = training_evidence
+                promotion_checkpoint = build_safe_promotion_checkpoint(
+                    policy_state_dict=checkpoint["policy_state_dict"],
+                    global_step=int(_state.global_step),
+                    metadata=metadata,
+                    training_evidence=training_evidence,
+                )
+                promotion_path = promotion_checkpoint_path(save_path)
+            else:
+                promotion_checkpoint = None
+                promotion_path = None
+
             if hasattr(model, "disc_model") and model.disc_model is not None:
                 checkpoint["disc_state_dict"] = model.disc_model.state_dict()
 
@@ -153,19 +250,39 @@ class ModelSaveCallback(TrainerCallback):
                         dir=save_dir, delete=False, suffix=".pt.tmp"
                     ) as tmp_file:
                         tmp_path = tmp_file.name
+                    if promotion_checkpoint is not None:
+                        with tempfile.NamedTemporaryFile(
+                            dir=save_dir,
+                            delete=False,
+                            suffix=".promotion.pt.tmp",
+                        ) as promotion_tmp_file:
+                            promotion_tmp_path = promotion_tmp_file.name
 
                     torch.save(checkpoint, tmp_path)
+                    if promotion_checkpoint is not None:
+                        torch.save(promotion_checkpoint, promotion_tmp_path)
 
                     # Atomic rename (os.replace is atomic on POSIX systems)
                     os.replace(tmp_path, save_path)
+                    if promotion_checkpoint is not None:
+                        os.replace(promotion_tmp_path, promotion_path)
                     print(f"Saved model checkpoint to {save_path}")
+                    if promotion_path is not None:
+                        print(f"Saved safe promotion checkpoint to {promotion_path}")
                     break
                 except Exception as e:
                     # Clean up temp file if it exists
                     if "tmp_path" in locals() and os.path.exists(tmp_path):
                         try:
                             os.remove(tmp_path)
-                        except:
+                        except OSError:
+                            pass
+                    if "promotion_tmp_path" in locals() and os.path.exists(
+                        promotion_tmp_path
+                    ):
+                        try:
+                            os.remove(promotion_tmp_path)
+                        except OSError:
                             pass
 
                     if attempt == 4:  # Last attempt

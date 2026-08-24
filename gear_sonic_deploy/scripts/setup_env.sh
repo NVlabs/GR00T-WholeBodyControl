@@ -310,10 +310,15 @@ if command -v git-lfs &> /dev/null; then
     git lfs install &> /dev/null
     echo "✅ Git LFS configured"
     
-    # Pull large files if in git repository
+    # Pull large files if in git repository. Air-gapped or selectively
+    # materialized deployments can opt out after validating required assets.
     if [ -d ".git" ]; then
-        echo "📥 Pulling Git LFS files..."
-        git lfs pull
+        if [ "${SKIP_GIT_LFS_PULL:-0}" = "1" ]; then
+            echo "⏭️  Skipping Git LFS pull (SKIP_GIT_LFS_PULL=1)"
+        else
+            echo "📥 Pulling Git LFS files..."
+            git lfs pull
+        fi
     fi
 else
     echo "⚠️  Git LFS not found. Please install git-lfs package."

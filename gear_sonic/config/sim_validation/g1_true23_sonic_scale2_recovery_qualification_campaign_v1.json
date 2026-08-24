@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_scale2_recovery_qualification_campaign_contract_v1",
+  "role": "offline_mjlab_q250_mixed_controller_qualification_only",
+  "prerequisites": {
+    "q250_pass_report_relative_path": "artifacts/g1_true23/g1_true23_sonic_scale2_teacher_recovery_q250_v1_retry2.json",
+    "q250_pass_report_sha256": "e9731e463694e6b577dd4af147a344461ef5d50ce5e1a61f26938a29e746ba0d",
+    "base_campaign_contract_relative_path": "gear_sonic/config/sim_validation/g1_true23_sonic_recovery_qualification_campaign_v1.json",
+    "base_campaign_contract_sha256": "2e24e3acf1d9ef7e1cf664de64935773a99ad225e8046f5b23f413932e21fad3"
+  },
+  "window": {
+    "mode": "q250",
+    "anchor_q9": 9,
+    "last_action_q9": 518,
+    "total_transitions": 510,
+    "student_transition_count": 241,
+    "student_first_q9": 9,
+    "student_last_q9": 249,
+    "teacher_transition_count": 269,
+    "teacher_first_q9": 250,
+    "teacher_last_q9": 518,
+    "control_hz": 50.0,
+    "final_timeout_only": true
+  },
+  "cohort": {
+    "source": "exact seeds and vectors from base campaign contract",
+    "scenario_order": ["nominal", "disturbance"],
+    "execution_order": "alternating_index_order_nominal_i_then_disturbance_i",
+    "rollouts_per_scenario": 10,
+    "total_rollouts": 20,
+    "environment_rebuilt_per_rollout": true,
+    "preflight_once_before_first_rollout": true,
+    "fail_fast": true,
+    "effective_seed_must_equal_requested_seed": true,
+    "effective_seed_digests_must_be_unique": true
+  },
+  "disturbance": {
+    "scope": "teacher_controlled_suffix",
+    "teacher_local_apply_transition": 50,
+    "global_apply_transition": 291,
+    "apply_q9": 300,
+    "ordering": "after_student_and_teacher_inference_before_action_processing_and_physics",
+    "first_disturbed_observation_global_transition": 292,
+    "first_disturbed_observation_q9": 301,
+    "baseline_global_transitions": [281, 282, 283, 284, 285, 286, 287, 288, 289, 290],
+    "baseline_step_count": 10,
+    "scan_first_global_transition": 291,
+    "stable_recovery_steps": 5,
+    "recovery_margin": 0.1,
+    "maximum_recovery_time_s": 2.0,
+    "readback_max_absolute_error": 1e-6
+  },
+  "gates": {
+    "inherit_exact_thresholds_from_base_campaign_contract": true,
+    "required_nominal_passes": 10,
+    "required_disturbance_passes": 10,
+    "required_disturbance_recoveries": 10,
+    "required_zero_hard_safety_violations": true,
+    "required_zero_soft_safety_warnings": true,
+    "required_zero_action_parity_state_semantic_faults": true,
+    "required_final_timeout_only": true,
+    "required_source_asset_input_immutability": true
+  },
+  "publication_boundary": {
+    "qualification_only": true,
+    "teacher_queries_performed": true,
+    "teacher_labels_published": false,
+    "training_rows_published": false,
+    "observation_action_or_physical_trajectories_published": false,
+    "fresh_disjoint_suffix_collection_authorized_only_after_full_pass": true,
+    "support_qualified_only_after_full_pass": true,
+    "dagger_data": false,
+    "training_performed": false,
+    "promotion_or_deployment": false,
+    "hardware_authorized": false
+  },
+  "stop_policy": {
+    "first_failed_run_stops_campaign": true,
+    "failed_campaign_admits_zero_labels": true,
+    "failed_campaign_forbids_recovery_bc_fit": true
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_scale2_teacher_recovery_contract_v1",
+  "seed": 20260805,
+  "source_student": {
+    "checkpoint_path": "/root/g1_true23_runs/sonic_survival_scale_extension_v1/checkpoints/sonic_survival_scale_extension_candidate.pt",
+    "checkpoint_sha256": "7c49c951b0a11536d12a68ab463f61111c5f8f483dc5fe820d6ec22137830613",
+    "policy_state_sha256": "a808df03d0badadf61d0a144aa016d2ee27a15c3c87661ade0c6465be74f3a9f",
+    "behavior": "genuine_sonic_267_to_64_plus_930_to_994_to_23_deterministic_mean"
+  },
+  "teacher": {
+    "checkpoint_sha256": "9cb0a06db441b8ceb51404b45ba25a81bd4120114aa6b97d6f660cac3f742f81",
+    "actor_state_sha256": "17302f7076cb480fe4ffc253e7b8228fcbaa033ccb3bf7aac1ed34940b8648ec",
+    "onnx_sha256": "321504108e677fb4b70d1398ff9a20e168def2231eb574e6d8fc1f39385d7b9b",
+    "pt_onnx_parity_atol": 0.00001,
+    "action_composition": "selected_raw_to_plain_sonic_raw_then_v2_once"
+  },
+  "window": {
+    "anchor_q9": 9,
+    "last_q9": 518,
+    "transitions": 510,
+    "modes": {
+      "q250": {
+        "student_transitions": 241,
+        "student_last_q9": 249,
+        "teacher_transitions": 269,
+        "teacher_first_q9": 250
+      },
+      "q225": {
+        "student_transitions": 216,
+        "student_last_q9": 224,
+        "teacher_transitions": 294,
+        "teacher_first_q9": 225
+      }
+    },
+    "handoff_resets_state": false,
+    "selected_previous_action_from_actual_student_final_target": true
+  },
+  "gates": {
+    "exact_final_timeout_only": true,
+    "minimum_base_height_m": 0.45,
+    "maximum_base_tilt_rad": 1.0,
+    "maximum_joint_velocity_ratio": 1.0,
+    "maximum_tracking_rmse_rad": 0.75,
+    "strict_raw_native_abs_max": 10.0,
+    "required_zero_counts": [
+      "nonfinite_count",
+      "q9_discontinuity_count",
+      "raw_clip_required_count",
+      "action_semantics_mismatch_count",
+      "teacher_parity_violation_count",
+      "teacher_composite_mismatch_count",
+      "selected_state_mismatch_count",
+      "hard_safety_violation_count",
+      "soft_safety_warning_count"
+    ]
+  },
+  "stop_policy": {
+    "run_q250_first": true,
+    "q225_permitted_only_after_q250_failure": true,
+    "stop_teacher_route_after_q225_failure": true,
+    "failed_run_admitted_label_count": 0
+  },
+  "boundaries": {
+    "diagnostic_only": true,
+    "teacher_labels_admitted": false,
+    "training_arrays_present": false,
+    "training_performed": false,
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_rank256_group_balanced_clipped_screen_contract_v1",
+  "role": "offline_mjlab_fresh_process_screen_of_one_group_balanced_clipped_update_only",
+  "parents": {
+    "update_contract_relative_path": "gear_sonic/config/sim_validation/g1_true23_sonic_rank256_group_balanced_clipped_update_v1.json",
+    "update_contract_sha256": "9c5071e4f3348f783994ed02e3c8584ebcdf7df8ea27a9ac7234c45e1a19937e",
+    "update_result_path": "/root/g1_true23_runs/sonic_rank256_group_balanced_clipped_update_v1/rank256_group_balanced_clipped_update_result.json",
+    "update_result_sha256": "36fdff82ffadbe29fef7b698deccea3b0cfa89359dcc9a1e876ffed29cf57ba0",
+    "update_delta_path": "/root/g1_true23_runs/sonic_rank256_group_balanced_clipped_update_v1/checkpoints/rank256_group_balanced_clipped_update_delta.pt",
+    "update_delta_sha256": "61625a2e1956381913f2e5ef09114b168adf7ee445d065be60e690cf3b924fc4"
+  },
+  "screen": {
+    "scales": [0.0, 0.25, 0.5, 1.0, 2.0],
+    "scenarios": ["nominal", "disturbance"],
+    "fresh_process_per_policy_scenario": true,
+    "baseline_policy_state_sha256": "6acada92dd6e2700499c64255e077c7e844aa0f96b0700e2e2c5640606ae0650",
+    "optimizer_reported_updated_policy_state_sha256": "4600039800feea517422e6ddb181e422c8abaf74b1018586e4e8007ccc855855",
+    "reconstructed_policy_state_sha256_by_scale": {
+      "0.0": "6acada92dd6e2700499c64255e077c7e844aa0f96b0700e2e2c5640606ae0650",
+      "0.25": "816f8cad07de270a9b16d4ae1fc39920a3103234a2e1f4ad6a7e164aeba1e1d4",
+      "0.5": "b41f8fec19f648470c673ff44d85051b5b0e71bbecb8caf9921f76e5411fd7b6",
+      "1.0": "4e1e8e10568fe821861da18c386a6008277ce4bd1ddf1b75d2b0a8ebf3ef9181",
+      "2.0": "4742a39f65c0dd66b43a4bfe7590f6200981a8b8c23448740a0afd71ad70e87b"
+    },
+    "float32_delta_subtract_add_not_byte_identical_to_direct_updated_state": true,
+    "delta_state_sha256": "7e0b1c5904e33d51ad8d760a2a4718b1f17fb460fcb395328beda4a5c0ef51a5",
+    "candidate_minimum_nominal_completed_transitions": 486,
+    "candidate_minimum_disturbance_completed_transitions": 288,
+    "zero_faults_required": true
+  },
+  "boundaries": {
+    "simulator_only": true,
+    "additional_training_transitions": 0,
+    "optimizer_steps": 0,
+    "critic_updates": 0,
+    "teacher_labels_used": false,
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

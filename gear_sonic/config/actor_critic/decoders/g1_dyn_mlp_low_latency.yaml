@@ -1,0 +1,15 @@
+g1_dyn:
+  inputs: ["token_flattened", "proprioception"]
+  outputs: ["action"]
+  has_temporal_dim: False
+  params:
+    _target_: gear_sonic.trl.modules.base_module.BaseModule
+    input_dim:
+    output_dim:
+    num_input_temporal_dims:
+    num_output_temporal_dims:
+    module_config_dict:
+      layer_config:
+        type: MLP
+        hidden_dims: [4096, 4096, 2048, 2048, 1024, 1024, 512, 512]
+        activation: SiLU

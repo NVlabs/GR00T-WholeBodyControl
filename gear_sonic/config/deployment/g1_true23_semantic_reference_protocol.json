@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_semantic_reference_protocol",
+  "source_frame_kind": "g1_semantic_reference_frame",
+  "source_sample_rate_hz": 50,
+  "source_sample_period_ns": 20000000,
+  "joint_order": "canonical_isaaclab_il29",
+  "complete_joint_count": 29,
+  "lower_body_il29_indices": [
+    0,
+    1,
+    3,
+    4,
+    6,
+    7,
+    9,
+    10,
+    13,
+    14,
+    17,
+    18
+  ],
+  "source_frame_required_fields": [
+    "schema_version",
+    "kind",
+    "source_kind",
+    "source_session_id",
+    "producer_sha256",
+    "source_frame_index",
+    "reference_monotonic_ns",
+    "capture_monotonic_ns",
+    "sample_period_ns",
+    "joint_order",
+    "complete_joint_mask_il29",
+    "joint_values_semantics",
+    "velocity_semantics",
+    "temporal_semantics",
+    "joint_pos_il29",
+    "joint_vel_il29"
+  ],
+  "approved_live_source_kinds": [
+    "planner_generated_g1_reference",
+    "retargeted_g1_delayed_reference"
+  ],
+  "prohibited_source_kinds": [
+    "raw_pico_pose",
+    "zero_filled_lower_body",
+    "past_window_relabelled_future"
+  ],
+  "temporal_profiles": {
+    "true23_step5_0p1s": {
+      "future_frame_step": 5,
+      "future_frame_offsets_s": [
+        0.0,
+        0.1,
+        0.2,
+        0.3,
+        0.4,
+        0.5,
+        0.6,
+        0.7,
+        0.8,
+        0.9
+      ],
+      "required_buffer_frames": 47,
+      "horizon_s": 0.9
+    },
+    "released_low_latency_step1_0p02s": {
+      "future_frame_step": 1,
+      "future_frame_offsets_s": [
+        0.0,
+        0.02,
+        0.04,
+        0.06,
+        0.08,
+        0.1,
+        0.12,
+        0.14,
+        0.16,
+        0.18
+      ],
+      "required_buffer_frames": 11,
+      "horizon_s": 0.18
+    }
+  },
+  "encoder_command_layout": {
+    "dimension": 240,
+    "layout": "positions_10x12_then_velocities_10x12",
+    "final_velocity_requires_next_contiguous_source_frame": true,
+    "missing_joint_fill_allowed": false,
+    "terminal_clamping_allowed": false
+  },
+  "live_evidence_bindings": {
+    "pico_capture": "separate source_frame_index and source_monotonic_ns",
+    "lower_body_reference": "separate playback frame/time, future frame indices/times, source identity, and producer hash",
+    "lowstate": "current monotonic time, advancing tick, CRC, and mode_machine == 4",
+    "single_timestamp_for_all_encoder_terms_allowed": false
+  },
+  "authorization": {
+    "read_only": true,
+    "dds_opened": false,
+    "robot_channel_opened": false,
+    "actuation_authorized": false
+  }
+}

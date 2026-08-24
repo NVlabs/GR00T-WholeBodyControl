@@ -42,7 +42,7 @@ teleop = [
 # MuJoCo simulation (run_sim_loop.py and related scripts)
 # Usage: pip install -e "gear_sonic[sim]"
 sim = [
-    "mujoco",
+    "mujoco==3.2.3",
     "tyro",
     "pin",
     "pyyaml",
@@ -93,7 +93,14 @@ inference = [
 # Training: full RL training stack (Isaac Lab must be installed separately)
 # Usage: pip install -e "gear_sonic[training]"
 training = [
+    "filelock",
     "hydra-core==1.3.2",
+    "lxml",
+    "open3d",
+    "pyyaml",
+    "rich",
+    "tensordict>=0.8.0,<1",
+    "vector-quantize-pytorch==1.31.0",
     "wandb",
     "trl==0.28.0",
     "transformers>=4.56.2",
@@ -102,6 +109,12 @@ training = [
     "smpl_sim @ git+https://github.com/ZhengyiLuo/SMPLSim.git",
     "open3d",
     "vector_quantize_pytorch",
+]
+# Offline true-23 checkpoint promotion and ONNX artifact validation.
+# No simulator or robot SDK is required.
+artifact_export = [
+    "onnx>=1.16,<2",
+    "onnxruntime>=1.16,<2",
 ]
 
 [tool.setuptools.packages.find]

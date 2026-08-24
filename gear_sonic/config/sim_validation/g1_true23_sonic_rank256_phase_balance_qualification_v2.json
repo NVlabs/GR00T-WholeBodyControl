@@ -1,0 +1,90 @@
+{
+  "schema_version": 2,
+  "kind": "g1_true23_sonic_rank256_phase_balance_qualification_contract_v2",
+  "role": "simulator_only_fixed_motion_phase_balance_residual_plus_late_nominal_actor_qualification",
+  "parents": {
+    "shifted_base_policy_state_sha256": "6acada92dd6e2700499c64255e077c7e844aa0f96b0700e2e2c5640606ae0650",
+    "shifted_base_result": {
+      "path": "/root/g1_true23_runs/sonic_rank256_group_balanced_clipped_screen_v1/rank256_group_balanced_clipped_screen_result.json",
+      "sha256": "fcabffa9b7b72fed98c91ae43652c6dac60d4ee68c410c12b31caadd114f9a7e"
+    },
+    "balance_residual_result": {
+      "path": "/root/g1_true23_runs/sonic_rank256_balance_residual_screen_v1_retry2/rank256_balance_residual_screen_result.json",
+      "sha256": "1f97b5093c41570dddc0eb13533e3d399198f99077625a8800d41760dfc5bf89"
+    },
+    "failed_v1_nominal": {
+      "path": "/root/g1_true23_runs/sonic_rank256_phase_balance_qualification_v1/evaluations/nominal_08.json",
+      "sha256": "f94e0fea2d79c4fc2793c668e2d8c3b612a719e2bd9d1d8e6d539aaef1a35972"
+    },
+    "passed_v1_exact_push": {
+      "path": "/root/g1_true23_runs/sonic_rank256_phase_balance_qualification_v1/evaluations/disturbance_00.json",
+      "sha256": "d2ea67c6aa7ebff83c086f226a7997b8ea684e87788ffbb0308936a72ffe2a7b"
+    }
+  },
+  "controller": {
+    "base_policy_action": "deterministic_sonic_raw_native23",
+    "signal": {
+      "formula": "1.5*(reference_gravity_x-measured_gravity_x)+0.5*anchor_angular_velocity_error_y+0.1*anchor_linear_velocity_error_x",
+      "orientation_error_gain": 1.5,
+      "angular_velocity_error_gain": 0.5,
+      "linear_velocity_error_gain": 0.1,
+      "deadband": 0.06,
+      "signal_clip": 1.0
+    },
+    "phase_window_q9_inclusive": [180, 300],
+    "residual_gain": 0.4,
+    "ankle_pitch_coefficient": -8.0,
+    "hip_pitch_coefficient": 0.0,
+    "maximum_applied_raw_residual_abs": 1.0,
+    "native_ankle_pitch_indices": [15, 16],
+    "safe_target_transform_application_count": 1,
+    "residual_disabled_outside_phase_window": true,
+    "late_policy": {
+      "switch_after_q9": 400,
+      "direction_scale": -1.0,
+      "policy_state_sha256": "044df762012a7f0e2e3bf1dc57542a8399fa27d1bbf6f8eacb099a0191f3d2eb",
+      "no_blend": true,
+      "first_late_action_q9": 401,
+      "last_late_action_q9": 518
+    }
+  },
+  "qualification": {
+    "steps": 510,
+    "reset_q9": 9,
+    "last_action_q9": 518,
+    "impulse_transition": 241,
+    "impulse_q9": 250,
+    "nominal_seeds": [611723381, 519990690, 1277059621, 677255333, 1807192292, 874120590, 446813377, 801834496, 835868017, 921108064],
+    "disturbance_seeds": [2069156915, 1542545985, 2061428075, 2099212765, 1168782395, 1193172598, 1372897089, 1497021055, 1323462058, 178822160],
+    "disturbance_vectors": [
+      [-0.109284965708, 0.348842165152, -0.026012141987, 0.137065557322, -0.499675156302, -0.717607152875],
+      [0.109284965708, -0.348842165152, 0.026012141987, -0.137065557322, 0.499675156302, 0.717607152875],
+      [0.35, 0.0, 0.0, 0.0, 0.0, 0.0],
+      [-0.35, 0.0, 0.0, 0.0, 0.0, 0.0],
+      [0.0, 0.35, 0.0, 0.0, 0.0, 0.0],
+      [0.0, -0.35, 0.0, 0.0, 0.0, 0.0],
+      [0.0, 0.0, 0.0, 0.5, 0.0, 0.0],
+      [0.0, 0.0, 0.0, -0.5, 0.0, 0.0],
+      [0.0, 0.0, 0.0, 0.0, 0.5, 0.0],
+      [0.0, 0.0, 0.0, 0.0, -0.5, 0.0]
+    ],
+    "required_completed_transitions": 510,
+    "required_terminal_q9": 518,
+    "required_termination_names": ["time_out"],
+    "required_zero_counts": ["nonfinite_count", "raw_clip_required_count", "action_semantics_mismatch_count", "q9_discontinuity_count"],
+    "all_twenty_required": true
+  },
+  "boundaries": {
+    "simulator_only": true,
+    "fixed_motion_phase_specific": true,
+    "training_transitions": 0,
+    "optimizer_steps": 0,
+    "critic_updates": 0,
+    "teacher_labels_used": false,
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "robot_or_network_commands_permitted": false,
+    "hardware_authorized": false
+  }
+}

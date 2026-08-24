@@ -1,0 +1,205 @@
+{
+ "control_hz": 50,
+ "deterministic_seeds": [
+  1729,
+  2718,
+  3141
+ ],
+ "disturbance_envelope": {
+  "angular_velocity_delta_radps": {
+   "pitch": [
+    -0.52,
+    0.52
+   ],
+   "roll": [
+    -0.52,
+    0.52
+   ],
+   "yaw": [
+    -0.78,
+    0.78
+   ]
+  },
+  "linear_velocity_delta_mps": {
+   "x": [
+    -0.5,
+    0.5
+   ],
+   "y": [
+    -0.5,
+    0.5
+   ],
+   "z": [
+    -0.2,
+    0.2
+   ]
+  }
+ },
+ "disturbance_schedule": {
+  "apply_step": 50,
+  "recovery_baseline_steps": 10,
+  "recovery_margin": 0.1,
+  "recovery_stable_steps": 5
+ },
+ "minimum_coverage": {
+  "episodes_per_scenario": 64,
+  "episodes_per_seed": 22,
+  "seconds_per_episode": 5.0,
+  "seeds_per_scenario": 3,
+  "steps_per_episode": 250
+ },
+ "motion_dataset": {
+  "processed": {
+   "file_count": null,
+   "manifest_sha256": null,
+   "root_relpath": "data/motion_lib_bones_seed/robot_filtered",
+   "total_bytes": null
+  },
+  "promotion_enabled": false,
+  "schema_version": 1,
+  "source_archive": {
+   "relpath": "g1.tar.gz",
+   "repository": "bones-studio/seed",
+   "revision": "2f59b2077b9da34dd4e43618e705c7cb962c9a66",
+   "sha256": "52580ea8bced72ea9e2ff1e7b68f01c51c7f1099581e9a46b7c87e1dec106d8a",
+   "size_bytes": 23499973647
+  }
+ },
+ "producer": {
+  "kind": "gear_sonic_true23_isaaclab_disturbance_validation",
+  "promotion_enabled": false,
+  "runner_sha256": "de1e1362dae3be15170fd19108772ff5d2e3b88b72fe56d48c2bce869db19c96",
+  "version": 1
+ },
+ "robot_model": "g1_23dof_rev_1_0",
+ "runtime_contract": {
+  "material_config_sha256_by_reference_profile": {
+   "released_low_latency_step1_0p02s": "52bac7e50170d9f2e99d118468c031779888350eecf51d1bad669cab0cfc72d0",
+   "true23_step5_0p1s": "8c151c78360a26a1e4e62dea9cacc4902c4c7909f7caab632c4222f099497a3d"
+  }
+ },
+ "runtime_sources": {
+  "file_count": 105,
+  "manifest_sha256": "f454f55f819ab253bbc08735609fa5f4b737bc7814ced5dd897b664b95ca79d4",
+  "relpaths": [
+   "external_dependencies/XRoboToolkit-PC-Service-Pybind_X86_and_ARM64/bindings/py_bindings.cpp",
+   "gear_sonic/__init__.py",
+   "gear_sonic/data/robots/g1/g1_23dof_rev_1_0.urdf",
+   "gear_sonic/data/robots/g1/g1_23dof_rev_1_0.xml",
+   "gear_sonic/data/robots/g1/meshes/head_link.STL",
+   "gear_sonic/data/robots/g1/meshes/left_ankle_pitch_link.STL",
+   "gear_sonic/data/robots/g1/meshes/left_ankle_roll_link.STL",
+   "gear_sonic/data/robots/g1/meshes/left_elbow_link.STL",
+   "gear_sonic/data/robots/g1/meshes/left_hip_pitch_link.STL",
+   "gear_sonic/data/robots/g1/meshes/left_hip_roll_link.STL",
+   "gear_sonic/data/robots/g1/meshes/left_hip_yaw_link.STL",
+   "gear_sonic/data/robots/g1/meshes/left_knee_link.STL",
+   "gear_sonic/data/robots/g1/meshes/left_shoulder_pitch_link.STL",
+   "gear_sonic/data/robots/g1/meshes/left_shoulder_roll_link.STL",
+   "gear_sonic/data/robots/g1/meshes/left_shoulder_yaw_link.STL",
+   "gear_sonic/data/robots/g1/meshes/left_wrist_roll_rubber_hand.STL",
+   "gear_sonic/data/robots/g1/meshes/logo_link.STL",
+   "gear_sonic/data/robots/g1/meshes/pelvis.STL",
+   "gear_sonic/data/robots/g1/meshes/pelvis_contour_link.STL",
+   "gear_sonic/data/robots/g1/meshes/right_ankle_pitch_link.STL",
+   "gear_sonic/data/robots/g1/meshes/right_ankle_roll_link.STL",
+   "gear_sonic/data/robots/g1/meshes/right_elbow_link.STL",
+   "gear_sonic/data/robots/g1/meshes/right_hip_pitch_link.STL",
+   "gear_sonic/data/robots/g1/meshes/right_hip_roll_link.STL",
+   "gear_sonic/data/robots/g1/meshes/right_hip_yaw_link.STL",
+   "gear_sonic/data/robots/g1/meshes/right_knee_link.STL",
+   "gear_sonic/data/robots/g1/meshes/right_shoulder_pitch_link.STL",
+   "gear_sonic/data/robots/g1/meshes/right_shoulder_roll_link.STL",
+   "gear_sonic/data/robots/g1/meshes/right_shoulder_yaw_link.STL",
+   "gear_sonic/data/robots/g1/meshes/right_wrist_roll_rubber_hand.STL",
+   "gear_sonic/data/robots/g1/meshes/torso_link_23dof_rev_1_0.STL",
+   "gear_sonic/envs/__init__.py",
+   "gear_sonic/envs/env_utils/__init__.py",
+   "gear_sonic/envs/env_utils/joint_utils.py",
+   "gear_sonic/envs/manager_env/__init__.py",
+   "gear_sonic/envs/manager_env/mdp/__init__.py",
+   "gear_sonic/envs/manager_env/mdp/actions.py",
+   "gear_sonic/envs/manager_env/mdp/actuators.py",
+   "gear_sonic/envs/manager_env/mdp/commands.py",
+   "gear_sonic/envs/manager_env/mdp/curriculum.py",
+   "gear_sonic/envs/manager_env/mdp/events.py",
+   "gear_sonic/envs/manager_env/mdp/observations.py",
+   "gear_sonic/envs/manager_env/mdp/recorders.py",
+   "gear_sonic/envs/manager_env/mdp/rewards.py",
+   "gear_sonic/envs/manager_env/mdp/terminations.py",
+   "gear_sonic/envs/manager_env/mdp/terrain.py",
+   "gear_sonic/envs/manager_env/mdp/utils.py",
+   "gear_sonic/envs/manager_env/modular_tracking_env_cfg.py",
+   "gear_sonic/envs/manager_env/robots/__init__.py",
+   "gear_sonic/envs/manager_env/robots/g1.py",
+   "gear_sonic/envs/manager_env/robots/g1_23dof.py",
+   "gear_sonic/envs/manager_env/robots/h2.py",
+   "gear_sonic/envs/wrapper/__init__.py",
+   "gear_sonic/envs/wrapper/manager_env_wrapper.py",
+   "gear_sonic/eval_agent_trl.py",
+   "gear_sonic/isaac_utils/__init__.py",
+   "gear_sonic/isaac_utils/maths.py",
+   "gear_sonic/isaac_utils/rotations.py",
+   "gear_sonic/scripts/preflight_g1_23dof_training.py",
+   "gear_sonic/scripts/run_g1_23dof_sim_validation.py",
+   "gear_sonic/train_agent_trl.py",
+   "gear_sonic/trl/__init__.py",
+   "gear_sonic/trl/callbacks/__init__.py",
+   "gear_sonic/trl/callbacks/hv_callback_handler.py",
+   "gear_sonic/trl/callbacks/im_eval_callback.py",
+   "gear_sonic/trl/callbacks/im_resample_callback.py",
+   "gear_sonic/trl/callbacks/model_save_callback.py",
+   "gear_sonic/trl/callbacks/read_eval_callback.py",
+   "gear_sonic/trl/callbacks/wandb_callback.py",
+   "gear_sonic/trl/modules/__init__.py",
+   "gear_sonic/trl/modules/actor_critic_modules.py",
+   "gear_sonic/trl/modules/base_module.py",
+   "gear_sonic/trl/modules/data_utils.py",
+   "gear_sonic/trl/modules/universal_token_modules.py",
+   "gear_sonic/trl/trainer/__init__.py",
+   "gear_sonic/trl/trainer/ppo_trainer.py",
+   "gear_sonic/trl/trainer/ppo_trainer_aux_loss.py",
+   "gear_sonic/trl/utils/__init__.py",
+   "gear_sonic/trl/utils/common.py",
+   "gear_sonic/trl/utils/g1_23dof_checkpoint.py",
+   "gear_sonic/trl/utils/kornia_transform.py",
+   "gear_sonic/trl/utils/math.py",
+   "gear_sonic/trl/utils/order_converter.py",
+   "gear_sonic/trl/utils/rl.py",
+   "gear_sonic/trl/utils/scheduler.py",
+   "gear_sonic/trl/utils/torch_transform.py",
+   "gear_sonic/utils/__init__.py",
+   "gear_sonic/utils/average_meters.py",
+   "gear_sonic/utils/batch_normalizer.py",
+   "gear_sonic/utils/common.py",
+   "gear_sonic/utils/config_utils.py",
+   "gear_sonic/utils/g1_23dof_artifact.py",
+   "gear_sonic/utils/g1_23dof_checkpoint_io.py",
+   "gear_sonic/utils/g1_23dof_contract.py",
+   "gear_sonic/utils/inference_helpers.py",
+   "gear_sonic/utils/logging.py",
+   "gear_sonic/utils/motion_lib/__init__.py",
+   "gear_sonic/utils/motion_lib/motion_lib_base.py",
+   "gear_sonic/utils/motion_lib/motion_lib_robot.py",
+   "gear_sonic/utils/motion_lib/skeleton.py",
+   "gear_sonic/utils/motion_lib/torch_humanoid_batch.py",
+   "gear_sonic/utils/obs_utils.py",
+   "gear_sonic/utils/running_mean_std.py",
+   "gear_sonic/utils/teleop/input_readers.py",
+   "gear_sonic/utils/teleop/isaac_teleop_client.py"
+  ],
+  "schema_version": 1
+ },
+ "scenarios": {
+  "disturbance_100": {
+   "disturbance_scale": 1.0
+  },
+  "disturbance_50": {
+   "disturbance_scale": 0.5
+  },
+  "nominal": {
+   "disturbance_scale": 0.0
+  }
+ },
+ "schema_version": 3
+}

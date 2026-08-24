@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_survival_length_score_contract_v1",
+  "role": "offline_mjlab_on_policy_360_step_survival_length_score_direction",
+  "seed": 20260805,
+  "source_candidate": {
+    "checkpoint_linux_path": "/root/g1_true23_runs/sonic_survival_scale_extension_v1/checkpoints/sonic_survival_scale_extension_candidate.pt",
+    "checkpoint_sha256": "7c49c951b0a11536d12a68ab463f61111c5f8f483dc5fe820d6ec22137830613",
+    "result_linux_path": "/root/g1_true23_runs/sonic_survival_scale_extension_v1/survival_scale_extension_result.json",
+    "result_sha256": "8a3b47d417d3129144284c1d2377edca5e1b86f8a824c6abf038931c63edaeac",
+    "policy_state_sha256": "a808df03d0badadf61d0a144aa016d2ee27a15c3c87661ade0c6465be74f3a9f",
+    "completed_transitions": 358,
+    "terminal_q9": 366,
+    "termination_names": ["anchor_pos"]
+  },
+  "collection": {
+    "num_envs": 128,
+    "num_steps": 360,
+    "total_transitions": 46080,
+    "first_episode_only": true,
+    "autoreset_rows_excluded": true,
+    "outcome": "first_episode_active_action_count_divided_by_360",
+    "outcome_centering": "batch_mean",
+    "outcome_scaling": "batch_population_standard_deviation",
+    "minimum_outcome_standard_deviation": 0.01,
+    "minimum_active_at_q163": 16,
+    "optimizer_steps": 0,
+    "critic_updates": 0
+  },
+  "gradient": {
+    "loss": "negative_mean_active_transition_centered_scaled_survival_length_times_action_log_probability",
+    "parameters": [
+      "core.actor_module.decoders.g1_dyn.module.14.bias",
+      "core.actor_module.decoders.g1_dyn.module.14.weight",
+      "core.actor_module.decoders.g1_dyn.module.16.bias",
+      "core.actor_module.decoders.g1_dyn.module.16.weight"
+    ],
+    "batch_size": 512,
+    "batches": 90,
+    "direction": "negative_gradient",
+    "direction_l2_target": 0.002365529660531515,
+    "scales": [-0.5, 0.0, 0.25, 0.5, 1.0, 2.0]
+  },
+  "evaluation_gate": {
+    "baseline_completed_transitions": 358,
+    "baseline_terminal_q9": 366,
+    "candidate_minimum_completed_transitions": 359,
+    "candidate_minimum_terminal_q9": 367,
+    "allowed_termination_names": ["ee_body_pos", "anchor_pos", "anchor_ori", "time_out"],
+    "required_zero_counts": [
+      "nonfinite_count",
+      "raw_clip_required_count",
+      "action_semantics_mismatch_count",
+      "q9_discontinuity_count"
+    ],
+    "selection": "maximum_completed_transitions_then_same_horizon_episode_return_then_smallest_absolute_scale"
+  },
+  "boundaries": {
+    "diagnostic_candidate_only": true,
+    "teacher_labels_used": false,
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

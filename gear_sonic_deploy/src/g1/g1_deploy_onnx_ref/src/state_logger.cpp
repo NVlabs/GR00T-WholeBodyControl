@@ -98,6 +98,9 @@ uint64_t StateLogger::LogFullState(const std::array<double, 4>& base_quat,
                                    const std::span<double>& left_hand_dq,
                                    const std::span<double>& right_hand_q,
                                    const std::span<double>& right_hand_dq,
+                                   bool left_hand_feedback_valid,
+                                   bool right_hand_feedback_valid,
+                                   std::chrono::steady_clock::time_point feedback_source_timestamp_monotonic,
                                    const std::span<double>& last_left_hand_action,
                                    const std::span<double>& last_right_hand_action,
                                    double ros_timestamp) {
@@ -105,6 +108,7 @@ uint64_t StateLogger::LogFullState(const std::array<double, 4>& base_quat,
   e.index = next_index_.fetch_add(1, std::memory_order_relaxed);
   e.timestamp = std::chrono::system_clock::now();
   e.timestamp_monotonic = std::chrono::steady_clock::now();
+  e.feedback_source_timestamp_monotonic = feedback_source_timestamp_monotonic;
   e.ros_timestamp = ros_timestamp;
   e.base_quat = base_quat;
   e.base_ang_vel = base_ang_vel;
@@ -126,6 +130,8 @@ uint64_t StateLogger::LogFullState(const std::array<double, 4>& base_quat,
   e.left_hand_dq.assign(std::begin(left_hand_dq), std::end(left_hand_dq));
   e.right_hand_q.assign(std::begin(right_hand_q), std::end(right_hand_q));
   e.right_hand_dq.assign(std::begin(right_hand_dq), std::end(right_hand_dq));
+  e.left_hand_feedback_valid = left_hand_feedback_valid;
+  e.right_hand_feedback_valid = right_hand_feedback_valid;
   e.last_left_hand_action.assign(std::begin(last_left_hand_action), std::end(last_left_hand_action));
   e.last_right_hand_action.assign(std::begin(last_right_hand_action), std::end(last_right_hand_action));
 

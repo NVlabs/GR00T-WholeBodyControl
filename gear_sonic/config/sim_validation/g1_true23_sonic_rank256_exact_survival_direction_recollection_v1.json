@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_rank256_exact_survival_direction_recollection_contract_v1",
+  "role": "simulator_only_exact_direction_reproduction_for_two_direction_screen",
+  "parent_result": {
+    "path": "/root/g1_true23_runs/sonic_rank256_exact_impulse_survival_score_v1/rank256_exact_impulse_survival_score_result.json",
+    "sha256": "f820041171103fad2863f01f1296100dd7c9bdc8205191e265cacc74a6475f03"
+  },
+  "failed_recollection": {
+    "path": "/root/g1_true23_runs/sonic_rank256_exact_survival_direction_recollection_v1/exact_survival_direction_recollection_result.json",
+    "sha256": "2032e9cad63aaf7f349f9a4ca6af3534e559fbe48b4612cb9be0a28af386bc8c",
+    "exact_reproduction": false,
+    "direction_artifact": null
+  },
+  "expected_evidence": {
+    "gradient_state_sha256": "9270953a70fc701f7e878d8858eb709763cd9003e74bb2578fe5f1d9c4661148",
+    "direction_state_sha256": "702d0afeb9c90538916ab3c35fee844d1156abb7b2e60c5ad040b8e4e4d98e2b",
+    "scaled_direction_state_sha256": "73e0a4cebe8e13fc901247ebb3c0e1b8e5a47f7b3d8d0957313ca15cf8468c64",
+    "scaled_direction_l2": 0.000591382415
+  },
+  "collection": {
+    "num_envs": 128,
+    "steps": 510,
+    "all_envs_receive_exact_vector": true,
+    "impulse_transition": 241,
+    "exact_vector": [-0.109284965708, 0.348842165152, -0.026012141987, 0.137065557322, -0.499675156302, -0.717607152875]
+  },
+  "boundaries": {
+    "evaluation_runs": 0,
+    "optimizer_steps": 0,
+    "critic_updates": 0,
+    "candidate_selected": false,
+    "support_qualified": false,
+    "deployment_ready": false,
+    "hardware_authorized": false
+  }
+}

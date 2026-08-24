@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_seed835_failure_prefix_dagger_round2_contract_v1",
+  "role": "second_student_on_policy_failure_prefix_with_exact_same_state_teacher_labels",
+  "inputs": {
+    "candidate_manifest": {"path": "artifacts/g1_true23/sonic_seed835_counterexample_bc_last_affine_v1.manifest.json", "sha256": "e8194a759a829368a9635493fab079cb30e38d3d74780e13ad743ea8b2a517fe"},
+    "candidate_decoder": {"path": "artifacts/g1_true23/sonic_seed835_counterexample_bc_last_affine_v1.decoder.onnx", "sha256": "812123cdea6c500f769223f06903c663c1e39debacdbd9d03d16ecb480b39745"},
+    "student_failure": {"path": "artifacts/g1_true23/sonic_seed835_counterexample_bc_last_affine_v1.seed835868017.initial510.json", "sha256": "323a606dd9afad115202b02f66c7f229f072126258d5abd3dc5f3bf36d36dc6f"},
+    "recovery_contract": {"path": "gear_sonic/config/sim_validation/g1_true23_sonic_student_teacher_recovery_v4.json", "sha256": "2b70f24f07619ad586a93f0e9c465e5d9647143d198f124c2568e4dd7e357581"},
+    "round1_counterexample_npz": {"path": "artifacts/g1_true23/sonic_seed835_failure_prefix_dagger_v1.npz", "sha256": "d5006903e926f2f3bce97701b8293b94814a6b5aead39c10fceb91da27db3bf8"},
+    "round1_counterexample_manifest": {"path": "artifacts/g1_true23/sonic_seed835_failure_prefix_dagger_v1.manifest.json", "sha256": "ebeb4209950743503140fd83cb706114d3d2a95a0b84f3db3d81e876932d7fe7"}
+  },
+  "rows": {
+    "total": 168,
+    "student_on_policy": 168,
+    "teacher_actuated": 0,
+    "q9_first": 9,
+    "q9_last": 176,
+    "terminal_causing_pre_action_row_included": true,
+    "post_action_terminal_state_included": false
+  },
+  "admission": {
+    "dynamic_recovery_mode": "cutoff510",
+    "student_transition_count": 510,
+    "teacher_transition_count": 0,
+    "expected_verdict": "mixed_controller_recovery_failed",
+    "expected_attempted_transitions": 168,
+    "expected_terminal_transition": 167,
+    "expected_terminal_q9": 176,
+    "expected_termination_names": ["ee_body_pos"],
+    "expected_controller_counts": {"student": 168, "teacher": 0},
+    "teacher_pt_cpu_onnx_parity_required_every_row": true,
+    "student_action_chain_required_every_row": true
+  },
+  "boundaries": {
+    "simulator_only": true,
+    "classification": "failure_prefix_counterexample_dagger_round2_bc_only",
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

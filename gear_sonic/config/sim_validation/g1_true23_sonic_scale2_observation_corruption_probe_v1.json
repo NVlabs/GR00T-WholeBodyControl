@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_scale2_observation_corruption_probe_contract_v1",
+  "role": "offline_mjlab_failed_seed_clean_vs_noisy_diagnostic_only",
+  "seed": 611723381,
+  "source": {
+    "checkpoint_sha256": "7c49c951b0a11536d12a68ab463f61111c5f8f483dc5fe820d6ec22137830613",
+    "policy_state_sha256": "a808df03d0badadf61d0a144aa016d2ee27a15c3c87661ade0c6465be74f3a9f"
+  },
+  "prerequisites": {
+    "campaign_failure_relative_path": "artifacts/g1_true23/g1_true23_sonic_scale2_recovery_campaign_q250_v1.json",
+    "campaign_failure_sha256": "f75822f66af5cdc41542f2069b8801b1b621a44af647cc323f0461e14f3434fc",
+    "campaign_failed_run_id": "nominal_00_seed611723381",
+    "campaign_observed_completed_transitions": 206,
+    "campaign_observed_terminal_q9": 214,
+    "q250_pass_relative_path": "artifacts/g1_true23/g1_true23_sonic_scale2_teacher_recovery_q250_v1_retry2.json",
+    "q250_pass_sha256": "e9731e463694e6b577dd4af147a344461ef5d50ce5e1a61f26938a29e746ba0d"
+  },
+  "episode": {
+    "anchor_q9": 9,
+    "transitions": 510,
+    "last_q9": 518,
+    "controller": "scale2_student_deterministic_mean",
+    "teacher_present": false,
+    "action_substitution": false,
+    "wrapper_clip_actions": null,
+    "safe_target_transform_application_count": 1
+  },
+  "modes": [
+    {
+      "name": "noisy",
+      "tokenizer_corruption_enabled": true,
+      "policy_corruption_enabled": true,
+      "must_run_first": true,
+      "required_completed_transitions": 206,
+      "required_terminal_q9": 214
+    },
+    {
+      "name": "clean",
+      "tokenizer_corruption_enabled": false,
+      "policy_corruption_enabled": false,
+      "requires_noisy_reproduction": true
+    }
+  ],
+  "comparison": {
+    "common_q9_alignment": true,
+    "raw_action_linf_thresholds": [0.001, 0.01, 0.05, 0.1],
+    "ee_z_linf_thresholds_m": [0.001, 0.01, 0.025],
+    "historical_returns_diagnostic_only": true,
+    "clean_pass_definition": "510_completed_and_time_out_only_at_q518"
+  },
+  "boundaries": {
+    "training_performed": false,
+    "optimizer_steps": 0,
+    "teacher_queries": 0,
+    "teacher_labels": 0,
+    "support_qualified": false,
+    "promotion_or_deployment": false,
+    "hardware_authorized": false,
+    "network_or_external_actuation": false
+  }
+}

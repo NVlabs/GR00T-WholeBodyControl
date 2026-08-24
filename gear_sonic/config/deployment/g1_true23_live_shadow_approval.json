@@ -1,0 +1,23 @@
+{
+  "audit": {
+    "relpath": "gear_sonic_deploy/src/g1/g1_deploy_onnx_ref/tests/check_true23_shadow_binary.cmake",
+    "sha256": "06340ff287236278ccbf2a063421134e120f35e393bf0d34adef22a7c307c3f3"
+  },
+  "binary_format": "ELF",
+  "binary_sha256": "24c9a360c8043c803a0d6334fcd3fbb3ffd0f9da78fc70ebfaeb820b33410837",
+  "core": {
+    "relpath": "gear_sonic_deploy/src/g1/g1_deploy_onnx_ref/include/true23_live_shadow_core.hpp",
+    "sha256": "c4ec0ef5bf065dbf47f3c67ad2bfc630f3559938b4a1e31acb0cce00e885c2b1"
+  },
+  "evidence_schema_version": 2,
+  "kind": "g1_true23_live_shadow_producer_approval",
+  "producer_filename": "g1_true23_live_shadow",
+  "producer_kind": "g1_true23_integrated_readonly_shadow_probe",
+  "promotion_enabled": false,
+  "review_state": "blocked_missing_semantic_pico_future_terms",
+  "schema_version": 1,
+  "source": {
+    "relpath": "gear_sonic_deploy/src/g1/g1_deploy_onnx_ref/src/g1_true23_live_shadow.cpp",
+    "sha256": "86879b93a2cad5846f24849038ea5b9f44a3e1890fcf79015e673b6bda5b0508"
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_pico_retargeter_approval",
+  "promotion_enabled": false,
+  "source_kind": "retargeted_g1_delayed_reference",
+  "required_raw_capture_kind": "xrobotoolkit_pico_xr24_bodytracking_ankle_fused_raw_capture",
+  "required_atomic_snapshot_contract": "xrt_xr24_body_tracker_fused_ankles_atomic_v1",
+  "required_derivative_layout_contract": "linear_xyz_then_angular_xyz_v1",
+  "required_source_coherence_contract": "same_packet_xr24_body_tracking_v1",
+  "required_ankle_role_semantics": "bodytracking_fused_roles_7_8_from_calibrated_ankle_bands_v1",
+  "current_hardened_client_compatible": true,
+  "required_producer": {
+    "kind": "nvidia_soma_retargeter_xr24_adapter",
+    "adapter_sha256": null,
+    "repository": "https://github.com/NVIDIA/soma-retargeter.git",
+    "commit": "b3ef2708d84bfd1314ddb52d0db6c9c211df1f57",
+    "package_version": "0.1.0",
+    "python_requires": ">=3.12",
+    "newton_version": "1.0.0",
+    "warp_version": "1.12.0",
+    "ankle_input_semantics": "bodytracking_fused_roles_7_8_from_calibrated_ankle_bands_v1",
+    "config_hash_semantics": "utf8_lf_normalized_sha256",
+    "config_sha256": {
+      "g1_feet_stabilizer_config.json": "68ab0dc2318eb91272d6c067de6c3b85c27de6cdab83a7d9d09013f9b75dd738",
+      "soma_to_g1_retargeter_config.json": "befc09515e3b4f75f85561ec757fd795d03904abade21bb9ed9940363797953e",
+      "soma_to_g1_scaler_config.json": "1f9da8ae28500a27bea90d2aaf3949df4992e3db7ca0a92fcc58cf8080854efb"
+    }
+  },
+  "required_evidence": {
+    "raw_capture_sha256": null,
+    "xrobotoolkit_sdk_sha256": null,
+    "pc_service_sha256": null,
+    "pico_client_apk_sha256": null,
+    "retarget_trace_sha256": null,
+    "exact_backend_replay_performed": false,
+    "raw_capture_replayed": false,
+    "full_il29_verified": false,
+    "normal_profile_minimum_raw_position_samples": 48,
+    "low_latency_profile_minimum_raw_position_samples": 12
+  },
+  "blockers": [
+    "No advancing live hardened BodyTracking XR24 capture has proved all 24 roles, reconstructed derivatives, and per-joint timestamps",
+    "No live capture has proved calibrated BT_VALID BodyTracking with at least two unique connected ankle bands",
+    "XR24-to-SOMA coordinate and role adapter lacks approved exact replay fixture",
+    "No synchronized raw PICO capture has replayed through the pinned SOMA backend",
+    "No complete canonical IL29 q/dq trace has been verified from that replay"
+  ],
+  "authorization": {
+    "read_only": true,
+    "dds_opened": false,
+    "robot_channel_opened": false,
+    "actuation_authorized": false,
+    "robot_commands_published": false
+  }
+}

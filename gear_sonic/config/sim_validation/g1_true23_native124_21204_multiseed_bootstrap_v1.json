@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_native124_21204_multiseed_teacher_bootstrap_contract_v1",
+  "role": "teacher_actuated_reset_trajectory_collection_for_cross_seed_sonic_bc",
+  "inputs": {
+    "base_bootstrap_contract": {"path": "gear_sonic/config/sim_validation/g1_true23_native124_21204_bootstrap_v1.json", "sha256": "38952e2459437c7a19e062384a8f587f0e3b69f2ada8eef223c63bdb0f9e2ce9"},
+    "seed835_teacher_nominal_pass": {"path": "artifacts/g1_true23/selected_teacher.seed835868017.nominal500.v1.json", "sha256": "852d2fe82926d3a87b78ba01aa21cd3bed842998f91225b656a2fc413742d235"},
+    "seed835_cutoff50_failure": {"path": "artifacts/g1_true23/sonic_hybrid_cutoff50.seed835868017.v1.json", "sha256": "89e7809a7c8c6c599f465ceb3f542b398b73b78f23fdd3e9787b8257eb78d9a6"}
+  },
+  "runtime": {
+    "allowed_seeds": [611723381, 835868017, 921108064],
+    "rows_per_seed": 510,
+    "anchor_q9": 9,
+    "last_action_q9": 518,
+    "teacher_controls_every_transition": true,
+    "student_controls_zero_transitions": true,
+    "whole_run_quarantine": true
+  },
+  "boundaries": {
+    "simulator_only": true,
+    "behavior_cloning_input_candidate": true,
+    "pure_student_qualified": false,
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

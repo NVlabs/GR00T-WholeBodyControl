@@ -243,10 +243,12 @@ def exceeded_body_height(
 
 
 def tracking_time_out(env: ManagerBasedRLEnv, command_name: str) -> torch.Tensor:
-    """Terminate when the motion clip has been fully played.
+    """Terminate when the usable motion playback range has been fully played.
 
     Compare the elapsed simulation steps (including the motion start offset)
-    against the total length of each environment's assigned motion clip.
+    against the command's timeout boundary. True23 reserves its complete future
+    reference horizon and final velocity proof frame; legacy embodiments retain
+    the full motion-clip boundary.
 
     Args:
         env: The manager-based RL environment.
@@ -257,7 +259,7 @@ def tracking_time_out(env: ManagerBasedRLEnv, command_name: str) -> torch.Tensor
     """
     command: TrackingCommand = env.command_manager.get_term(command_name)
     elapsed = command.time_steps + command.motion_start_time_steps + 1
-    total = command.motion_lib.get_time_step_total(command.motion_ids)
+    total = command.tracking_time_out_steps
     return elapsed >= total
 
 

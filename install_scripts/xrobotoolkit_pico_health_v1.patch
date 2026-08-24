@@ -1,0 +1,840 @@
+diff --git a/Assets/Editor/HardenedBuild.cs b/Assets/Editor/HardenedBuild.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..a7c968a22f728a1ab27b6b021bba7e02c5a83c6e
+--- /dev/null
++++ b/Assets/Editor/HardenedBuild.cs
+@@ -0,0 +1,110 @@
++using System;
++using System.IO;
++using System.Linq;
++using UnityEditor;
++using UnityEditor.Build.Reporting;
++
++internal static class HardenedBuild
++{
++    public static void BuildAndroid()
++    {
++        string outputPath = GetArgument("outputPath");
++        if (string.IsNullOrWhiteSpace(outputPath))
++            throw new ArgumentException("outputPath=<absolute apk path> is required");
++
++        string directory = Path.GetDirectoryName(outputPath);
++        if (string.IsNullOrWhiteSpace(directory))
++            throw new ArgumentException("outputPath must include a directory");
++        Directory.CreateDirectory(directory);
++
++        PlayerSettings.productName = "XRoboToolkit Hardened";
++        PlayerSettings.bundleVersion = "1.1.1-hardened.1";
++        PlayerSettings.Android.bundleVersionCode = 2;
++        PlayerSettings.Android.targetSdkVersion =
++            AndroidSdkVersions.AndroidApiLevel30;
++        PlayerSettings.Android.useCustomKeystore = false;
++        PlayerSettings.SetApplicationIdentifier(
++            BuildTargetGroup.Android,
++            "com.xrobotoolkit.client.hardened");
++        ConfigureAndroidTools(
++            GetArgument("sdkRoot"),
++            GetArgument("ndkRoot"),
++            GetArgument("jdkRoot"));
++
++        string[] scenes = EditorBuildSettings.scenes
++            .Where(scene => scene != null && scene.enabled)
++            .Select(scene => scene.path)
++            .ToArray();
++        if (scenes.Length == 0)
++            throw new InvalidOperationException("No enabled build scenes");
++
++        BuildPlayerOptions options = new BuildPlayerOptions
++        {
++            scenes = scenes,
++            locationPathName = outputPath,
++            target = BuildTarget.Android,
++            options = BuildOptions.Development,
++        };
++        BuildReport report = BuildPipeline.BuildPlayer(options);
++        if (report.summary.result != BuildResult.Succeeded)
++        {
++            throw new InvalidOperationException(
++                $"Android build failed: {report.summary.result}; " +
++                $"{report.summary.totalErrors} error(s)");
++        }
++    }
++
++    private static void ConfigureAndroidTools(
++        string requestedSdk,
++        string requestedNdk,
++        string requestedJdk)
++    {
++        string editorDirectory = Path.GetDirectoryName(EditorApplication.applicationPath);
++        if (string.IsNullOrWhiteSpace(editorDirectory))
++            throw new InvalidOperationException("Could not locate Unity Editor directory");
++
++        string androidPlayer = Path.Combine(
++            editorDirectory,
++            "Data",
++            "PlaybackEngines",
++            "AndroidPlayer");
++        string embeddedSdk = Path.Combine(androidPlayer, "SDK");
++        string embeddedNdk = Path.Combine(androidPlayer, "NDK");
++        string sdk = string.IsNullOrWhiteSpace(requestedSdk)
++            ? embeddedSdk
++            : Path.GetFullPath(requestedSdk);
++        string ndk = string.IsNullOrWhiteSpace(requestedNdk)
++            ? embeddedNdk
++            : Path.GetFullPath(requestedNdk);
++        foreach (string path in new[] { sdk, ndk })
++        {
++            if (!Directory.Exists(path))
++                throw new DirectoryNotFoundException(
++                    $"Unity Android dependency missing: {path}");
++        }
++
++        UnityEditor.Android.AndroidExternalToolsSettings.sdkRootPath =
++            string.IsNullOrWhiteSpace(requestedSdk)
++                ? string.Empty
++                : sdk;
++        UnityEditor.Android.AndroidExternalToolsSettings.ndkRootPath =
++            string.IsNullOrWhiteSpace(requestedNdk)
++                ? string.Empty
++                : ndk;
++        UnityEditor.Android.AndroidExternalToolsSettings.jdkRootPath =
++            string.IsNullOrWhiteSpace(requestedJdk)
++                ? string.Empty
++                : Path.GetFullPath(requestedJdk);
++    }
++
++    private static string GetArgument(string name)
++    {
++        string prefix = name + "=";
++        foreach (string argument in Environment.GetCommandLineArgs())
++        {
++            if (argument.StartsWith(prefix, StringComparison.Ordinal))
++                return argument.Substring(prefix.Length);
++        }
++        return null;
++    }
++}
+diff --git a/Assets/Editor/HardenedBuild.cs.meta b/Assets/Editor/HardenedBuild.cs.meta
+new file mode 100644
+index 0000000000000000000000000000000000000000..9c0b98d27e93ea7f68c7f3a63a631d4617feb9d5
+--- /dev/null
++++ b/Assets/Editor/HardenedBuild.cs.meta
+@@ -0,0 +1,11 @@
++fileFormatVersion: 2
++guid: c2b5d1c711bde124daf3f965a9fe21c1
++MonoImporter:
++  externalObjects: {}
++  serializedVersion: 2
++  defaultReferences: []
++  executionOrder: 0
++  icon: {instanceID: 0}
++  userData:
++  assetBundleName:
++  assetBundleVariant:
+diff --git a/Assets/Scripts/TrackingData.cs b/Assets/Scripts/TrackingData.cs
+index 7cf0a31797da9737ad4904643c268eca07e9461a..1d7f4319e9add5eab53bd7ba5061f93e6cfdf431 100644
+--- a/Assets/Scripts/TrackingData.cs
++++ b/Assets/Scripts/TrackingData.cs
+@@ -1,4 +1,5 @@
+ using System;
++using System.Collections.Generic;
+ using LitJson;
+ using Unity.XR.PICO.TOBSupport;
+ using Unity.XR.PXR;
+@@ -17,7 +18,6 @@ namespace Robot
+         public static TrackingType TrackingTypeValue { get; private set; }
+
+         private JsonData _motionTrackingJson = new JsonData();
+-        private JsonData _bodyTrackingJson = new JsonData();
+         private JsonData _controllerDataJson = new JsonData();
+         private JsonData _leftControllerJson = new JsonData();
+         private JsonData _rightControllerJson = new JsonData();
+@@ -26,6 +26,8 @@ namespace Robot
+         private JsonData _handData = new JsonData();
+         private JsonData _leftHandData = new JsonData();
+         private JsonData _rightHandData = new JsonData();
++        private long _bodySampleSequence;
++        private long _controllerSampleSequence;
+
+         public static void SetHeadOn(bool on)
+         {
+@@ -58,6 +60,9 @@ namespace Robot
+
+         public void Get(ref JsonData totalData)
+         {
++            totalData["GrootTeleopSafety"] = GetTeleopSafetyProtocol();
++            long packetTimestampNs = Utils.GetCurrentTimestamp();
++
+             //sensor
+             double predictTime = PXR_Enterprise.GetPredictedDisplayTime(); //毫秒
+             predictTime = predictTime * 1000;
+@@ -84,13 +89,62 @@ namespace Robot
+
+             if (ControllerOn)
+             {
+-                JsonData controller = GetLeftRightControllerJsonData(predictTime);
+-                totalData["Controller"] = controller;
++                JsonData controller;
++                bool leftDeviceValid;
++                bool leftIsTrackedQuerySucceeded;
++                bool leftIsTracked;
++                bool leftTrackingStateQuerySucceeded;
++                InputTrackingState leftTrackingState;
++                bool rightDeviceValid;
++                bool rightIsTrackedQuerySucceeded;
++                bool rightIsTracked;
++                bool rightTrackingStateQuerySucceeded;
++                InputTrackingState rightTrackingState;
++                bool controllerValid = TryGetLeftRightControllerJsonData(
++                    predictTime,
++                    out controller,
++                    out leftDeviceValid,
++                    out leftIsTrackedQuerySucceeded,
++                    out leftIsTracked,
++                    out leftTrackingStateQuerySucceeded,
++                    out leftTrackingState,
++                    out rightDeviceValid,
++                    out rightIsTrackedQuerySucceeded,
++                    out rightIsTracked,
++                    out rightTrackingStateQuerySucceeded,
++                    out rightTrackingState);
++                if (controllerValid)
++                {
++                    _controllerSampleSequence++;
++                    controller["sampleSequence"] = _controllerSampleSequence;
++                    totalData["Controller"] = controller;
++                }
++                else if (totalData.ContainsKey("Controller"))
++                {
++                    totalData.Remove("Controller");
++                }
++
++                totalData["ControllerTrackingStatus"] = GetControllerTrackingStatus(
++                    leftDeviceValid,
++                    leftIsTrackedQuerySucceeded,
++                    leftIsTracked,
++                    leftTrackingStateQuerySucceeded,
++                    leftTrackingState,
++                    rightDeviceValid,
++                    rightIsTrackedQuerySucceeded,
++                    rightIsTracked,
++                    rightTrackingStateQuerySucceeded,
++                    rightTrackingState,
++                    controllerValid,
++                    _controllerSampleSequence,
++                    packetTimestampNs);
+             }
+             else
+             {
+                 if (totalData.ContainsKey("Controller"))
+                     totalData.Remove("Controller");
++                if (totalData.ContainsKey("ControllerTrackingStatus"))
++                    totalData.Remove("ControllerTrackingStatus");
+             }
+
+             if (HandTrackingOn)
+@@ -109,30 +163,84 @@ namespace Robot
+
+             if (TrackingTypeValue == TrackingType.Body)
+             {
+-                int state = 0;
+-                PXR_Input.GetMotionTrackerCalibState(ref state);
++                int calibrationState = 0;
++                int calibrationResult = PXR_Input.GetMotionTrackerCalibState(ref calibrationState);
++                MotionTrackerMode trackingMode = PXR_MotionTracking.GetMotionTrackerMode();
+
+-                if (state == 1)
++                MotionTrackerConnectState connectState = new MotionTrackerConnectState();
++                int connectStateResult =
++                    PXR_MotionTracking.GetMotionTrackerConnectStateWithSN(ref connectState);
++                int trackerCount = connectStateResult == 0 ? Math.Max(0, connectState.trackerSum) : 0;
++                int uniqueTrackerCount = GetUniqueTrackerCount(connectState, trackerCount);
++
++                bool isTracking = false;
++                BodyTrackingState bodyState = new BodyTrackingState();
++                int bodyStateResult = PXR_MotionTracking.GetBodyTrackingState(ref isTracking, ref bodyState);
++
++                int bodyDataResult = -1;
++                int bodyRoleCount = 0;
++                int bodyRoleArrayLength = 0;
++                bool stateValid =
++                    calibrationResult == 0 &&
++                    calibrationState == 1 &&
++                    trackingMode == MotionTrackerMode.BodyTracking &&
++                    connectStateResult == 0 &&
++                    trackerCount >= 2 &&
++                    uniqueTrackerCount >= 2 &&
++                    bodyStateResult == 0 &&
++                    isTracking &&
++                    bodyState.code == TrackingStateCode.PXR_MT_SUCCESS &&
++                    bodyState.stateCode == BodyTrackingStatusCode.BT_VALID &&
++                    bodyState.connectedBandCount >= 2;
++
++                if (stateValid)
+                 {
+-                    // Get the current tracking mode
+-                    MotionTrackerMode trackingMode = PXR_MotionTracking.GetMotionTrackerMode();
+-                    // Debug.Log("trackingMode::" + trackingMode);
+-                    // Update human tracking pose data
+-                    if (trackingMode == MotionTrackerMode.BodyTracking)
++                    BodyTrackingGetDataInfo dataInfo = new BodyTrackingGetDataInfo();
++                    BodyTrackingData trackingData = new BodyTrackingData();
++                    bodyDataResult =
++                        PXR_MotionTracking.GetBodyTrackingData(ref dataInfo, ref trackingData);
++                    bodyRoleArrayLength =
++                        trackingData.roleDatas == null ? 0 : trackingData.roleDatas.Length;
++                    if (bodyDataResult == 0)
++                        bodyRoleCount = GetValidBodyRoleCount(trackingData);
++
++                    if (bodyDataResult == 0 && bodyRoleCount == (int)BodyTrackerRole.ROLE_NUM)
+                     {
+-                        BodyTrackingGetDataInfo dataInfo = new BodyTrackingGetDataInfo();
+-                        BodyTrackingData trackingData = new BodyTrackingData();
+-                        // Obtain position and orientation data of each body node
+-                        int ret = PXR_MotionTracking.GetBodyTrackingData(ref dataInfo, ref trackingData);
+-                        JsonData json = GetBodyTracking(dataInfo, trackingData);
+-                        totalData["Body"] = json;
++                        _bodySampleSequence++;
++                        totalData["Body"] = GetBodyTracking(trackingData, _bodySampleSequence);
+                     }
+                 }
++
++                bool sampleValid =
++                    stateValid &&
++                    bodyDataResult == 0 &&
++                    bodyRoleCount == (int)BodyTrackerRole.ROLE_NUM;
++                totalData["BodyTrackingStatus"] = GetBodyTrackingStatus(
++                    calibrationResult,
++                    calibrationState,
++                    trackingMode,
++                    connectStateResult,
++                    trackerCount,
++                    uniqueTrackerCount,
++                    bodyStateResult,
++                    isTracking,
++                    bodyState,
++                    bodyDataResult,
++                    bodyRoleCount,
++                    bodyRoleArrayLength,
++                    sampleValid,
++                    _bodySampleSequence,
++                    packetTimestampNs);
++
++                if (!sampleValid && totalData.ContainsKey("Body"))
++                    totalData.Remove("Body");
+             }
+             else
+             {
+                 if (totalData.ContainsKey("Body"))
+                     totalData.Remove("Body");
++                if (totalData.ContainsKey("BodyTrackingStatus"))
++                    totalData.Remove("BodyTrackingStatus");
+             }
+
+             if (TrackingTypeValue == TrackingType.Motion)
+@@ -152,8 +260,7 @@ namespace Robot
+             }
+
+
+-            long nsTime = Utils.GetCurrentTimestamp();
+-            totalData["timeStampNs"] = nsTime;
++            totalData["timeStampNs"] = packetTimestampNs;
+             ActiveInputDevice inputDevice = PXR_HandTracking.GetActiveInputDevice();
+             totalData["Input"] = (int)inputDevice;
+         }
+@@ -243,37 +350,264 @@ namespace Robot
+         }
+
+
+-        private JsonData GetBodyTracking(BodyTrackingGetDataInfo dataInfo, BodyTrackingData trackingData)
++        private static int GetUniqueTrackerCount(MotionTrackerConnectState connectState, int trackerCount)
+         {
+-            JsonData joints;
+-            if (_bodyTrackingJson.ContainsKey("joints"))
++            if (connectState.trackersSN == null || trackerCount <= 0)
++                return 0;
++
++            HashSet<string> serials = new HashSet<string>(StringComparer.Ordinal);
++            int count = Math.Min(trackerCount, connectState.trackersSN.Length);
++            for (int i = 0; i < count; i++)
+             {
+-                joints = _bodyTrackingJson["joints"];
++                string serial = connectState.trackersSN[i].value;
++                if (!string.IsNullOrWhiteSpace(serial))
++                    serials.Add(serial.Trim());
+             }
+-            else
++
++            return serials.Count;
++        }
++
++        private static int GetValidBodyRoleCount(BodyTrackingData trackingData)
++        {
++            if (trackingData.roleDatas == null)
++                return 0;
++
++            int validRoleCount = 0;
++            int count = Math.Min(
++                trackingData.roleDatas.Length,
++                (int)BodyTrackerRole.ROLE_NUM);
++            for (int i = 0; i < count; i++)
+             {
+-                joints = new JsonData();
+-                joints.SetJsonType(JsonType.Array);
+-                _bodyTrackingJson["joints"] = joints;
++                if (IsValidBodyRoleData(trackingData, i))
++                    validRoleCount++;
+             }
+
+-            if (trackingData.roleDatas != null)
++            return validRoleCount;
++        }
++
++        private static unsafe bool IsValidBodyRoleData(
++            BodyTrackingData trackingData,
++            int expectedRoleIndex)
++        {
++            // PICO defines roleDatas array order as the canonical XR24 joint
++            // identity; the redundant role field is not populated reliably.
++            BodyTrackingRoleData roleData = trackingData.roleDatas[expectedRoleIndex];
++            BodyTrackerTransPose pose = roleData.localPose;
++            if (pose.TimeStamp < 0 ||
++                !IsFinite(pose.PosX) ||
++                !IsFinite(pose.PosY) ||
++                !IsFinite(pose.PosZ) ||
++                !IsFinite(pose.RotQx) ||
++                !IsFinite(pose.RotQy) ||
++                !IsFinite(pose.RotQz) ||
++                !IsFinite(pose.RotQw))
+             {
+-                int len = trackingData.roleDatas.Length;
+-                _motionTrackingJson["len"] = len;
++                return false;
++            }
+
+-                for (int i = 0; i < len; i++)
++            double quaternionNormSquared =
++                pose.RotQx * pose.RotQx +
++                pose.RotQy * pose.RotQy +
++                pose.RotQz * pose.RotQz +
++                pose.RotQw * pose.RotQw;
++            if (!IsFinite(quaternionNormSquared) ||
++                quaternionNormSquared < 0.25 ||
++                quaternionNormSquared > 2.25)
++            {
++                return false;
++            }
++
++            fixed (double* velocity = trackingData.roleDatas[expectedRoleIndex].velo,
++                           acceleration = trackingData.roleDatas[expectedRoleIndex].acce,
++                           angularVelocity = trackingData.roleDatas[expectedRoleIndex].wvelo,
++                           angularAcceleration = trackingData.roleDatas[expectedRoleIndex].wacce)
++            {
++                for (int component = 0; component < 3; component++)
+                 {
+-                    JsonData joint;
+-                    if (i < joints.Count)
++                    if (!IsFinite(velocity[component]) ||
++                        !IsFinite(acceleration[component]) ||
++                        !IsFinite(angularVelocity[component]) ||
++                        !IsFinite(angularAcceleration[component]))
+                     {
+-                        joint = joints[i];
+-                    }
+-                    else
+-                    {
+-                        joint = new JsonData();
+-                        joints.Add(joint);
++                        return false;
+                     }
++                }
++            }
++
++            return true;
++        }
++
++        private static bool IsFinite(double value)
++        {
++            return !double.IsNaN(value) && !double.IsInfinity(value);
++        }
++
++        private static bool IsFinite(float value)
++        {
++            return !float.IsNaN(value) && !float.IsInfinity(value);
++        }
++
++        private static bool IsValidPose(Vector3 position, Quaternion rotation)
++        {
++            if (!IsFinite(position.x) ||
++                !IsFinite(position.y) ||
++                !IsFinite(position.z) ||
++                !IsFinite(rotation.x) ||
++                !IsFinite(rotation.y) ||
++                !IsFinite(rotation.z) ||
++                !IsFinite(rotation.w))
++            {
++                return false;
++            }
++
++            float quaternionNormSquared =
++                rotation.x * rotation.x +
++                rotation.y * rotation.y +
++                rotation.z * rotation.z +
++                rotation.w * rotation.w;
++            return IsFinite(quaternionNormSquared) &&
++                   quaternionNormSquared >= 0.25f &&
++                   quaternionNormSquared <= 2.25f;
++        }
++
++        private static bool HasPositionAndRotationTracking(InputTrackingState trackingState)
++        {
++            const InputTrackingState required =
++                InputTrackingState.Position | InputTrackingState.Rotation;
++            return (trackingState & required) == required;
++        }
++
++        private static JsonData GetTeleopSafetyProtocol()
++        {
++            JsonData protocol = new JsonData();
++            protocol["name"] = "groot-wbc";
++            protocol["schemaVersion"] = 1;
++            protocol["clientBuild"] = "xrobotoolkit-pico-health-v1";
++            JsonData capabilities = new JsonData();
++            capabilities.SetJsonType(JsonType.Array);
++            capabilities.Add("body_tracking_health_v1");
++            capabilities.Add("controller_tracking_health_v1");
++            protocol["capabilities"] = capabilities;
++            return protocol;
++        }
++
++        private static JsonData GetControllerTrackingStatus(
++            bool leftDeviceValid,
++            bool leftIsTrackedQuerySucceeded,
++            bool leftIsTracked,
++            bool leftTrackingStateQuerySucceeded,
++            InputTrackingState leftTrackingState,
++            bool rightDeviceValid,
++            bool rightIsTrackedQuerySucceeded,
++            bool rightIsTracked,
++            bool rightTrackingStateQuerySucceeded,
++            InputTrackingState rightTrackingState,
++            bool valid,
++            long sampleSequence,
++            long packetTimestampNs)
++        {
++            JsonData status = new JsonData();
++            status["schemaVersion"] = 1;
++            status["clientBuild"] = "xrobotoolkit-pico-health-v1";
++            status["left"] = GetControllerSideTrackingStatus(
++                leftDeviceValid,
++                leftIsTrackedQuerySucceeded,
++                leftIsTracked,
++                leftTrackingStateQuerySucceeded,
++                leftTrackingState);
++            status["right"] = GetControllerSideTrackingStatus(
++                rightDeviceValid,
++                rightIsTrackedQuerySucceeded,
++                rightIsTracked,
++                rightTrackingStateQuerySucceeded,
++                rightTrackingState);
++            status["valid"] = valid;
++            status["sampleSequence"] = sampleSequence;
++            status["timeStampNs"] = packetTimestampNs;
++            return status;
++        }
++
++        private static JsonData GetControllerSideTrackingStatus(
++            bool deviceValid,
++            bool isTrackedAvailable,
++            bool isTracked,
++            bool trackingStateAvailable,
++            InputTrackingState trackingState)
++        {
++            JsonData status = new JsonData();
++            status["deviceValid"] = deviceValid;
++            status["isTrackedAvailable"] = isTrackedAvailable;
++            status["isTracked"] = isTracked;
++            status["trackingStateAvailable"] = trackingStateAvailable;
++            status["trackingState"] = (int)trackingState;
++            status["valid"] =
++                deviceValid &&
++                isTrackedAvailable &&
++                isTracked &&
++                trackingStateAvailable &&
++                HasPositionAndRotationTracking(trackingState);
++            return status;
++        }
++
++        private static JsonData GetBodyTrackingStatus(
++            int calibrationResult,
++            int calibrationState,
++            MotionTrackerMode trackingMode,
++            int connectStateResult,
++            int trackerCount,
++            int uniqueTrackerCount,
++            int bodyStateResult,
++            bool isTracking,
++            BodyTrackingState bodyState,
++            int bodyDataResult,
++            int bodyRoleCount,
++            int bodyRoleArrayLength,
++            bool valid,
++            long sampleSequence,
++            long packetTimestampNs)
++        {
++            JsonData status = new JsonData();
++            status["schemaVersion"] = 1;
++            status["clientBuild"] = "xrobotoolkit-pico-health-v1";
++            status["calibrationResult"] = calibrationResult;
++            status["calibrated"] = calibrationState == 1;
++            status["trackingMode"] = (int)trackingMode;
++            status["connectStateResult"] = connectStateResult;
++            status["trackerCount"] = trackerCount;
++            status["uniqueTrackerCount"] = uniqueTrackerCount;
++            status["bodyStateResult"] = bodyStateResult;
++            status["isTracking"] = isTracking;
++            status["trackingStateCode"] = (int)bodyState.code;
++            status["bodyStateCode"] = (int)bodyState.stateCode;
++            status["bodyErrorCode"] = (int)bodyState.errorCode;
++            status["connectedBandCount"] = (int)bodyState.connectedBandCount;
++            status["bodyDataResult"] = bodyDataResult;
++            status["bodyRoleCount"] = bodyRoleCount;
++            status["bodyRoleArrayLength"] = bodyRoleArrayLength;
++            status["valid"] = valid;
++            status["sampleSequence"] = sampleSequence;
++            status["timeStampNs"] = packetTimestampNs;
++            return status;
++        }
++
++        private JsonData GetBodyTracking(BodyTrackingData trackingData, long sampleSequence)
++        {
++            JsonData bodyTrackingJson = new JsonData();
++            JsonData joints = new JsonData();
++            joints.SetJsonType(JsonType.Array);
++            bodyTrackingJson["joints"] = joints;
++            bodyTrackingJson["len"] = 0;
++            bodyTrackingJson["sampleSequence"] = sampleSequence;
++
++            if (trackingData.roleDatas != null)
++            {
++                int len = Math.Min(trackingData.roleDatas.Length, (int)BodyTrackerRole.ROLE_NUM);
++                bodyTrackingJson["len"] = len;
++
++                for (int i = 0; i < len; i++)
++                {
++                    JsonData joint = new JsonData();
++                    joints.Add(joint);
+
+                     Vector3 pos = new Vector3((float)trackingData.roleDatas[i].localPose.PosX,
+                         (float)trackingData.roleDatas[i].localPose.PosY,
+@@ -307,34 +641,75 @@ namespace Robot
+                 }
+             }
+
+-            return _bodyTrackingJson;
++            return bodyTrackingJson;
+         }
+
+
+-        private JsonData GetLeftRightControllerJsonData(double predictTime)
++        private bool TryGetLeftRightControllerJsonData(
++            double predictTime,
++            out JsonData controllerData,
++            out bool leftDeviceValid,
++            out bool leftIsTrackedQuerySucceeded,
++            out bool leftIsTracked,
++            out bool leftTrackingStateQuerySucceeded,
++            out InputTrackingState leftTrackingState,
++            out bool rightDeviceValid,
++            out bool rightIsTrackedQuerySucceeded,
++            out bool rightIsTracked,
++            out bool rightTrackingStateQuerySucceeded,
++            out InputTrackingState rightTrackingState)
+         {
++            controllerData = null;
++            InputDevice left = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand);
++            leftDeviceValid = left.isValid;
++            leftIsTrackedQuerySucceeded =
++                left.TryGetFeatureValue(CommonUsages.isTracked, out leftIsTracked);
++            leftTrackingStateQuerySucceeded =
++                left.TryGetFeatureValue(CommonUsages.trackingState, out leftTrackingState);
+             Vector3 leftPosition =
+                 PXR_Input.GetControllerPredictPosition(PXR_Input.Controller.LeftController, predictTime);
+             Quaternion leftRotation =
+                 PXR_Input.GetControllerPredictRotation(PXR_Input.Controller.LeftController, predictTime);
++            bool leftPoseValid = IsValidPose(leftPosition, leftRotation);
+
+-
+-            InputDevice left = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand);
+-            GetControllerJsonData(left, ref _leftControllerJson);
+-            _controllerDataJson["left"] = _leftControllerJson;
+-            _controllerDataJson["left"]["pose"] = GetPoseStr(leftPosition, leftRotation);
+-
++            InputDevice right = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
++            rightDeviceValid = right.isValid;
++            rightIsTrackedQuerySucceeded =
++                right.TryGetFeatureValue(CommonUsages.isTracked, out rightIsTracked);
++            rightTrackingStateQuerySucceeded =
++                right.TryGetFeatureValue(CommonUsages.trackingState, out rightTrackingState);
+             Vector3 rightPosition =
+                 PXR_Input.GetControllerPredictPosition(PXR_Input.Controller.RightController, predictTime);
+             Quaternion rightRotation =
+                 PXR_Input.GetControllerPredictRotation(PXR_Input.Controller.RightController, predictTime);
++            bool rightPoseValid = IsValidPose(rightPosition, rightRotation);
++
++            bool valid =
++                leftDeviceValid &&
++                leftIsTrackedQuerySucceeded &&
++                leftIsTracked &&
++                leftTrackingStateQuerySucceeded &&
++                HasPositionAndRotationTracking(leftTrackingState) &&
++                leftPoseValid &&
++                rightDeviceValid &&
++                rightIsTrackedQuerySucceeded &&
++                rightIsTracked &&
++                rightTrackingStateQuerySucceeded &&
++                HasPositionAndRotationTracking(rightTrackingState) &&
++                rightPoseValid;
++            if (!valid)
++                return false;
++
++            GetControllerJsonData(left, ref _leftControllerJson);
++            _controllerDataJson["left"] = _leftControllerJson;
++            _controllerDataJson["left"]["pose"] = GetPoseStr(leftPosition, leftRotation);
+
+-            InputDevice right = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
+             GetControllerJsonData(right, ref _rightControllerJson);
+             _controllerDataJson["right"] = _rightControllerJson;
+             _controllerDataJson["right"]["pose"] = GetPoseStr(rightPosition, rightRotation);
+
+-            return _controllerDataJson;
++            controllerData = _controllerDataJson;
++            return true;
+         }
+
+         private static void GetControllerJsonData(InputDevice controllerDevice, ref JsonData json)
+@@ -461,4 +836,4 @@ namespace Robot
+             Motion = 2
+         }
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/Assets/Scripts/UI/LogWindow.cs b/Assets/Scripts/UI/LogWindow.cs
+index 6f17f2d75c39f30697077267765e362a14d46937..a138d85218a61eff61f821885e88fe922dc08cd7 100644
+--- a/Assets/Scripts/UI/LogWindow.cs
++++ b/Assets/Scripts/UI/LogWindow.cs
+@@ -1,4 +1,6 @@
+-﻿using System.Collections;
++using System.Collections;
++using System.Collections.Concurrent;
++using System.Threading;
+ using TMPro;
+ using UnityEngine;
+ using UnityEngine.UI;
+@@ -10,12 +12,24 @@ public class LogWindow : MonoBehaviour
+     public ScrollRect scrollRect;
+
+     private static LogWindow _instance;
++    private static readonly ConcurrentQueue<string> _pendingMessages =
++        new ConcurrentQueue<string>();
++    private static int _mainThreadId;
+
+     public RectTransform rectTransform;
+
+     private void Awake()
+     {
+         _instance = this;
++        _mainThreadId = Thread.CurrentThread.ManagedThreadId;
++    }
++
++    private void Update()
++    {
++        while (_pendingMessages.TryDequeue(out string message))
++        {
++            AppendText(message);
++        }
+     }
+
+     private IEnumerator AutoScrollCoroutine()
+@@ -60,7 +74,16 @@ public class LogWindow : MonoBehaviour
+
+     private static void Message(string message)
+     {
+-        if (_instance != null)
++        if (_instance == null)
++        {
++            return;
++        }
++
++        if (Thread.CurrentThread.ManagedThreadId != _mainThreadId)
++        {
++            _pendingMessages.Enqueue(message);
++        }
++        else
+         {
+             _instance.AppendText(message);
+         }
+@@ -83,4 +106,4 @@ public class LogWindow : MonoBehaviour
+         // red color text
+         Message($"<color=red>{info}</color>");
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/ProjectSettings/ProjectSettings.asset b/ProjectSettings/ProjectSettings.asset
+index b40c52ebb30da17ca770178ebb0f1ef87ee66a24..b7bf4dfe67337502e3e9f76a7df8622d2a17b189 100644
+--- a/ProjectSettings/ProjectSettings.asset
++++ b/ProjectSettings/ProjectSettings.asset
+@@ -13,7 +13,7 @@ PlayerSettings:
+   useOnDemandResources: 0
+   accelerometerFrequency: 60
+   companyName: xrobotoolkit
+-  productName: XRoboToolkit
++  productName: XRoboToolkit Hardened
+   defaultCursor: {fileID: 0}
+   cursorHotspot: {x: 0, y: 0}
+   m_SplashScreenBackgroundColor: {r: 0.12156863, g: 0.12156863, b: 0.1254902, a: 1}
+@@ -136,12 +136,9 @@ PlayerSettings:
+   vulkanEnableLateAcquireNextImage: 0
+   vulkanEnableCommandBufferRecycling: 1
+   loadStoreDebugModeEnabled: 0
+-  bundleVersion: 1.1.1
++  bundleVersion: 1.1.1-hardened.1
+   preloadedAssets:
+   - {fileID: 11400000, guid: f2ef844c0e47a5d4297d66125bf1d191, type: 2}
+-  - {fileID: -8221979108565540337, guid: da34a6e7d51410049b366296e6664eda, type: 2}
+-  - {fileID: 11400000, guid: baaededcd5eca33479b1d58ea0d96039, type: 2}
+-  - {fileID: -4845704345076574626, guid: 62beb5920dbc8f148a62ea2d6a9e63e1, type: 2}
+   metroInputSource: 0
+   wsaTransparentSwapchain: 0
+   m_HolographicPauseOnTrackingLoss: 1
+@@ -162,16 +159,16 @@ PlayerSettings:
+   androidSupportedAspectRatio: 1
+   androidMaxAspectRatio: 2.1
+   applicationIdentifier:
+-    Android: com.xrobotoolkit.client
++    Android: com.xrobotoolkit.client.hardened
+   buildNumber:
+     Standalone: 0
+     VisionOS: 0
+     iPhone: 0
+     tvOS: 0
+   overrideDefaultApplicationIdentifier: 1
+-  AndroidBundleVersionCode: 1
++  AndroidBundleVersionCode: 2
+   AndroidMinSdkVersion: 30
+-  AndroidTargetSdkVersion: 31
++  AndroidTargetSdkVersion: 30
+   AndroidPreferredInstallLocation: 1
+   aotOptions:
+   stripEngineCode: 1
+@@ -272,7 +269,7 @@ PlayerSettings:
+   AndroidEnableTango: 0
+   androidEnableBanner: 1
+   androidUseLowAccuracyLocation: 0
+-  androidUseCustomKeystore: 1
++  androidUseCustomKeystore: 0
+   m_AndroidBanners:
+   - width: 320
+     height: 180

@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_rank256_q200_teacher_recovery_contract_v1",
+  "role": "rank256_student_to_exact_selected_teacher_q200_recoverability_diagnostic",
+  "inputs": {
+    "candidate_manifest": {"path": "artifacts/g1_true23/sonic_seed835_counterexample_round3_rank256_bc_last_affine_v1.manifest.json", "sha256": "ad8a779e7867c88fdd6e9d60b6e85584a24f30368c32908b27f2274378c0b213"},
+    "candidate_decoder": {"path": "artifacts/g1_true23/sonic_seed835_counterexample_round3_rank256_bc_last_affine_v1.decoder.onnx", "sha256": "d1a20a098ccc3328ab188c081b5cefa642425bda9e7d06711a599a66531279ca"},
+    "pure_student_failure": {"path": "artifacts/g1_true23/sonic_seed835_counterexample_round3_rank256_bc_last_affine_v1.seed835868017.initial510.json", "sha256": "bb8056c10752877f7402090ea1af9076a7f130414c4eeb464b46bfe79602e6fb"},
+    "base_recovery_contract": {"path": "gear_sonic/config/sim_validation/g1_true23_sonic_student_teacher_recovery_v4.json", "sha256": "2b70f24f07619ad586a93f0e9c465e5d9647143d198f124c2568e4dd7e357581"}
+  },
+  "window": {
+    "anchor_q9": 9,
+    "last_q9": 518,
+    "transitions": 510,
+    "student_transition_count": 191,
+    "student_first_q9": 9,
+    "student_last_q9": 199,
+    "teacher_transition_count": 319,
+    "teacher_first_q9": 200,
+    "teacher_last_q9": 518,
+    "handoff_resets_state": false
+  },
+  "gates": {
+    "expected_verdict": "mixed_controller_recovery_passed",
+    "expected_controller_counts": {"student": 191, "teacher": 319},
+    "sole_terminal": "time_out",
+    "terminal_transition": 509,
+    "terminal_q9": 518,
+    "all_existing_recovery_v4_safety_parity_action_history_and_binding_gates_required": true
+  },
+  "boundaries": {
+    "simulator_only": true,
+    "diagnostic_only": true,
+    "teacher_labels_admitted": false,
+    "training_performed": false,
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

@@ -1,5 +1,6 @@
 """PPO trainer adapted from HuggingFace TRL for humanoid whole-body control."""
 
+from collections.abc import Mapping
 import gc  # noqa: F401
 import math
 import os
@@ -2189,16 +2190,183 @@ class TRLPPOTrainer(PPOTrainer):  # noqa: F405
             The loaded checkpoint dict.
         """
         print(f"Loading checkpoint from {checkpoint_path}")  # noqa: T201
-        checkpoint = torch.load(
-            checkpoint_path, map_location=self.accelerator.device, weights_only=False
+        from gear_sonic.utils.g1_23dof_artifact import (
+            approved_motion_dataset_provenance,
+            inspect_true23_policy_state,
+            is_true23_training_config,
+            validate_training_checkpoint_records,
+            validate_training_material_evidence,
         )
+        from gear_sonic.utils.g1_23dof_checkpoint_io import (
+            load_true23_trainer_checkpoint,
+        )
+
+        is_true23_checkpoint = is_true23_training_config(
+            getattr(self.env, "config", None)
+        )
+        if is_true23_checkpoint:
+            training_material = validate_training_material_evidence(
+                getattr(self.env, "_g1_23dof_training_material", None),
+                context="start-of-training material",
+            )
+            motion_dataset = approved_motion_dataset_provenance(
+                getattr(self.env, "config", None)
+            )
+            checkpoint = load_true23_trainer_checkpoint(
+                checkpoint_path,
+                resume=resume,
+                map_location=self.accelerator.device,
+            )
+        else:
+            # Full resume files contain trusted local trainer objects and are the
+            # only checkpoint path intentionally using Python pickle globals.
+            checkpoint = torch.load(
+                checkpoint_path,
+                map_location=self.accelerator.device,
+                weights_only=False,
+            )
+        g1_23dof_metadata = checkpoint.get("g1_23dof_metadata")
+        if (
+            resume
+            and isinstance(g1_23dof_metadata, dict)
+            and g1_23dof_metadata.get("checkpoint_stage") == "checkpoint_initialization"
+        ):
+            raise ValueError(
+                "G1 23-DoF initialization checkpoints are weights-only; "
+                "resume=True is forbidden"
+            )
 
         # Load model state
         model = self.accelerator.unwrap_model(self.model)
         if "actor_model_state_dict" in checkpoint:
             model.policy.load_state_dict(checkpoint["actor_model_state_dict"])
         elif "policy_state_dict" in checkpoint:
-            model.policy.load_state_dict(checkpoint["policy_state_dict"], strict=False)
+            model.policy.load_state_dict(
+                checkpoint["policy_state_dict"],
+                strict=g1_23dof_metadata is not None,
+            )
+        if is_true23_checkpoint:
+            loaded_policy_sha256 = inspect_true23_policy_state(
+                {"policy_state_dict": model.policy.state_dict()}
+            )
+            stage = g1_23dof_metadata.get("checkpoint_stage")
+            if stage == "checkpoint_initialization":
+                initialization_report = checkpoint.get(
+                    "g1_23dof_initialization_report"
+                )
+                if not isinstance(initialization_report, Mapping):
+                    raise ValueError(
+                        "true23 initialization lacks provenance report"
+                    )
+                if (
+                    initialization_report.get(
+                        "initial_policy_state_sha256"
+                    )
+                    != loaded_policy_sha256
+                ):
+                    raise ValueError(
+                        "true23 initialization policy hash changed"
+                    )
+                from gear_sonic.utils.g1_23dof_contract import (
+                    APPROVED_WARM_START_RELEASES,
+                )
+
+                release = APPROVED_WARM_START_RELEASES.get(
+                    initialization_report.get(
+                        "source_checkpoint_sha256"
+                    )
+                )
+                if (
+                    release is None
+                    or initialization_report.get("source_family")
+                    != release["source_family"]
+                    or initialization_report.get("source_revision")
+                    != release["source_revision"]
+                    or initialization_report.get("reference_profile")
+                    != release["reference_profile"]
+                    or loaded_policy_sha256
+                    != release["initial_policy_state_sha256"]
+                ):
+                    raise ValueError(
+                        "true23 initialization is not exact approved "
+                        "release conversion"
+                    )
+                lineage = {
+                    "source_family": initialization_report.get(
+                        "source_family"
+                    ),
+                    "source_revision": initialization_report.get(
+                        "source_revision"
+                    ),
+                    "source_checkpoint_sha256": initialization_report.get(
+                        "source_checkpoint_sha256"
+                    ),
+                    "reference_profile": initialization_report.get(
+                        "reference_profile"
+                    ),
+                    "initial_policy_state_sha256": loaded_policy_sha256,
+                    "training_start_global_step": 0,
+                    "motion_dataset": motion_dataset,
+                    "training_material": training_material,
+                }
+            elif stage == "trained":
+                training_evidence = checkpoint.get(
+                    "g1_23dof_training_evidence"
+                )
+                if not isinstance(training_evidence, Mapping):
+                    raise ValueError(
+                        "true23 trained checkpoint lacks training evidence"
+                    )
+                checkpoint_state = checkpoint.get("state")
+                checkpoint_step = (
+                    checkpoint_state.get("global_step")
+                    if isinstance(checkpoint_state, Mapping)
+                    else getattr(checkpoint_state, "global_step", None)
+                )
+                validate_training_checkpoint_records(
+                    checkpoint,
+                    global_step=int(checkpoint_step),
+                    policy_state_sha256=loaded_policy_sha256,
+                )
+                lineage = {
+                    key: training_evidence[key]
+                    for key in (
+                        "source_family",
+                        "source_revision",
+                        "source_checkpoint_sha256",
+                        "reference_profile",
+                        "initial_policy_state_sha256",
+                        "training_start_global_step",
+                    )
+                }
+                if training_evidence.get("motion_dataset") != motion_dataset:
+                    raise ValueError(
+                        "true23 resume motion dataset differs from trained "
+                        "checkpoint"
+                    )
+                lineage["motion_dataset"] = motion_dataset
+                checkpoint_material = validate_training_material_evidence(
+                    training_evidence.get("training_material"),
+                    context="resume checkpoint training material",
+                )
+                for material_key in (
+                    "material_config_sha256",
+                    "runtime_source",
+                    "robot_assets",
+                ):
+                    if checkpoint_material[material_key] != training_material[
+                        material_key
+                    ]:
+                        raise ValueError(
+                            "true23 resume material differs from trained "
+                            f"checkpoint: {material_key}"
+                        )
+                lineage["training_material"] = training_material
+            else:
+                raise ValueError(
+                    f"unsupported true23 checkpoint stage: {stage!r}"
+                )
+            model.policy._g1_23dof_training_lineage = lineage
         if "value_state_dict" in checkpoint and model.value_model is not None:
             model.value_model.load_state_dict(checkpoint["value_state_dict"])
 
@@ -2241,7 +2409,16 @@ class TRLPPOTrainer(PPOTrainer):  # noqa: F405
                     ]:
                         setattr(self.state, key, value)
 
-        print(f"Loaded checkpoint from step {checkpoint['state'].global_step}")  # noqa: T201
+        checkpoint_state = checkpoint.get("state")
+        if isinstance(checkpoint_state, Mapping):
+            checkpoint_global_step = checkpoint_state.get("global_step")
+        else:
+            checkpoint_global_step = getattr(checkpoint_state, "global_step", None)
+        if checkpoint_global_step is not None:
+            load_label = f"step {checkpoint_global_step}"
+        else:
+            load_label = "weights-only initialization"
+        print(f"Loaded checkpoint ({load_label})")  # noqa: T201
         return checkpoint
 
     def eval(self):

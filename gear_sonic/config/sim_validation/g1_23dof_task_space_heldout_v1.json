@@ -1,0 +1,108 @@
+{
+  "schema": "g1_true23_task_space_retarget_manifest_v1",
+  "source_dataset": "bones-studio/seed g1.tar.gz",
+  "source_revision": "2f59b2077b9da34dd4e43618e705c7cb962c9a66",
+  "source_root_hint": "/root/bones_seed/g1_extracted/g1/csv",
+  "fps_source": 120.0,
+  "fps_target": 50.0,
+  "selection_policy": {
+    "categories": [
+      "idle",
+      "walk",
+      "turn",
+      "crouch",
+      "reach_lift",
+      "fast"
+    ],
+    "clips_per_category": 2,
+    "minimum_frames_per_category_at_target_fps": 500,
+    "smoke_clip_excluded": "230124/thinking_R_003__A140_M.csv",
+    "note": "One simpler or steady clip and one transitional or harder clip per category; selected before held-out retarget results were observed."
+  },
+  "clips": [
+    {
+      "clip_id": "idle__220721__hands_on_back_loop_a036m",
+      "category": "idle",
+      "source_csv": "220721/idle_hands_on_back_loop_001__A036_M.csv",
+      "expected_frames_at_target_fps": 547,
+      "difficulty": 0.09985959529876709
+    },
+    {
+      "clip_id": "idle__220713__change_idle_left_a021",
+      "category": "idle",
+      "source_csv": "220713/change_idle_to_idle_left_003__A021.csv",
+      "expected_frames_at_target_fps": 362,
+      "difficulty": 0.18750014901161194
+    },
+    {
+      "clip_id": "walk__220713__sideway_045_stop_a024",
+      "category": "walk",
+      "source_csv": "220713/walk_sideway_045_stop_005__A024.csv",
+      "expected_frames_at_target_fps": 315,
+      "difficulty": 1.4469133615493774
+    },
+    {
+      "clip_id": "walk__220713__sideway_right_loop_a021m",
+      "category": "walk",
+      "source_csv": "220713/walk_sideway_right_loop_003__A021_M.csv",
+      "expected_frames_at_target_fps": 674,
+      "difficulty": 1.8507071733474731
+    },
+    {
+      "clip_id": "turn__220721__mohak_045_a034",
+      "category": "turn",
+      "source_csv": "220721/mohak_turn_045_003__A034.csv",
+      "expected_frames_at_target_fps": 254,
+      "difficulty": 0.7648928761482239
+    },
+    {
+      "clip_id": "turn__220714__start_walk_0000_a026m",
+      "category": "turn",
+      "source_csv": "220714/turn_start_walk_0000_002__A026_M.csv",
+      "expected_frames_at_target_fps": 320,
+      "difficulty": 1.7039554119110107
+    },
+    {
+      "clip_id": "crouch__220713__kneeling_loop_a024m",
+      "category": "crouch",
+      "source_csv": "220713/kneeling_loop_003__A024_M.csv",
+      "expected_frames_at_target_fps": 352,
+      "difficulty": 0.058587055653333664
+    },
+    {
+      "clip_id": "crouch__220721__kneeling_start_a036m",
+      "category": "crouch",
+      "source_csv": "220721/kneeling_start_004__A036_M.csv",
+      "expected_frames_at_target_fps": 357,
+      "difficulty": 0.939263641834259
+    },
+    {
+      "clip_id": "reach_lift__220721__reaching_down_a035m",
+      "category": "reach_lift",
+      "source_csv": "220721/reaching_down_001__A035_M.csv",
+      "expected_frames_at_target_fps": 404,
+      "difficulty": 0.37520337104797363
+    },
+    {
+      "clip_id": "reach_lift__220721__reaching_down_a036",
+      "category": "reach_lift",
+      "source_csv": "220721/reaching_down_003__A036.csv",
+      "expected_frames_at_target_fps": 346,
+      "difficulty": 0.8298735618591309
+    },
+    {
+      "clip_id": "fast__220713__jump_right_a022",
+      "category": "fast",
+      "source_csv": "220713/jump_right_001__A022.csv",
+      "expected_frames_at_target_fps": 361,
+      "difficulty": 1.2835394144058228
+    },
+    {
+      "clip_id": "fast__220713__jog_backward_start_a021",
+      "category": "fast",
+      "source_csv": "220713/jog_backward_start_004__A021.csv",
+      "expected_frames_at_target_fps": 232,
+      "difficulty": 2.855426073074341
+    }
+  ]
+}

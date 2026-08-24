@@ -19,6 +19,7 @@
 #ifndef ROBOT_PARAMETERS_HPP
 #define ROBOT_PARAMETERS_HPP
 
+#include <atomic>
 #include <array>
 
 // ---------------------------------------------------------------------------
@@ -64,9 +65,9 @@ struct HeadingState {
  * @brief High-level operator signals (set by input interfaces, read by control loop).
  */
 struct OperatorState {
-  bool stop = false;   ///< Emergency stop requested.
-  bool start = false;  ///< Control-system start requested.
-  bool play = false;   ///< Motion playback active.
+  std::atomic<bool> stop{false};   ///< Emergency stop requested.
+  std::atomic<bool> start{false};  ///< Control-system start requested.
+  std::atomic<bool> play{false};   ///< Motion playback active.
 };
 
 /**

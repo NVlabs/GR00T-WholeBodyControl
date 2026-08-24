@@ -1,0 +1,26 @@
+{
+  "schema": "g1_true23_task_space_retarget_manifest_v1",
+  "source_dataset": "bones-studio/seed g1.tar.gz",
+  "source_revision": "2f59b2077b9da34dd4e43618e705c7cb962c9a66",
+  "source_root_hint": "/root/bones_seed/g1_extracted/g1/csv",
+  "fps_source": 120.0,
+  "fps_target": 50.0,
+  "qualification_categories": ["idle"],
+  "selection_policy": {
+    "note": "Both clips are unchanged members of the original preselected frozen manifest; idle-only support declaration was created after broad v4, with no clip substitution."
+  },
+  "clips": [
+    {
+      "clip_id": "idle__220721__hands_on_back_loop_a036m",
+      "category": "idle",
+      "source_csv": "220721/idle_hands_on_back_loop_001__A036_M.csv",
+      "fps_source": 120.0
+    },
+    {
+      "clip_id": "idle__220713__change_idle_left_a021",
+      "category": "idle",
+      "source_csv": "220713/change_idle_to_idle_left_003__A021.csv",
+      "fps_source": 120.0
+    }
+  ]
+}

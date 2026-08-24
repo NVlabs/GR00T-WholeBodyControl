@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_native124_gantry_candidate",
+  "selected_on": "2026-08-04",
+  "robot_model": "g1_23dof_rev_1_0",
+  "required_mode_machine": 4,
+  "motor_indices": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 16, 17, 18, 19, 22, 23, 24, 25, 26],
+  "absent_motor_indices": [13, 14, 20, 21, 27, 28],
+  "policy": {
+    "repository": "Kennyp-Chen/robojudo_sar-assets",
+    "revision": "80f33ae12a5ce0862e1a3d6d36990e43f94154a0",
+    "path": "assets/models/g1/beyondmimic/23dof_50fps/fightAndSports1_subject1.onnx",
+    "sha256": "cc644839807b6ef522e47b3bcb69845843aa345b4fb895847c76642830b5d2b9",
+    "observation_dim": 124,
+    "action_dim": 23,
+    "control_hz": 50,
+    "native_23dof": true,
+    "uses_29_to_23_output_mask": false
+  },
+  "qualification": {
+    "mujoco_model": "gear_sonic/data/robots/g1/g1_23dof_rev_1_0.xml",
+    "neutral_20s_report": "artifacts/unitree23_candidates/confirm_sports_neutral_20s.json",
+    "synthetic_fullbody_20s_report": "artifacts/unitree23_candidates/confirm_sports_synthetic_fullbody_20s.json",
+    "nominal_and_50n_and_100n_disturbances_passed": true,
+    "embedded_clip_20s_passed": false,
+    "embedded_clip_limit": "The embedded motion is not loop-safe beyond its trained interval; live PICO uses external references and cannot use the embedded clip output."
+  },
+  "deployment_stage": "shadow_then_gantry",
+  "shadow_runtime": {
+    "binary": "gear_sonic_deploy/target/release/g1_true23_live_shadow",
+    "sha256": "13d6876149c108a4e9a419b516c2282f3a7926aba23e44e5d53d7c9d86eb8564",
+    "validate_only_passed": true,
+    "read_only_surface_audit_passed": true
+  },
+  "active_stage_one_runtime": {
+    "binary": "gear_sonic_deploy/target/release/g1_true23_native124_active_gantry",
+    "sha256": "e00e48a13642f1bd980f7a762af9458cb3cf18bf18c2c58ec58c3b79c2846f37",
+    "compiled": true,
+    "validate_only_passed": true,
+    "core_harness_passed": true,
+    "deployment_authorized": false,
+    "no_go_reason": "The first implementation reuses the full causal active translation unit and therefore retains unreachable generic encoder/decoder CLI surfaces. It also has not passed an end-to-end stage-one MuJoCo acquisition replay."
+  },
+  "active_free_standing_authorized": false
+}

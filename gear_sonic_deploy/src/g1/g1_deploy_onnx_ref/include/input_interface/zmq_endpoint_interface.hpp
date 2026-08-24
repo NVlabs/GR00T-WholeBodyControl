@@ -39,7 +39,7 @@
  *   - `vr_position` (9 doubles) – enables VR 3-point tracking mode.
  *   - `vr_orientation` (12 doubles) – defaults used if absent.
  *   - `vr_compliance` (3 doubles) – **IGNORED** (compliance is keyboard-controlled).
- *   - `catch_up` (bool, default true) – controls gap tolerance for motion sync.
+ *   - `catch_up` (bool) – retained for wire compatibility; native gap bounds always apply.
  *   - `heading_increment` (scalar) – incremental heading adjustment per message.
  *
  * ## Streaming Architecture
@@ -64,9 +64,15 @@
 #include <mutex>
 #include <string>
 #include <algorithm>
+#include <atomic>
 #include <cstdlib>
 #include <limits>
+#include <optional>
+#include <span>
+#include <unordered_set>
+#include <utility>
 
+#include "control_session_state.hpp"
 #include "input_interface.hpp"
 #include "zmq_packed_message_subscriber.hpp"
 #include "streamed_motion_merger.hpp"
@@ -124,13 +130,20 @@ public:
 
     static constexpr std::string_view LOCALHOST = "localhost";
 
+    static bool ShouldResetSourceSequence(
+        bool explicit_reset, bool has_control_session) {
+        return explicit_reset || !has_control_session;
+    }
+
     ZMQEndpointInterface(
         const std::string& host = std::string(LOCALHOST),
         int port = 5556,
         const std::string& topic = "pose",
         bool use_conflate = false,
-        bool verbose = false
-    ) : InputInterface(), host_(host), port_(port), topic_(topic), verbose_(verbose), is_localhost_(host == LOCALHOST) {
+        bool verbose = false,
+        std::shared_ptr<ControlSessionState> control_session_state = nullptr
+    ) : InputInterface(), host_(host), port_(port), topic_(topic), verbose_(verbose),
+        control_session_state_(std::move(control_session_state)) {
         type_ = InputType::NETWORK;
         
         // Set terminal to non-blocking mode (same as SimpleKeyboard)
@@ -162,7 +175,7 @@ public:
         subscriber_->Start();
         
         // Initialize streamed motion buffer (reserve large capacity for streaming)
-        ResetStreamedMotion();
+        ResetStreamedMotion(/*reset_source_sequence=*/true);
         
         std::cout << "[ZMQEndpointInterface] Connected to " << host << ":" << port 
                   << " topic='" << topic << "'" << std::endl;
@@ -252,6 +265,7 @@ public:
             std::lock_guard<std::mutex> lock(current_motion_mutex);
             has_external_token_state_ = false;
             external_token_state_.SetData({});
+            operator_state.stop = true;
             operator_state.play = false;
             reinitialize_heading = true;
             current_motion = motion_reader.GetMotionShared(motion_reader.current_motion_index_);
@@ -326,7 +340,6 @@ public:
                 }
                 // reset streaming buffers when enabling to avoid mixing with stale data
                 ResetStreamedMotion(); // This also resets protocol version in the merger
-                has_new_data_ = false;
             } else {
                 std::cout << "=====================================" << std::endl;
                 std::cout << "ZMQ STREAMING MODE: DISABLED" << std::endl;
@@ -350,7 +363,6 @@ public:
                 }
                 // reset the streamed motion (also resets protocol version)
                 ResetStreamedMotion();
-                has_new_data_ = false;
             }
         }
         if (stop_control) { operator_state.stop = true; }
@@ -394,6 +406,7 @@ public:
                     // Handle Protocol v4 (token-only) - no motion, just tokens
                     if (result.protocol_version == 4) {
                         if (result.motion) {
+                            ClearLastValidDecodeTime();
                             DisableZmqAndReset(motion_reader, current_motion, current_frame,
                                                operator_state, reinitialize_heading, current_motion_mutex,
                                                "Protocol version 4 with motion data is impossible!");
@@ -401,6 +414,7 @@ public:
                         }
 
                         if (result.token_data.empty()) {
+                            ClearLastValidDecodeTime();
                             DisableZmqAndReset(motion_reader, current_motion, current_frame,
                                                operator_state, reinitialize_heading, current_motion_mutex,
                                                "Protocol version 4 with empty token data!");
@@ -414,6 +428,7 @@ public:
                             has_external_token_state_ = true;
                             operator_state.play = true; // this should be redundant because the robot never read reference motion
                         }
+                        PublishLastValidDecodeTime(buffered_receive_time_);
                         
                         // Skip motion handling and keyboard controls
                         return;
@@ -421,6 +436,7 @@ public:
                     
                     // Check if protocol version change was detected (error case)
                     if (!result.motion && result.protocol_version != 0) {
+                        ClearLastValidDecodeTime();
                         DisableZmqAndReset(motion_reader, current_motion, current_frame,
                                            operator_state, reinitialize_heading, current_motion_mutex,
                                            "Protocol version changed from " + std::to_string(active_protocol_version_)
@@ -440,6 +456,7 @@ public:
                     
                         
                         new_motion = result.motion;
+                        PublishLastValidDecodeTime(buffered_receive_time_);
                         std::cout << "[ZMQEndpointInterface] motion name: " << new_motion->name << std::endl;
                         stream_window_start_ = result.window_start;
                         frame_offset_adjustment = result.frame_offset_adjustment;
@@ -575,26 +592,157 @@ public:
         toggle_zmq_mode = true;
     }
 
+    void RequireFreshFrameAfterActivation() {
+        std::lock_guard<std::mutex> lock(data_mutex_);
+        has_new_data_ = false;
+        buffered_header_ = {};
+        buffered_buffers_.clear();
+        buffered_receive_time_.reset();
+        ClearLastValidDecodeTime();
+    }
+
     std::optional<std::chrono::steady_clock::time_point> GetLastUpdateTime() const override {
-      if (is_localhost_) {
-        return data_timestamp_;
+      // Only a successfully decoded motion/token frame may renew the native
+      // control lease. Receipt of a malformed packet is not a heartbeat.
+      const auto ticks =
+          last_valid_decode_ticks_.load(std::memory_order_acquire);
+      if (ticks <= 0) {
+        return {};
       }
-      return last_receive_time_;
+      return std::chrono::steady_clock::time_point(
+          std::chrono::steady_clock::duration(ticks));
     }
     
 private:
+    friend struct ZMQWireTestAccess;
+
+    bool ValidateControlSessionEnvelope(
+        const ZMQPackedMessageSubscriber::DecodedHeader& header,
+        const std::vector<ZMQPackedMessageSubscriber::BufferView>& buffers)
+        const {
+        if (!control_session_state_) {
+            return true;
+        }
+        int receiver_index = -1;
+        int publisher_index = -1;
+        for (std::size_t index = 0; index < header.fields.size(); ++index) {
+            if (header.fields[index].name == "receiver_epoch") {
+                if (receiver_index >= 0) return false;
+                receiver_index = static_cast<int>(index);
+            } else if (
+                header.fields[index].name == "publisher_session") {
+                if (publisher_index >= 0) return false;
+                publisher_index = static_cast<int>(index);
+            }
+        }
+        const auto parse =
+            [&](int index) -> std::optional<ControlSessionToken> {
+              if (index < 0 ||
+                  static_cast<std::size_t>(index) >= buffers.size()) {
+                  return std::nullopt;
+              }
+              const auto& field = header.fields[index];
+              const auto& buffer = buffers[index];
+              if (field.dtype != "u8" ||
+                  field.shape != std::vector<std::size_t>{
+                                     CONTROL_SESSION_TOKEN_SIZE} ||
+                  buffer.data == nullptr ||
+                  buffer.size != CONTROL_SESSION_TOKEN_SIZE) {
+                  return std::nullopt;
+              }
+              return ControlSessionState::ParseWireToken(
+                  std::span<const std::uint8_t>(
+                      static_cast<const std::uint8_t*>(buffer.data),
+                      buffer.size));
+            };
+        const auto receiver = parse(receiver_index);
+        const auto publisher = parse(publisher_index);
+        return receiver.has_value() && publisher.has_value() &&
+               control_session_state_->IsClaimedPublisher(
+                   *receiver, *publisher);
+    }
+
+    bool ValidateBufferedControlSessionEnvelope() const {
+        if (!control_session_state_) {
+            return true;
+        }
+        int receiver_index = -1;
+        int publisher_index = -1;
+        for (std::size_t index = 0;
+             index < buffered_header_.fields.size();
+             ++index) {
+            if (buffered_header_.fields[index].name ==
+                "receiver_epoch") {
+                if (receiver_index >= 0) return false;
+                receiver_index = static_cast<int>(index);
+            } else if (
+                buffered_header_.fields[index].name ==
+                "publisher_session") {
+                if (publisher_index >= 0) return false;
+                publisher_index = static_cast<int>(index);
+            }
+        }
+        const auto parse =
+            [&](int index) -> std::optional<ControlSessionToken> {
+              if (index < 0 ||
+                  static_cast<std::size_t>(index) >=
+                      buffered_buffers_.size()) {
+                  return std::nullopt;
+              }
+              const auto& field = buffered_header_.fields[index];
+              const auto& buffer = buffered_buffers_[index];
+              if (field.dtype != "u8" ||
+                  field.shape != std::vector<std::size_t>{
+                                     CONTROL_SESSION_TOKEN_SIZE} ||
+                  buffer.size() != CONTROL_SESSION_TOKEN_SIZE) {
+                  return std::nullopt;
+              }
+              return ControlSessionState::ParseWireToken(
+                  std::span<const std::uint8_t>(
+                      buffer.data(), buffer.size()));
+            };
+        const auto receiver = parse(receiver_index);
+        const auto publisher = parse(publisher_index);
+        return receiver.has_value() && publisher.has_value() &&
+               control_session_state_->IsClaimedPublisher(
+                   *receiver, *publisher);
+    }
+
     /// Reset the streamed motion buffer, merger state, and protocol version.
     /// Called on construction, when toggling ZMQ mode, and on safety reset.
-    void ResetStreamedMotion() {
+    void ResetStreamedMotion(bool reset_source_sequence = false) {
+        std::lock_guard<std::mutex> lock(data_mutex_);
         motion_merger_.Reset();
         active_protocol_version_ = -1;  // Reset protocol version tracking
+        if (ShouldResetSourceSequence(
+                reset_source_sequence,
+                static_cast<bool>(control_session_state_))) {
+            last_accepted_source_frame_.reset();
+        }
         // Update legacy fields for backward compatibility
         streamed_motion_ = std::make_shared<MotionSequence>();
         streamed_motion_->name = "streamed";
         streamed_motion_->ReserveCapacity(15000, 29, 1, 1, 0, 0); // max 15k frames, 29 joints, 1 body, 1 quat
         stream_window_start_ = 0;
-        data_timestamp_.reset();
+        has_new_data_ = false;
         last_receive_time_.reset();
+        buffered_receive_time_.reset();
+        ClearLastValidDecodeTime();
+    }
+
+    void PublishLastValidDecodeTime(
+        const std::optional<std::chrono::steady_clock::time_point>& timestamp) {
+        if (!timestamp.has_value()) {
+            ClearLastValidDecodeTime();
+            return;
+        }
+        last_valid_decode_ticks_.store(
+            timestamp->time_since_epoch().count(),
+            std::memory_order_release);
+    }
+
+    void ClearLastValidDecodeTime() {
+        last_valid_decode_ticks_.store(0, std::memory_order_release);
     }
     
     /// Outcome of DecodeIntoMotionSequence().
@@ -631,6 +779,12 @@ private:
                                           int old_window_start,
                                           DataBuffer<HeadingState>& heading_state_buffer) {
         DecodeResult result;
+        if (!ValidateBufferedControlSessionEnvelope()) {
+            std::cerr
+                << "[ZMQEndpointInterface] Pose publisher is not owner"
+                << std::endl;
+            return result;
+        }
         if (buffered_buffers_.empty()) {
             std::cerr << "[ZMQEndpointInterface] No buffered buffers" << std::endl;
             return result;
@@ -654,24 +808,574 @@ private:
         // VR 3-point tracking fields (optional)
         int vr_position_idx = -1, vr_orientation_idx = -1, vr_compliance_idx = -1;
         
+        bool duplicate_semantic_field = false;
+        std::unordered_set<std::string> seen_field_names;
+        const auto assign_field_index =
+            [&](int& destination, std::size_t index) {
+              if (destination >= 0) {
+                duplicate_semantic_field = true;
+                return;
+              }
+              destination = static_cast<int>(index);
+            };
         for (size_t i = 0; i < buffered_header_.fields.size(); ++i) {
             const auto& f = buffered_header_.fields[i];
-            if (f.name == "joint_pos") joint_pos_idx = static_cast<int>(i);
-            else if (f.name == "joint_vel") joint_vel_idx = static_cast<int>(i);
-            else if (f.name == "body_quat_w" || f.name == "body_quat") body_quat_idx = static_cast<int>(i);
-            else if (f.name == "frame_index" || f.name == "last_smpl_global_frames") frame_index_idx = static_cast<int>(i);
-            else if (f.name == "smpl_joints") smpl_joints_idx = static_cast<int>(i);
-            else if (f.name == "smpl_pose") smpl_pose_idx = static_cast<int>(i);
-            else if (f.name == "left_hand_joints") left_hand_joints_idx = static_cast<int>(i);
-            else if (f.name == "right_hand_joints") right_hand_joints_idx = static_cast<int>(i);
-            else if (f.name == "catch_up") catch_up_idx = static_cast<int>(i);
-            else if (f.name == "token_state") token_state_idx = static_cast<int>(i);
-            else if (f.name == "heading_increment") heading_increment_idx = static_cast<int>(i);
-            else if (f.name == "timestamp_monotonic") timestamp_monotonic_idx = static_cast<int>(i);
+            if (!seen_field_names.insert(f.name).second) {
+                duplicate_semantic_field = true;
+            }
+            if (f.name == "joint_pos") assign_field_index(joint_pos_idx, i);
+            else if (f.name == "joint_vel") assign_field_index(joint_vel_idx, i);
+            else if (f.name == "body_quat_w" || f.name == "body_quat") assign_field_index(body_quat_idx, i);
+            else if (f.name == "frame_index" || f.name == "last_smpl_global_frames") assign_field_index(frame_index_idx, i);
+            else if (f.name == "smpl_joints") assign_field_index(smpl_joints_idx, i);
+            else if (f.name == "smpl_pose") assign_field_index(smpl_pose_idx, i);
+            else if (f.name == "left_hand_joints") assign_field_index(left_hand_joints_idx, i);
+            else if (f.name == "right_hand_joints") assign_field_index(right_hand_joints_idx, i);
+            else if (f.name == "catch_up") assign_field_index(catch_up_idx, i);
+            else if (f.name == "token_state") assign_field_index(token_state_idx, i);
+            else if (f.name == "heading_increment") assign_field_index(heading_increment_idx, i);
+            else if (f.name == "timestamp_monotonic") assign_field_index(timestamp_monotonic_idx, i);
             // VR 3-point tracking fields
-            else if (f.name == "vr_position") vr_position_idx = static_cast<int>(i);
-            else if (f.name == "vr_orientation") vr_orientation_idx = static_cast<int>(i);
-            else if (f.name == "vr_compliance") vr_compliance_idx = static_cast<int>(i);
+            else if (f.name == "vr_position") assign_field_index(vr_position_idx, i);
+            else if (f.name == "vr_orientation") assign_field_index(vr_orientation_idx, i);
+            else if (f.name == "vr_compliance") assign_field_index(vr_compliance_idx, i);
+        }
+        if (duplicate_semantic_field) {
+            std::cerr
+                << "[ZMQEndpointInterface] Duplicate or aliased fields are not allowed"
+                << std::endl;
+            return result;
+        }
+
+        // Reject malformed or unbounded packets before any decode, allocation,
+        // protocol-state update, or output-buffer side effect.
+        constexpr std::size_t MAX_POSE_FIELDS = 64;
+        constexpr std::size_t MAX_POSE_PAYLOAD_BYTES = 8 * 1024 * 1024;
+        constexpr std::size_t MAX_STREAM_FRAMES = 512;
+        constexpr std::size_t MAX_STREAM_WIDTH = 256;
+        if (buffered_header_.fields.empty() ||
+            buffered_header_.fields.size() != buffered_buffers_.size() ||
+            buffered_header_.fields.size() > MAX_POSE_FIELDS ||
+            (buffered_header_.endian != "" &&
+             buffered_header_.endian != "le" &&
+             buffered_header_.endian != "be")) {
+            std::cerr
+                << "[ZMQEndpointInterface] Invalid field count or byte order"
+                << std::endl;
+            return result;
+        }
+
+        const bool validation_needs_swap = buffered_header_.NeedsByteSwap();
+        const auto is_float_dtype = [](const std::string& dtype) {
+            return dtype == "f32" || dtype == "f64";
+        };
+        const auto is_supported_pose_dtype = [&](const std::string& dtype) {
+            return is_float_dtype(dtype) || dtype == "i32" ||
+                   dtype == "i64" || dtype == "u8" || dtype == "bool";
+        };
+        const auto read_float_value =
+            [&](int field_index, std::size_t element_index, double& value) {
+              if (field_index < 0 ||
+                  static_cast<std::size_t>(field_index) >=
+                      buffered_buffers_.size()) {
+                  return false;
+              }
+              const auto& field = buffered_header_.fields[field_index];
+              const auto& buffer = buffered_buffers_[field_index];
+              if (field.dtype == "f32") {
+                  const std::size_t offset = element_index * sizeof(float);
+                  if (offset > buffer.size() ||
+                      sizeof(float) > buffer.size() - offset) {
+                      return false;
+                  }
+                  float decoded = 0.0F;
+                  std::memcpy(&decoded, buffer.data() + offset, sizeof(decoded));
+                  if (validation_needs_swap) {
+                      decoded = byte_swap(decoded);
+                  }
+                  value = static_cast<double>(decoded);
+                  return std::isfinite(value);
+              }
+              if (field.dtype == "f64") {
+                  const std::size_t offset = element_index * sizeof(double);
+                  if (offset > buffer.size() ||
+                      sizeof(double) > buffer.size() - offset) {
+                      return false;
+                  }
+                  double decoded = 0.0;
+                  std::memcpy(&decoded, buffer.data() + offset, sizeof(decoded));
+                  if (validation_needs_swap) {
+                      decoded = byte_swap(decoded);
+                  }
+                  value = decoded;
+                  return std::isfinite(value);
+              }
+              return false;
+            };
+        const auto read_integer_value =
+            [&](int field_index, std::size_t element_index, int64_t& value) {
+              if (field_index < 0 ||
+                  static_cast<std::size_t>(field_index) >=
+                      buffered_buffers_.size()) {
+                  return false;
+              }
+              const auto& field = buffered_header_.fields[field_index];
+              const auto& buffer = buffered_buffers_[field_index];
+              if (field.dtype == "i32") {
+                  const std::size_t offset = element_index * sizeof(int32_t);
+                  if (offset > buffer.size() ||
+                      sizeof(int32_t) > buffer.size() - offset) {
+                      return false;
+                  }
+                  int32_t decoded = 0;
+                  std::memcpy(&decoded, buffer.data() + offset, sizeof(decoded));
+                  if (validation_needs_swap) {
+                      decoded = byte_swap(decoded);
+                  }
+                  value = decoded;
+                  return true;
+              }
+              if (field.dtype == "i64") {
+                  const std::size_t offset = element_index * sizeof(int64_t);
+                  if (offset > buffer.size() ||
+                      sizeof(int64_t) > buffer.size() - offset) {
+                      return false;
+                  }
+                  int64_t decoded = 0;
+                  std::memcpy(&decoded, buffer.data() + offset, sizeof(decoded));
+                  if (validation_needs_swap) {
+                      decoded = byte_swap(decoded);
+                  }
+                  value = decoded;
+                  return true;
+              }
+              if (field.dtype == "u8" || field.dtype == "bool") {
+                  if (element_index >= buffer.size()) {
+                      return false;
+                  }
+                  value = buffer[element_index];
+                  return true;
+              }
+              return false;
+            };
+        const auto shape_is =
+            [&](int field_index,
+                std::initializer_list<std::size_t> expected) {
+              if (field_index < 0) {
+                  return false;
+              }
+              const auto& actual = buffered_header_.fields[field_index].shape;
+              return actual.size() == expected.size() &&
+                     std::equal(actual.begin(), actual.end(), expected.begin());
+            };
+        const auto is_float_field = [&](int field_index) {
+            return field_index >= 0 &&
+                   is_float_dtype(
+                       buffered_header_.fields[field_index].dtype);
+        };
+        const auto float_values_within =
+            [&](int field_index, double absolute_limit) {
+              if (!is_float_field(field_index)) {
+                  return false;
+              }
+              const auto& field = buffered_header_.fields[field_index];
+              const auto& buffer = buffered_buffers_[field_index];
+              const std::size_t count =
+                  buffer.size() / field.GetElementSize();
+              for (std::size_t i = 0; i < count; ++i) {
+                  double value = 0.0;
+                  if (!read_float_value(field_index, i, value) ||
+                      std::abs(value) > absolute_limit) {
+                      return false;
+                  }
+              }
+              return true;
+            };
+
+        std::size_t total_payload_bytes = 0;
+        bool generic_metadata_valid = true;
+        for (std::size_t i = 0; i < buffered_header_.fields.size(); ++i) {
+            const auto& field = buffered_header_.fields[i];
+            const auto& buffer = buffered_buffers_[i];
+            std::size_t declared_bytes = 0;
+            if (field.name.empty() || field.shape.size() > 3 ||
+                !is_supported_pose_dtype(field.dtype) ||
+                !field.TryComputeByteSize(declared_bytes) ||
+                declared_bytes != buffer.size() ||
+                declared_bytes > MAX_POSE_PAYLOAD_BYTES ||
+                total_payload_bytes >
+                    MAX_POSE_PAYLOAD_BYTES - declared_bytes) {
+                generic_metadata_valid = false;
+                break;
+            }
+            total_payload_bytes += declared_bytes;
+            if (is_float_dtype(field.dtype)) {
+                const std::size_t count =
+                    declared_bytes / field.GetElementSize();
+                for (std::size_t element = 0; element < count; ++element) {
+                    double value = 0.0;
+                    if (!read_float_value(
+                            static_cast<int>(i), element, value)) {
+                        generic_metadata_valid = false;
+                        break;
+                    }
+                }
+            } else if (field.dtype == "bool") {
+                if (std::any_of(
+                        buffer.begin(),
+                        buffer.end(),
+                        [](uint8_t value) { return value > 1; })) {
+                    generic_metadata_valid = false;
+                }
+            }
+            if (!generic_metadata_valid) {
+                break;
+            }
+        }
+        if (!generic_metadata_valid) {
+            std::cerr
+                << "[ZMQEndpointInterface] Invalid, non-finite, or oversized field metadata"
+                << std::endl;
+            return result;
+        }
+
+        const auto hand_field_valid = [&](int field_index) {
+            return field_index < 0 ||
+                   (is_float_field(field_index) &&
+                    (shape_is(field_index, {7}) ||
+                     shape_is(field_index, {1, 7})) &&
+                    float_values_within(field_index, 4.0 * 3.141592653589793));
+        };
+        const auto vr_position_valid = [&]() {
+            return vr_position_idx < 0 ||
+                   (is_float_field(vr_position_idx) &&
+                    (shape_is(vr_position_idx, {9}) ||
+                     shape_is(vr_position_idx, {1, 9}) ||
+                     shape_is(vr_position_idx, {3, 3})) &&
+                    float_values_within(vr_position_idx, 10.0));
+        };
+        const auto vr_orientation_valid = [&]() {
+            if (vr_orientation_idx < 0) {
+                return true;
+            }
+            if (!is_float_field(vr_orientation_idx) ||
+                !(shape_is(vr_orientation_idx, {12}) ||
+                  shape_is(vr_orientation_idx, {1, 12}) ||
+                  shape_is(vr_orientation_idx, {3, 4}))) {
+                return false;
+            }
+            for (std::size_t quaternion = 0; quaternion < 3; ++quaternion) {
+                double norm_squared = 0.0;
+                for (std::size_t component = 0; component < 4; ++component) {
+                    double value = 0.0;
+                    if (!read_float_value(
+                            vr_orientation_idx,
+                            quaternion * 4 + component,
+                            value)) {
+                        return false;
+                    }
+                    norm_squared += value * value;
+                }
+                const double norm = std::sqrt(norm_squared);
+                if (norm < 0.5 || norm > 1.5) {
+                    return false;
+                }
+            }
+            return true;
+        };
+        if (!hand_field_valid(left_hand_joints_idx) ||
+            !hand_field_valid(right_hand_joints_idx) ||
+            !vr_position_valid() || !vr_orientation_valid() ||
+            (vr_position_idx < 0 &&
+             (vr_orientation_idx >= 0 || vr_compliance_idx >= 0)) ||
+            (vr_compliance_idx >= 0 &&
+             (!is_float_field(vr_compliance_idx) ||
+              !shape_is(vr_compliance_idx, {3}) ||
+              !float_values_within(vr_compliance_idx, 1.0)))) {
+            std::cerr
+                << "[ZMQEndpointInterface] Invalid hand or VR field"
+                << std::endl;
+            return result;
+        }
+        if (heading_increment_idx >= 0 &&
+            (!is_float_field(heading_increment_idx) ||
+             !shape_is(heading_increment_idx, {1}) ||
+             !float_values_within(
+                 heading_increment_idx, 3.141592653589793))) {
+            std::cerr
+                << "[ZMQEndpointInterface] Invalid heading increment"
+                << std::endl;
+            return result;
+        }
+        if (timestamp_monotonic_idx >= 0) {
+            double timestamp_value = -1.0;
+            if (buffered_header_.fields[timestamp_monotonic_idx].dtype !=
+                    "f64" ||
+                !shape_is(timestamp_monotonic_idx, {1}) ||
+                !read_float_value(
+                    timestamp_monotonic_idx, 0, timestamp_value) ||
+                timestamp_value < 0.0) {
+                std::cerr
+                    << "[ZMQEndpointInterface] Invalid monotonic timestamp"
+                    << std::endl;
+                return result;
+            }
+        }
+        if (catch_up_idx >= 0) {
+            const auto& field = buffered_header_.fields[catch_up_idx];
+            int64_t value = -1;
+            if (!shape_is(catch_up_idx, {1}) ||
+                (field.dtype != "bool" && field.dtype != "u8" &&
+                 field.dtype != "i32" && field.dtype != "i64") ||
+                !read_integer_value(catch_up_idx, 0, value) ||
+                (value != 0 && value != 1)) {
+                std::cerr
+                    << "[ZMQEndpointInterface] Invalid catch_up scalar"
+                    << std::endl;
+                return result;
+            }
+        }
+
+        std::optional<int64_t> validated_source_frame;
+        if (protocol_version == 4) {
+            const bool token_shape_valid =
+                token_state_idx >= 0 && is_float_field(token_state_idx) &&
+                (shape_is(token_state_idx, {64}) ||
+                 shape_is(token_state_idx, {1, 64}));
+            const bool frame_shape_valid =
+                frame_index_idx >= 0 &&
+                (buffered_header_.fields[frame_index_idx].dtype == "i64" &&
+                 shape_is(frame_index_idx, {1}));
+            int64_t token_frame_index = 0;
+            const bool frame_value_valid =
+                frame_index_idx >= 0 &&
+                (read_integer_value(
+                     frame_index_idx, 0, token_frame_index) &&
+                 token_frame_index >= 0 &&
+                 token_frame_index <=
+                     std::numeric_limits<int>::max());
+            if (!token_shape_valid || !frame_shape_valid ||
+                !frame_value_valid) {
+                std::cerr
+                    << "[ZMQEndpointInterface] Invalid protocol v4 schema"
+                    << std::endl;
+                return result;
+            }
+            validated_source_frame = token_frame_index;
+        } else if (protocol_version >= 1 && protocol_version <= 3) {
+            std::size_t expected_frames = 0;
+            if (protocol_version == 1) {
+                if (joint_pos_idx < 0 ||
+                    buffered_header_.fields[joint_pos_idx].shape.size() != 2) {
+                    std::cerr
+                        << "[ZMQEndpointInterface] Invalid protocol v1 frame source"
+                        << std::endl;
+                    return result;
+                }
+                expected_frames =
+                    buffered_header_.fields[joint_pos_idx].shape[0];
+            } else {
+                if (smpl_joints_idx < 0 ||
+                    buffered_header_.fields[smpl_joints_idx].shape.size() < 2) {
+                    std::cerr
+                        << "[ZMQEndpointInterface] Invalid SMPL frame source"
+                        << std::endl;
+                    return result;
+                }
+                expected_frames =
+                    buffered_header_.fields[smpl_joints_idx].shape[0];
+            }
+            if (expected_frames < 2 ||
+                expected_frames > MAX_STREAM_FRAMES) {
+                std::cerr
+                    << "[ZMQEndpointInterface] Pose chunk frame count is out of bounds"
+                    << std::endl;
+                return result;
+            }
+
+            const auto matrix_field_valid =
+                [&](int field_index, double absolute_limit) {
+                  if (field_index < 0 || !is_float_field(field_index)) {
+                      return false;
+                  }
+                  const auto& shape =
+                      buffered_header_.fields[field_index].shape;
+                  return shape.size() == 2 &&
+                         shape[0] == expected_frames &&
+                         shape[1] > 0 &&
+                         shape[1] <= MAX_STREAM_WIDTH &&
+                         float_values_within(
+                             field_index, absolute_limit);
+                };
+            const bool has_any_joint_field =
+                joint_pos_idx >= 0 || joint_vel_idx >= 0;
+            if (has_any_joint_field &&
+                (!matrix_field_valid(
+                     joint_pos_idx, 4.0 * 3.141592653589793) ||
+                 !matrix_field_valid(joint_vel_idx, 100.0) ||
+                 buffered_header_.fields[joint_pos_idx].shape[1] !=
+                     buffered_header_.fields[joint_vel_idx].shape[1])) {
+                std::cerr
+                    << "[ZMQEndpointInterface] Invalid or inconsistent joint fields"
+                    << std::endl;
+                return result;
+            }
+            if ((protocol_version == 1 || protocol_version == 3) &&
+                !has_any_joint_field) {
+                std::cerr
+                    << "[ZMQEndpointInterface] Required joint fields are absent"
+                    << std::endl;
+                return result;
+            }
+
+            const auto smpl_field_valid =
+                [&](int field_index, double absolute_limit) {
+                  if (field_index < 0 || !is_float_field(field_index)) {
+                      return false;
+                  }
+                  const auto& shape =
+                      buffered_header_.fields[field_index].shape;
+                  const bool shape_valid =
+                      (shape.size() == 2 &&
+                       shape[0] == expected_frames && shape[1] == 3) ||
+                      (shape.size() == 3 &&
+                       shape[0] == expected_frames &&
+                       shape[1] > 0 &&
+                       shape[1] <= MAX_STREAM_WIDTH &&
+                       shape[2] == 3);
+                  return shape_valid &&
+                         float_values_within(
+                             field_index, absolute_limit);
+                };
+            if (smpl_joints_idx >= 0 &&
+                !smpl_field_valid(smpl_joints_idx, 10.0)) {
+                std::cerr
+                    << "[ZMQEndpointInterface] Invalid SMPL joint field"
+                    << std::endl;
+                return result;
+            }
+            if (smpl_pose_idx >= 0 &&
+                !smpl_field_valid(
+                    smpl_pose_idx, 4.0 * 3.141592653589793)) {
+                std::cerr
+                    << "[ZMQEndpointInterface] Invalid SMPL pose field"
+                    << std::endl;
+                return result;
+            }
+            if ((protocol_version == 2 || protocol_version == 3) &&
+                (smpl_joints_idx < 0 || smpl_pose_idx < 0)) {
+                std::cerr
+                    << "[ZMQEndpointInterface] Required SMPL fields are absent"
+                    << std::endl;
+                return result;
+            }
+
+            if (body_quat_idx < 0 ||
+                !is_float_field(body_quat_idx)) {
+                std::cerr
+                    << "[ZMQEndpointInterface] Invalid body quaternion field"
+                    << std::endl;
+                return result;
+            }
+            const auto& quaternion_shape =
+                buffered_header_.fields[body_quat_idx].shape;
+            std::size_t quaternion_bodies = 0;
+            if (quaternion_shape.size() == 2 &&
+                quaternion_shape[0] == expected_frames &&
+                quaternion_shape[1] == 4) {
+                quaternion_bodies = 1;
+            } else if (
+                quaternion_shape.size() == 3 &&
+                quaternion_shape[0] == expected_frames &&
+                quaternion_shape[1] > 0 &&
+                quaternion_shape[1] <= MAX_STREAM_WIDTH &&
+                quaternion_shape[2] == 4) {
+                quaternion_bodies = quaternion_shape[1];
+            } else {
+                std::cerr
+                    << "[ZMQEndpointInterface] Invalid body quaternion shape"
+                    << std::endl;
+                return result;
+            }
+            for (std::size_t frame = 0; frame < expected_frames; ++frame) {
+                for (std::size_t body = 0; body < quaternion_bodies; ++body) {
+                    double norm_squared = 0.0;
+                    for (std::size_t component = 0; component < 4; ++component) {
+                        double value = 0.0;
+                        const std::size_t element =
+                            (frame * quaternion_bodies + body) * 4 +
+                            component;
+                        if (!read_float_value(
+                                body_quat_idx, element, value)) {
+                            norm_squared =
+                                std::numeric_limits<double>::infinity();
+                            break;
+                        }
+                        norm_squared += value * value;
+                    }
+                    const double norm = std::sqrt(norm_squared);
+                    if (norm < 0.5 || norm > 1.5) {
+                        std::cerr
+                            << "[ZMQEndpointInterface] Invalid body quaternion value"
+                            << std::endl;
+                        return result;
+                    }
+                }
+            }
+
+            if (frame_index_idx < 0 ||
+                (buffered_header_.fields[frame_index_idx].dtype != "i32" &&
+                 buffered_header_.fields[frame_index_idx].dtype != "i64") ||
+                !shape_is(frame_index_idx, {expected_frames})) {
+                std::cerr
+                    << "[ZMQEndpointInterface] Invalid frame-index field"
+                    << std::endl;
+                return result;
+            }
+            int64_t previous_frame = -1;
+            int64_t frame_step = -1;
+            for (std::size_t frame = 0; frame < expected_frames; ++frame) {
+                int64_t value = -1;
+                if (!read_integer_value(
+                        frame_index_idx, frame, value) ||
+                    value < 0 ||
+                    value >
+                        static_cast<int64_t>(
+                            std::numeric_limits<int>::max()) -
+                            1000000) {
+                    std::cerr
+                        << "[ZMQEndpointInterface] Frame index is out of range"
+                        << std::endl;
+                    return result;
+                }
+                if (frame > 0) {
+                    const int64_t delta = value - previous_frame;
+                    if (delta <= 0 || delta > 1000 ||
+                        (frame_step >= 0 && delta != frame_step)) {
+                        std::cerr
+                            << "[ZMQEndpointInterface] Frame indices must be strictly and uniformly increasing"
+                            << std::endl;
+                        return result;
+                    }
+                    frame_step = delta;
+                }
+                previous_frame = value;
+            }
+            validated_source_frame = previous_frame;
+        } else {
+            std::cerr
+                << "[ZMQEndpointInterface] Unsupported protocol version: "
+                << protocol_version << std::endl;
+            return result;
+        }
+
+        if (!validated_source_frame.has_value() ||
+            (last_accepted_source_frame_.has_value() &&
+             *validated_source_frame <= *last_accepted_source_frame_)) {
+            std::cerr
+                << "[ZMQEndpointInterface] Source frame did not advance"
+                << std::endl;
+            return result;
         }
         
         // ===== PROTOCOL VERSION 4: Token-Only Streaming (check first, has different requirements) =====
@@ -683,13 +1387,8 @@ private:
             }
 
             // Check protocol version before decoding token_state
-            if (active_protocol_version_ == -1) {
-                // First message - establish protocol version
-                active_protocol_version_ = protocol_version;
-                if constexpr (DEBUG_LOGGING) {
-                    std::cout << "[ZMQEndpointInterface] Protocol version " << active_protocol_version_ << " established" << std::endl;
-                }
-            } else if (active_protocol_version_ != protocol_version) {
+            if (active_protocol_version_ != -1 &&
+                active_protocol_version_ != protocol_version) {
                 // Protocol version changed - this is an error
                 std::cerr << "[ZMQEndpointInterface] ERROR: Protocol version changed from " 
                         << active_protocol_version_ << " to " << protocol_version << std::endl;
@@ -863,7 +1562,10 @@ private:
                     }
                 }
             }
-            
+
+            active_protocol_version_ = protocol_version;
+            last_accepted_source_frame_ = validated_source_frame;
+
             // Return success with protocol version but no motion (token-only)
             result.protocol_version = 4;
             return result;
@@ -1480,7 +2182,10 @@ private:
             }
         }
 
-        // Optional: decode heading_increment (single scalar, f32 or f64)
+        std::optional<double> pending_heading_increment;
+
+        // Decode optional values into temporaries. They are committed only
+        // after the protocol is accepted and the motion merge succeeds.
         if (heading_increment_idx >= 0) {
           double heading_increment = 0.0;
           const auto& dh_buf = buffered_buffers_[heading_increment_idx];
@@ -1501,42 +2206,12 @@ private:
             }
           }
 
-          auto current_heading_state = heading_state_buffer.GetDataWithTime().data;
-          HeadingState current_state =
-            current_heading_state ? *current_heading_state : HeadingState();
-
-          // Add increment to current heading
-          heading_state_buffer.SetData(
-              HeadingState(
-                current_state.init_base_quat,
-                current_state.delta_heading + heading_increment));
-        }
-
-        // Optional: decode monotonic timestamp (single scalar, f64)
-        if (timestamp_monotonic_idx >= 0) {
-          double timestamp_monotonic = 0.0;
-          const auto& ts_buf = buffered_buffers_[timestamp_monotonic_idx];
-          const auto& ts_field = buffered_header_.fields[timestamp_monotonic_idx];
-          if (ts_field.dtype == "f64") {
-            double val = 0.0;
-            if (ts_buf.size() >= sizeof(double)) {
-              std::memcpy(&val, ts_buf.data(), sizeof(double));
-              if (needs_swap) val = byte_swap(val);
-              timestamp_monotonic = val;
-            }
-          }
-          if (is_localhost_)
-          {
-            auto duration_monotonic = std::chrono::duration<double>(timestamp_monotonic);
-            auto time_point_monotonic = std::chrono::steady_clock::time_point(
-                std::chrono::duration_cast<std::chrono::steady_clock::duration>(duration_monotonic));
-            data_timestamp_ = time_point_monotonic;
-          }
+          pending_heading_increment = heading_increment;
         }
 
         // ===== Decode catch_up field if present =====
         // Default: catch_up = true (use MAX_GAP_FRAMES)
-        // If catch_up = false: allow infinite delays (set max_gap_frames to very large value)
+        // The merger retains this wire flag but always enforces its native gap bound.
         bool catch_up_enabled = true; // Default to true if field not present
         if (catch_up_idx >= 0) {
             const auto& catch_up_field = buffered_header_.fields[catch_up_idx];
@@ -1661,13 +2336,8 @@ private:
         // ===== STEP 3: Validate protocol version (application-specific) =====
         
         // Check protocol version before merging
-        if (active_protocol_version_ == -1) {
-            // First message - establish protocol version
-            active_protocol_version_ = protocol_version;
-            if constexpr (DEBUG_LOGGING) {
-                std::cout << "[ZMQEndpointInterface] Protocol version " << active_protocol_version_ << " established" << std::endl;
-            }
-        } else if (active_protocol_version_ != protocol_version) {
+        if (active_protocol_version_ != -1 &&
+            active_protocol_version_ != protocol_version) {
             // Protocol version changed - this is an error
             std::cerr << "[ZMQEndpointInterface] ERROR: Protocol version changed from " 
                       << active_protocol_version_ << " to " << protocol_version << std::endl;
@@ -1703,9 +2373,9 @@ private:
         }
         
         // Convert MergeResult to DecodeResult
-        if (active_protocol_version_ == 1) {
+        if (protocol_version == 1) {
             merge_result.motion->SetEncodeMode(0);  // Protocol 1: joint-based
-        } else if (active_protocol_version_ == 2 || active_protocol_version_ == 3) {
+        } else if (protocol_version == 2 || protocol_version == 3) {
             // Protocol versions 2 and 3 both use encoder mode 2 (SMPL-based)
             merge_result.motion->SetEncodeMode(2);
         }
@@ -1715,6 +2385,21 @@ private:
         result.did_catchup_reset = merge_result.did_catchup_reset;
         result.frame_step = merge_result.frame_step;
         result.protocol_version = merge_result.protocol_version;
+
+        active_protocol_version_ = protocol_version;
+        last_accepted_source_frame_ = validated_source_frame;
+        if (pending_heading_increment.has_value()) {
+            auto current_heading_state =
+                heading_state_buffer.GetDataWithTime().data;
+            HeadingState current_state =
+                current_heading_state ? *current_heading_state
+                                      : HeadingState();
+            heading_state_buffer.SetData(
+                HeadingState(
+                    current_state.init_base_quat,
+                    current_state.delta_heading +
+                        *pending_heading_increment));
+        }
         
         // Handle hand joints: set hand joint values directly from decoded data
         if (has_left_hand_joints || has_right_hand_joints) {
@@ -1806,7 +2491,12 @@ private:
         const std::string& topic,
         const ZMQPackedMessageSubscriber::DecodedHeader& hdr,
         const std::vector<ZMQPackedMessageSubscriber::BufferView>& bufs) {
-        
+        if (!ValidateControlSessionEnvelope(hdr, bufs)) {
+            std::cerr
+                << "[ZMQEndpointInterface] Rejected unowned pose packet"
+                << std::endl;
+            return;
+        }
         std::lock_guard<std::mutex> lock(data_mutex_);
         
         // Print message received info
@@ -1824,9 +2514,11 @@ private:
                                        static_cast<const uint8_t*>(buf.data) + buf.size);
             buffered_buffers_.push_back(std::move(copied));
         }
-        
+
         has_new_data_ = true;
-        last_receive_time_ = std::chrono::steady_clock::now();
+        const auto receipt_time = std::chrono::steady_clock::now();
+        buffered_receive_time_ = receipt_time;
+        last_receive_time_ = receipt_time;
         receive_count_++;
     }
     
@@ -1837,6 +2529,7 @@ private:
     int port_;            ///< ZMQ server port.
     std::string topic_;   ///< ZMQ subscription topic.
     bool verbose_;        ///< Verbose logging flag.
+    std::shared_ptr<ControlSessionState> control_session_state_;
     
     /// Background subscriber for the pose / motion topic.
     std::unique_ptr<ZMQPackedMessageSubscriber> subscriber_;
@@ -1854,9 +2547,11 @@ private:
     // ------------------------------------------------------------------
     // Timing / diagnostics
     // ------------------------------------------------------------------
-    bool is_localhost_ = true;         ///< True if host_ is localhost (for directly comparing timestamps)
-    std::optional<std::chrono::steady_clock::time_point> data_timestamp_{};  ///< Timestamp of last received message from XR source
     std::optional<std::chrono::steady_clock::time_point> last_receive_time_{}; ///< Timestamp of last OnPoseDataReceived (ms, monotonic).
+    std::optional<std::chrono::steady_clock::time_point> buffered_receive_time_{}; ///< Receipt time of the packet currently buffered for decode.
+    std::optional<int64_t> last_accepted_source_frame_{}; ///< Last source frame accepted for this stream session.
+    std::atomic<std::chrono::steady_clock::duration::rep>
+        last_valid_decode_ticks_{0};  ///< Receipt ticks of last valid pose/token frame.
     uint64_t receive_count_ = 0;       ///< Total number of messages received.
     uint64_t last_decode_time_ = 0;    ///< Timestamp of last DecodeIntoMotionSequence call (ms).
     

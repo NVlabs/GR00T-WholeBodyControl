@@ -19,13 +19,18 @@ import torch
 from gear_sonic.envs.env_utils import joint_utils
 from gear_sonic.envs.manager_env.mdp import commands, utils
 from gear_sonic.trl.utils import torch_transform
+from gear_sonic.utils.g1_23dof_contract import (
+    NATIVE_IL23_TO_CANONICAL_IL29,
+    SOURCE_DOF,
+    SOURCE_IL29_EXCLUDED_INDICES,
+    TARGET_DOF,
+)
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv
 
 
-from isaaclab.managers import ObservationGroupCfg as ObsGroup
-from isaaclab.managers import SceneEntityCfg
+from isaaclab.managers import ObservationGroupCfg as ObsGroup, SceneEntityCfg
 from isaaclab.utils import configclass
 
 # Joint ordering constants (Mujoco order for compatibility)
@@ -1867,6 +1872,46 @@ def ext_forces(
 # =============================================================================
 # Body-only observation functions (for pre-trained action_transform_module)
 # Uses get_body_joint_indices from joint_utils.py
+
+
+def _expand_g1_23dof_padded_observation(
+    values: torch.Tensor, excluded_values: list[float] | tuple[float, ...]
+) -> torch.Tensor:
+    """Expand compact IL23 state into released SONIC IL29 observation slots."""
+    if values.shape[-1] != TARGET_DOF:
+        raise ValueError(f"expected {TARGET_DOF} compact joints, got {values.shape[-1]}")
+    if len(excluded_values) != SOURCE_DOF - TARGET_DOF:
+        raise ValueError("excluded_values must contain six fixed values")
+    expanded = values.new_zeros((*values.shape[:-1], SOURCE_DOF))
+    expanded[..., list(NATIVE_IL23_TO_CANONICAL_IL29)] = values
+    expanded[..., list(SOURCE_IL29_EXCLUDED_INDICES)] = values.new_tensor(
+        excluded_values
+    )
+    return expanded
+
+
+def g1_23dof_padded_joint_pos_rel(
+    env: ManagerBasedEnv,
+    excluded_q_rel: list[float] | tuple[float, ...] = (0.0,) * 6,
+) -> torch.Tensor:
+    """29-slot q-relative warm-start input; six absent slots stay fixed."""
+    asset = env.scene["robot"]
+    values = asset.data.joint_pos - asset.data.default_joint_pos
+    return _expand_g1_23dof_padded_observation(values, excluded_q_rel)
+
+
+def g1_23dof_padded_joint_vel_rel(env: ManagerBasedEnv) -> torch.Tensor:
+    """29-slot dq warm-start input; six absent slots are exactly zero."""
+    asset = env.scene["robot"]
+    values = asset.data.joint_vel - asset.data.default_joint_vel
+    return _expand_g1_23dof_padded_observation(values, (0.0,) * 6)
+
+
+def g1_23dof_padded_last_action(env: ManagerBasedEnv) -> torch.Tensor:
+    """29-slot previous-action warm-start input; no output masking."""
+    return _expand_g1_23dof_padded_observation(
+        env.action_manager.action, (0.0,) * 6
+    )
 
 
 def joint_pos_wo_hand(env: ManagerBasedEnv, asset_cfg) -> torch.Tensor:

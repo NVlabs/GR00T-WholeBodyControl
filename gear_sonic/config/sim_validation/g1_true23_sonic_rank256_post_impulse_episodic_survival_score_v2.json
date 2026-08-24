@@ -1,0 +1,59 @@
+{
+  "schema_version": 2,
+  "kind": "g1_true23_sonic_rank256_post_impulse_episodic_survival_score_contract_v2",
+  "role": "offline_mjlab_rank256_exact_impulse_post_recovery_episodic_survival_score_experiment_only",
+  "parents": {
+    "grouped_result_path": "/root/g1_true23_runs/sonic_rank256_grouped_multiobjective_survival_score_v1/rank256_grouped_multiobjective_survival_score_result.json",
+    "grouped_result_sha256": "5a2336687d79965f4a4a0e4a5556d4aab68eb1250c6c35581cb68f48697a69bb",
+    "failed_v1_preflight_path": "/root/g1_true23_runs/sonic_rank256_post_impulse_survival_score_v1/preflight.json",
+    "failed_v1_preflight_sha256": "c53af127c273e5567d2c4e1c71c35803e5a3ba08d63a6284e5a896cb8e9d3040",
+    "failed_v1_material_path": "/root/g1_true23_runs/sonic_rank256_post_impulse_survival_score_v1/material_manifest.json",
+    "failed_v1_material_sha256": "de94bd84b6d467dcd37ab4b8ab5e37d4cdf044c356de11c4adb7f680275ed287",
+    "failed_v1_reason": "per_transition_population_variance_became_undefined_after_survivor_convergence",
+    "failed_v1_policy_mutations": 0
+  },
+  "collection": {
+    "num_envs": 128,
+    "steps": 510,
+    "total_transitions": 65280,
+    "all_envs_receive_exact_vector": true,
+    "impulse_global_transition": 241,
+    "impulse_q9": 250,
+    "first_recovery_observation_transition": 242,
+    "first_recovery_observation_q9": 251,
+    "exact_vector": [-0.109284965708, 0.348842165152, -0.026012141987, 0.137065557322, -0.499675156302, -0.717607152875],
+    "exploration_std": 0.05,
+    "first_episode_only": true,
+    "autoreset_rows_excluded": true
+  },
+  "gradient": {
+    "outcome": "first_episode_survival_length_divided_by_510",
+    "credit_assignment": "post_impulse_observations_only",
+    "baseline": "population_alive_at_first_recovery_observation",
+    "normalization": "first_recovery_survivor_population_z_score",
+    "contribution": "episodic_outcome_on_each_executed_post_impulse_action",
+    "minimum_first_recovery_survivors": 32,
+    "minimum_population_std": 0.01,
+    "direction_l2": 0.000591382415,
+    "scales": [-4.0, -2.0, -1.0, -0.5, 0.0, 0.25, 0.5, 1.0, 2.0, 4.0]
+  },
+  "evaluation": {
+    "nominal_seed": 835868017,
+    "disturbance_seed": 2069156915,
+    "candidate_requires_nominal_not_worse_than_baseline": true,
+    "candidate_requires_disturbance_strictly_better_than_baseline": true,
+    "zero_faults_required": true,
+    "no_candidate_retires_score_gradient_route": true
+  },
+  "boundaries": {
+    "simulator_only": true,
+    "optimizer_steps": 0,
+    "critic_updates": 0,
+    "teacher_labels_used": false,
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

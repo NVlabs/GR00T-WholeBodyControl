@@ -144,8 +144,28 @@ source .venv_teleop/bin/activate   # prompt: (gear_sonic_teleop)
 :align: center
 ```
 
+```{warning}
+Stock XRoboToolkit PICO v1.1.1 omits authoritative body-tracking status,
+continuous tracker count/calibration, and body-data return codes. Its
+24-joint Body object can also be cached after a tracking failure, and its
+packet clock does not prove either controller remains tracked. Use stock
+v1.1.1 for raw visualization/protocol diagnostics only; the manager rejects
+it in simulation and on hardware.
+
+Real-robot operation requires the side-by-side **XRoboToolkit Hardened** client
+built by `install_scripts/build_xrobotoolkit_hardened.ps1`. It transmits
+`BT_VALID`, calibration, successful API results, at least two distinct
+connected trackers, all 24 calculated body roles, and authoritative
+position-and-rotation tracking for both controllers atomically with their
+frames. Full body and raw Object/Motion pose records remain mutually
+exclusive; raw Object mode is not used as the Full-body safety gate.
+```
+
 ---
 
 ## Next Steps
 
-Your PICO hardware and software are now ready. Proceed to the [ZMQ Manager (`zmq_manager`) tutorial](../tutorials/vr_wholebody_teleop.md) to run whole-body teleoperation in simulation or on the real robot.
+Your PICO hardware and software are now ready for full-body streaming and
+simulation. Proceed to the [ZMQ Manager (`zmq_manager`)
+tutorial](../tutorials/vr_wholebody_teleop.md). Real-robot operation requires
+every hardened live preflight gate to pass.

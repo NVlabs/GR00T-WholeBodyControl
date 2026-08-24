@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_rank256_group_balanced_clipped_update_contract_v1",
+  "role": "offline_mjlab_rank256_one_group_balanced_clipped_policy_update_experiment_only",
+  "parents": {
+    "constrained_contract_relative_path": "gear_sonic/config/sim_validation/g1_true23_sonic_rank256_constrained_recovery_mix_v1.json",
+    "constrained_contract_sha256": "9496fc59a288fd6b74ad09e33ad3a7cb096e3795a7b806cee6c7ac27055902d7",
+    "constrained_result_path": "/root/g1_true23_runs/sonic_rank256_constrained_recovery_mix_v1/rank256_constrained_recovery_mix_result.json",
+    "constrained_result_sha256": "ac499b8e046f3746dd972c83952a42c71904d95ec6ca35594cc9b73dfc1c5c95"
+  },
+  "initial_policy": {
+    "reward_coefficient": 1.0,
+    "grouped_coefficient": 2.0,
+    "causal_coefficient": 0.0,
+    "policy_state_sha256": "6acada92dd6e2700499c64255e077c7e844aa0f96b0700e2e2c5640606ae0650",
+    "observed_nominal_completed_transitions": 505,
+    "observed_exact_impulse_completed_transitions": 287,
+    "exploration_std": 0.05
+  },
+  "collection": {
+    "num_envs": 128,
+    "steps": 510,
+    "total_transitions": 65280,
+    "groups": [
+      {"name": "nominal", "start": 0, "stop": 64, "impulse": false},
+      {"name": "exact_impulse", "start": 64, "stop": 128, "impulse": true}
+    ],
+    "impulse_global_transition": 241,
+    "impulse_q9": 250,
+    "exact_vector": [-0.109284965708, 0.348842165152, -0.026012141987, 0.137065557322, -0.499675156302, -0.717607152875],
+    "first_episode_only": true,
+    "autoreset_rows_excluded": true,
+    "minimum_exact_impulse_survivors_at_q250": 48,
+    "minimum_exact_impulse_survivors_at_q295": 16
+  },
+  "optimizer": {
+    "objective": "equal_group_clipped_importance_weighted_standardized_reward_to_go",
+    "gamma": 0.99,
+    "advantage_normalization": "within_group_population_z_score",
+    "group_contribution": "equal_group_mean",
+    "learning_rate": 0.00001,
+    "epochs": 1,
+    "mini_batches": 4,
+    "optimizer_steps": 4,
+    "clip_param": 0.1,
+    "max_grad_norm": 0.25,
+    "entropy_coefficient": 0.0,
+    "critic_used": false,
+    "updated_parameters": [
+      "core.actor_module.decoders.g1_dyn.module.14.bias",
+      "core.actor_module.decoders.g1_dyn.module.14.weight",
+      "core.actor_module.decoders.g1_dyn.module.16.bias",
+      "core.actor_module.decoders.g1_dyn.module.16.weight"
+    ],
+    "screen_scales": [0.0, 0.25, 0.5, 1.0, 2.0]
+  },
+  "evaluation": {
+    "nominal_seed": 835868017,
+    "disturbance_seed": 2069156915,
+    "candidate_minimum_nominal_completed_transitions": 486,
+    "candidate_minimum_disturbance_completed_transitions": 288,
+    "zero_faults_required": true,
+    "fresh_process_per_policy_scenario": true
+  },
+  "boundaries": {
+    "simulator_only": true,
+    "single_collection": true,
+    "single_optimizer_iteration": true,
+    "teacher_labels_used": false,
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

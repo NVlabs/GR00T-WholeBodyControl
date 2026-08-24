@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_rank256_iterative_grouped_screen_contract_v3",
+  "role": "fresh_process_screen_of_completed_shifted_base_grouped_gradient_only",
+  "parents": {
+    "iteration_contract_relative_path": "gear_sonic/config/sim_validation/g1_true23_sonic_rank256_iterative_grouped_survival_score_v2.json",
+    "iteration_contract_sha256": "bc77be53fd840a7a1c68cdc7a1ec09577f6b16c221fb52d05a7191f260e0f845",
+    "partial_run_path": "/root/g1_true23_runs/sonic_rank256_iterative_grouped_survival_score_v2",
+    "partial_preflight_sha256": "4932152923d627317656a0a2a52cecccce6d30b0616fb4b3fa8f15a5602acc37",
+    "partial_material_manifest_sha256": "465d0bc699f94887c63ea0a91699db9817aa7db92ae3a17dc0b3608e882efbb7",
+    "gradient_evidence_sha256": "9b9d21c65fcfd6d9830f05700009052f0469d3359697b9b50ef6039d80e852a9",
+    "gradient_direction_sha256": "ae42123a0b23934ef03bdc912226fd8f8310b5f2c5dde5d817c5d215b1671550",
+    "gradient_direction_state_sha256": "a882d3b2fac697160da01406140c19ccaadca467719bd70685c8db8592e4e64b"
+  },
+  "screen": {
+    "scales": [-4.0, -2.0, -1.0, -0.5, 0.0, 0.25, 0.5, 1.0, 2.0, 4.0],
+    "scenarios": ["nominal", "disturbance"],
+    "one_fresh_process_per_evaluation": true,
+    "original_policy_nominal_minimum_transitions": 486,
+    "original_policy_disturbance_strictly_above_transitions": 287,
+    "zero_faults_required": true
+  },
+  "boundaries": {
+    "reuses_completed_gradient_without_recomputation": true,
+    "additional_training_transitions": 0,
+    "optimizer_steps": 0,
+    "critic_updates": 0,
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_rank256_grouped_multiobjective_survival_score_contract_v1",
+  "role": "offline_mjlab_rank256_grouped_nominal_exact_impulse_survival_score_experiment_only",
+  "parents": {
+    "mixed_result_path": "/root/g1_true23_runs/sonic_rank256_disturbance_survival_score_v1_retry2/rank256_disturbance_survival_score_result.json",
+    "mixed_result_sha256": "aa6d25c8f6ec4d5e14b9ea7789bbd77d4353dda7269d5b0264c08cf32fdd7b7c",
+    "exact_impulse_result_path": "/root/g1_true23_runs/sonic_rank256_exact_impulse_survival_score_v1/rank256_exact_impulse_survival_score_result.json",
+    "exact_impulse_result_sha256": "f820041171103fad2863f01f1296100dd7c9bdc8205191e265cacc74a6475f03"
+  },
+  "collection": {
+    "num_envs": 128,
+    "steps": 510,
+    "total_transitions": 65280,
+    "groups": [
+      {"name": "nominal", "start": 0, "stop": 64, "impulse": false},
+      {"name": "exact_impulse", "start": 64, "stop": 128, "impulse": true}
+    ],
+    "impulse_global_transition": 241,
+    "impulse_q9": 250,
+    "exact_vector": [-0.109284965708, 0.348842165152, -0.026012141987, 0.137065557322, -0.499675156302, -0.717607152875],
+    "exploration_std": 0.05,
+    "first_episode_only": true,
+    "autoreset_rows_excluded": true
+  },
+  "gradient": {
+    "outcome": "first_episode_length_divided_by_510",
+    "normalization": "within_group_population_z_score",
+    "group_contribution": "equal_active_transition_normalized",
+    "direction_l2": 0.000591382415,
+    "scales": [-2.0, -1.0, -0.5, 0.0, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0]
+  },
+  "evaluation": {
+    "nominal_seed": 835868017,
+    "disturbance_seed": 2069156915,
+    "candidate_requires_nominal_not_worse_than_baseline": true,
+    "candidate_requires_disturbance_strictly_better_than_baseline": true,
+    "zero_faults_required": true,
+    "no_candidate_retires_score_gradient_route": true
+  },
+  "boundaries": {
+    "simulator_only": true,
+    "optimizer_steps": 0,
+    "critic_updates": 0,
+    "teacher_labels_used": false,
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

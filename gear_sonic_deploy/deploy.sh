@@ -11,9 +11,9 @@ set -e
 #   sim   - Use loopback interface for simulation (MuJoCo)
 #   real  - Auto-detect robot network interface (192.168.123.x)
 #   <interface_name> - Use specific interface (e.g., enP8p1s0, eth0)
-#   <ip_address> - Use interface with specific IP
+#   <ip_address> - Use the local host interface assigned this IP
 #
-# Default: real
+# Default: sim
 # ============================================================================
 
 # Colors for output
@@ -114,10 +114,24 @@ resolve_interface() {
     # Check if interface is an IP address
     if is_ip_address "$interface"; then
         if [[ "$interface" == "127.0.0.1" ]]; then
-            TARGET="$interface"
+            TARGET="$(find_interface_by_ip "$interface")"
+            if [[ -z "$TARGET" ]]; then
+                TARGET=$([[ "$os_type" == "Darwin" ]] && echo "lo0" || echo "lo")
+            fi
             ENV_TYPE="sim"
         else
-            TARGET="$interface"
+            if [[ "$interface" != 192.168.123.* ]]; then
+                echo -e "${RED}Error: real deployment IP must be local 192.168.123.x.${NC}" >&2
+                return 1
+            fi
+            local local_interface
+            local_interface=$(find_interface_by_ip "$interface")
+            if [[ -z "$local_interface" ]]; then
+                echo -e "${RED}Error: $interface is not assigned to this host.${NC}" >&2
+                echo "Pass the local 192.168.123.x interface/IP, not the robot IP." >&2
+                return 1
+            fi
+            TARGET="$local_interface"
             ENV_TYPE="real"
         fi
         return 0
@@ -153,19 +167,9 @@ resolve_interface() {
         if [[ -n "$real_interface" ]]; then
             TARGET="$real_interface"
         else
-            # Fallback to common interface names
-            # Try to find any non-loopback interface
-            local fallback_interface
-            fallback_interface=$(get_network_interfaces | grep -v "127.0.0.1" | head -1 | cut -d: -f1)
-            
-            if [[ -n "$fallback_interface" ]]; then
-                TARGET="$fallback_interface"
-                echo -e "${YELLOW}⚠️  Could not find 192.168.123.x interface, using: $TARGET${NC}" >&2
-            else
-                # Ultimate fallback
-                TARGET="enP8p1s0"
-                echo -e "${YELLOW}⚠️  Could not auto-detect interface, using default: $TARGET${NC}" >&2
-            fi
+            echo -e "${RED}Error: no local 192.168.123.x robot interface found.${NC}" >&2
+            echo "Connect/configure the Unitree Ethernet link, or pass an explicit local interface." >&2
+            return 1
         fi
         ENV_TYPE="real"
         return 0
@@ -187,8 +191,20 @@ resolve_interface() {
             ENV_TYPE="sim"
             return 0
         fi
+
+        if ! get_network_interfaces | cut -d: -f1 | grep -Fxq "$interface"; then
+            echo -e "${RED}Error: interface '$interface' does not exist or has no IPv4 address.${NC}" >&2
+            return 1
+        fi
+
+        if ! get_network_interfaces | awk -F: -v iface="$interface" '
+            $1 == iface && $2 ~ /^192\.168\.123\./ { found=1 }
+            END { exit found ? 0 : 1 }
+        '; then
+            echo -e "${RED}Error: interface '$interface' has no local 192.168.123.x address.${NC}" >&2
+            return 1
+        fi
         
-        # Default to real for unknown interfaces
         TARGET="$interface"
         ENV_TYPE="real"
         return 0
@@ -216,15 +232,15 @@ show_usage() {
     echo "  sim              Use loopback interface for simulation (MuJoCo)"
     echo "  real             Auto-detect robot network (192.168.123.x)"
     echo "  <interface>      Use specific interface (e.g., enP8p1s0, eth0)"
-    echo "  <ip_address>     Use interface by IP address"
+    echo "  <ip_address>     Use the local host interface assigned this IP"
     echo ""
-    echo "Default: real"
+    echo "Default: sim"
     echo ""
     echo "Examples:"
     echo "  $0 sim           # Run in simulation mode"
     echo "  $0 real          # Auto-detect real robot interface"
     echo "  $0 enP8p1s0      # Use specific interface"
-    echo "  $0 192.168.x.x # Use interface with this IP"
+    echo "  $0 192.168.123.99 # Use the local host interface with this IP"
     echo "  $0 --cp policy/checkpoints/custom/model_step_123456 real  # Use custom checkpoint"
     echo "  $0 --obs-config policy/configs/custom.yaml sim  # Use custom obs config"
     echo "  $0 --planner planner/custom.onnx --input-type keyboard real  # Use custom planner and input"
@@ -232,7 +248,7 @@ show_usage() {
 }
 
 # Default interface mode
-INTERFACE_MODE="real"
+INTERFACE_MODE="sim"
 
 # Default configuration values (can be overridden by command line)
 CHECKPOINT_DEFAULT="policy/release/model"
@@ -538,15 +554,24 @@ echo -e "${CYAN}═════════════════════�
 echo ""
 
 # Ask for confirmation
+confirmed=false
 if [[ "$ENV_TYPE" == "real" ]]; then
     echo -e "${YELLOW}⚠️  WARNING: This will start the REAL robot control system!${NC}"
+    echo ""
+    read -r -p "$(echo -e "${GREEN}Type 'yes' to start real-robot control [no]: ${NC}")" confirm
+    if [[ "$confirm" == "yes" ]]; then
+        confirmed=true
+    fi
 else
     echo -e "${YELLOW}📋 This will start the simulation control system.${NC}"
+    echo ""
+    read -r -p "$(echo -e "${GREEN}Proceed with simulation? [Y/n]: ${NC}")" confirm
+    if [[ "$confirm" =~ ^[Yy]$ ]] || [[ -z "$confirm" ]]; then
+        confirmed=true
+    fi
 fi
-echo ""
-read -p "$(echo -e ${GREEN}Proceed with deployment? [Y/n]: ${NC})" confirm
 
-if [[ "$confirm" =~ ^[Yy]$ ]] || [[ -z "$confirm" ]]; then
+if [[ "$confirmed" == true ]]; then
     echo ""
     echo -e "${GREEN}🚀 Starting deployment...${NC}"
     echo ""

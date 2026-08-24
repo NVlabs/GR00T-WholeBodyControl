@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_sonic_rank256_disturbance_survival_score_contract_v1",
+  "role": "offline_mjlab_rank256_q250_impulse_survival_score_experiment_only",
+  "inputs": {
+    "source_checkpoint": {
+      "path": "/root/g1_true23_runs/causal_history_recovery_stand_transition_dance_v1/checkpoints/causal_model_250.pt",
+      "sha256": "85bd6de646905a44190dbf32c79737082bb604ab007a90a62e4fd2fdeeee6bd9"
+    },
+    "candidate_manifest": {
+      "path": "artifacts/g1_true23/sonic_seed835_counterexample_round3_rank256_bc_last_affine_v1.manifest.json",
+      "sha256": "ad8a779e7867c88fdd6e9d60b6e85584a24f30368c32908b27f2274378c0b213"
+    },
+    "candidate_decoder": {
+      "path": "artifacts/g1_true23/sonic_seed835_counterexample_round3_rank256_bc_last_affine_v1.decoder.onnx",
+      "sha256": "d1a20a098ccc3328ab188c081b5cefa642425bda9e7d06711a599a66531279ca"
+    },
+    "failed_q200_campaign": {
+      "path": "artifacts/g1_true23/sonic_rank256_q200_recovery_qualification_campaign_v1.json",
+      "sha256": "33981a7d602725846dd181161fb5f986fe5540d2dee23ff3d264cf314469a315"
+    },
+    "balanced_teacher_screen": {
+      "path": "artifacts/g1_true23/sonic_rank256_q200_balanced_teacher_disturbance_screen_v1.json",
+      "sha256": "d8fd75243bdededa10cb6336f6261d5e5a3785ea297991074cb11dbb0f70c2cc"
+    }
+  },
+  "collection": {
+    "num_envs": 128,
+    "steps": 510,
+    "total_transitions": 65280,
+    "anchor_q9": 9,
+    "last_q9": 518,
+    "first_episode_only": true,
+    "autoreset_rows_excluded": true,
+    "exploration_std": 0.05,
+    "impulse_global_transition": 241,
+    "impulse_q9": 250,
+    "impulse_vectors": "support_bounded_sha_seeded_128_with_failed_seed_vector_at_env0"
+  },
+  "gradient": {
+    "outcome": "first_episode_length_divided_by_510",
+    "parameters": [
+      "core.actor_module.decoders.g1_dyn.module.14.bias",
+      "core.actor_module.decoders.g1_dyn.module.14.weight",
+      "core.actor_module.decoders.g1_dyn.module.16.bias",
+      "core.actor_module.decoders.g1_dyn.module.16.weight"
+    ],
+    "optimizer_steps": 0,
+    "critic_updates": 0,
+    "direction_l2": 0.000591382415,
+    "scales": [-1.0, -0.5, 0.0, 0.25, 0.5, 1.0, 2.0, 4.0]
+  },
+  "evaluation": {
+    "nominal_seed": 835868017,
+    "disturbance_seed": 2069156915,
+    "disturbance_vector": [-0.109284965708, 0.348842165152, -0.026012141987, 0.137065557322, -0.499675156302, -0.717607152875],
+    "candidate_requires_nominal_not_worse_than_baseline": true,
+    "candidate_requires_disturbance_strictly_better_than_baseline": true,
+    "candidate_requires_zero_action_q9_nonfinite_faults": true
+  },
+  "boundaries": {
+    "simulator_only": true,
+    "teacher_labels_used": false,
+    "optimizer_steps": 0,
+    "critic_updates": 0,
+    "support_qualified": false,
+    "promotion_eligible": false,
+    "deployment_ready": false,
+    "hardware_authorized": false,
+    "robot_or_network_commands_permitted": false
+  }
+}

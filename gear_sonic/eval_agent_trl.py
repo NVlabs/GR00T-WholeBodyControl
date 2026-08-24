@@ -431,13 +431,47 @@ def main(override_config: omegaconf.OmegaConf):
 
     checkpoint_path = str(config.checkpoint)
     logger.info(f"Loading checkpoint from {checkpoint_path}")
-    checkpoint = torch.load(checkpoint_path, map_location=accelerator.device, weights_only=False)
+    from collections.abc import Mapping
+
+    from gear_sonic.utils.g1_23dof_artifact import is_true23_training_config
+    from gear_sonic.utils.g1_23dof_checkpoint_io import (
+        checkpoint_stage,
+        extract_global_step,
+        load_safe_true23_checkpoint,
+    )
+
+    is_true23_checkpoint = is_true23_training_config(config) or is_true23_training_config(
+        getattr(env, "config", None)
+    )
+    if is_true23_checkpoint:
+        checkpoint = load_safe_true23_checkpoint(
+            checkpoint_path,
+            map_location=accelerator.device,
+            allow_legacy_initialization=True,
+        )
+        global_step = (
+            extract_global_step(checkpoint)
+            if checkpoint_stage(checkpoint) == "trained"
+            else 0
+        )
+    else:
+        checkpoint = torch.load(
+            checkpoint_path,
+            map_location=accelerator.device,
+            weights_only=False,
+        )
+        checkpoint_state = checkpoint["state"]
+        global_step = (
+            checkpoint_state.get("global_step")
+            if isinstance(checkpoint_state, Mapping)
+            else checkpoint_state.global_step
+        )
 
     # Load policy state dict with backward compatibility for std/log_std
     if "actor_model_state_dict" in checkpoint:
-        state_dict = checkpoint["actor_model_state_dict"]
+        state_dict = dict(checkpoint["actor_model_state_dict"])
     elif "policy_state_dict" in checkpoint:
-        state_dict = checkpoint["policy_state_dict"]
+        state_dict = dict(checkpoint["policy_state_dict"])
     else:
         state_dict = None
 
@@ -461,7 +495,7 @@ def main(override_config: omegaconf.OmegaConf):
         model.policy.load_state_dict(state_dict)
         logger.info("Successfully loaded policy state dict")
 
-    state.global_step = checkpoint["state"].global_step
+    state.global_step = global_step
 
     schedule_wrapper = easydict.EasyDict(env=env, model=model)
     if "schedule_dict" in config.trainer:
@@ -470,7 +504,30 @@ def main(override_config: omegaconf.OmegaConf):
         )
     env.reinit_dr()
 
-    global_step = checkpoint["state"].global_step
+    if config.get("true23_sim_validation", False):
+        from gear_sonic.scripts.run_g1_23dof_sim_validation import (
+            OUTPUT_ENV_VAR,
+            run_loaded_isaaclab_validation,
+        )
+
+        output_path_raw = os.environ.get(OUTPUT_ENV_VAR)
+        if not output_path_raw:
+            raise RuntimeError(
+                f"{OUTPUT_ENV_VAR} must name the true23 simulation report output"
+            )
+        run_loaded_isaaclab_validation(
+            env=env,
+            model=model,
+            checkpoint=checkpoint,
+            checkpoint_path=Path(checkpoint_path),
+            output_path=Path(output_path_raw),
+            runtime_config=config,
+        )
+        logger.info(f"True23 simulation evidence written to: {output_path_raw}")
+        if simulator_type == "IsaacSim":
+            simulation_app.close()
+        return
+
     exported_policy_path = os.path.join(config.experiment_dir, "exported")
     os.makedirs(exported_policy_path, exist_ok=True)
     exported_onnx_name = f"model_step_{global_step:06d}.onnx"
@@ -479,6 +536,13 @@ def main(override_config: omegaconf.OmegaConf):
         shutil.copy(checkpoint_path, new_cp_path)
 
     if config.get("export_onnx_only", False):
+        if is_true23_checkpoint:
+            raise RuntimeError(
+                "generic eval_agent_trl ONNX export is blocked for true23; use "
+                "`python -m gear_sonic.scripts.export_g1_23dof_onnx` with "
+                "checkpoint-bound simulation evidence to publish the validated "
+                "teleop encoder + decoder pair"
+            )
 
         def get_example_obs():
             obs_dict = env.reset_all()
@@ -498,31 +562,20 @@ def main(override_config: omegaconf.OmegaConf):
         )
 
         if "tokenizer" in example_obs_dict and has_encoders:
-
-            inference_helpers.export_universal_token_module_as_onnx(
-                model.policy.actor_module,
-                encoder_name="smpl",
-                decoder_name="g1_dyn",
-                path=exported_policy_path,
-                exported_model_name=exported_onnx_name.replace(".onnx", "_smpl.onnx"),
-                batch_size=1,
+            available_encoders = inference_helpers.available_universal_token_encoders(
+                model.policy.actor_module
             )
-            inference_helpers.export_universal_token_module_as_onnx(
-                model.policy.actor_module,
-                encoder_name="g1",
-                decoder_name="g1_dyn",
-                path=exported_policy_path,
-                exported_model_name=exported_onnx_name.replace(".onnx", "_g1.onnx"),
-                batch_size=1,
-            )
-            inference_helpers.export_universal_token_module_as_onnx(
-                model.policy.actor_module,
-                encoder_name="teleop",
-                decoder_name="g1_dyn",
-                path=exported_policy_path,
-                exported_model_name=exported_onnx_name.replace(".onnx", "_teleop.onnx"),
-                batch_size=1,
-            )
+            for encoder_name in available_encoders:
+                inference_helpers.export_universal_token_module_as_onnx(
+                    model.policy.actor_module,
+                    encoder_name=encoder_name,
+                    decoder_name="g1_dyn",
+                    path=exported_policy_path,
+                    exported_model_name=exported_onnx_name.replace(
+                        ".onnx", f"_{encoder_name}.onnx"
+                    ),
+                    batch_size=1,
+                )
 
             inference_helpers.export_universal_token_encoders_as_onnx(
                 model.policy.actor_module,

@@ -1,0 +1,36 @@
+{
+  "kind": "g1_true23_pico_fullbody_multimotion_manifest_v1",
+  "motions": [
+    {
+      "name": "pico_upright",
+      "path": "artifacts/g1_true23/pico_fullbody_motion_v1/upright.true23.npz",
+      "weight": 1.0
+    },
+    {
+      "name": "pico_standing_1806",
+      "path": "artifacts/g1_true23/pico_fullbody_motion_v1/standing_1806.true23.npz",
+      "weight": 1.0
+    },
+    {
+      "name": "pico_crouch",
+      "path": "artifacts/g1_true23/pico_fullbody_motion_v1/crouch.true23.npz",
+      "weight": 1.0
+    },
+    {
+      "name": "sonic_native_hand_crawl",
+      "path": "artifacts/g1_true23/sonic_library_true23_hand_original_speed_v1/hand_crawling.true23.npz",
+      "weight": 1.0
+    },
+    {
+      "name": "sonic_elbow_crawl",
+      "path": "artifacts/g1_true23/sonic_library_true23_elbow_physical_reference_v1/elbow_crawling.true23.npz",
+      "weight": 1.0
+    },
+    {
+      "name": "sonic_happy_dance",
+      "path": "artifacts/g1_true23/sonic_library_true23_happy_physical_reference_v1/happy_dance.true23.npz",
+      "weight": 1.0
+    }
+  ],
+  "schema_version": 1
+}

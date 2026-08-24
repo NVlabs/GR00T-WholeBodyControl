@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "kind": "g1_true23_native124_21204_composite_mjlab_contract_v1",
+  "role": "offline_mjlab_nominal_composite_diagnostic_only",
+  "artifact_identity": {
+    "iteration": 21204,
+    "tracker_manifest_sha256": "03435a9c86aff7f53ca12082dbfcf44e8579a9f16cbb7e44ddde21bf8f189826",
+    "support_config_sha256": "28d29c4204a3a0c4952723a9bfb40327ea2fa4aa50ca39bb510ea6121c6119e9",
+    "selection_sha256": "8a0c2658ad0b366c210189ebf87c7c9487c3531ea36b12654ca4d4dc8ffa04cb",
+    "export_report_sha256": "21faa01eacd13b66f7ccc4c7a40c67f6a12777d0b4d6e94390cc50807d54c66b",
+    "checkpoint_sha256": "9cb0a06db441b8ceb51404b45ba25a81bd4120114aa6b97d6f660cac3f742f81",
+    "actor_state_sha256": "17302f7076cb480fe4ffc253e7b8228fcbaa033ccb3bf7aac1ed34940b8648ec",
+    "onnx_sha256": "321504108e677fb4b70d1398ff9a20e168def2231eb574e6d8fc1f39385d7b9b"
+  },
+  "motions": [
+    {
+      "name": "neutral_smoke",
+      "basename": "g1_true23_causal_neutral_acquisition_v3.npz",
+      "sha256": "228ebc200191339da2b8cff6f9f2d5be6342c0603dbde05fc7eddfe5d044fe1d",
+      "fps": 50.0,
+      "frame_count": 600
+    },
+    {
+      "name": "dad_dance_primary",
+      "basename": "B_DadDance.npz",
+      "sha256": "a4962f1e4df45ca70ada473a962b52527b17ac667dfb17ef3cd37d4ed21c3bfb",
+      "fps": 50.0,
+      "frame_count": 2090
+    }
+  ],
+  "motion_array_contract": {
+    "required_keys": [
+      "fps",
+      "joint_pos",
+      "joint_vel",
+      "body_pos_w",
+      "body_quat_w",
+      "body_lin_vel_w",
+      "body_ang_vel_w"
+    ]
+  },
+  "causal_window": {
+    "num_envs": 1,
+    "sampling_mode": "start",
+    "initial_q9_index": 9,
+    "synchronization_warmup_transitions": 2,
+    "teacher_control_transitions": 500,
+    "expected_final_q9_index": 511,
+    "control_hz": 50.0,
+    "play_mode": true,
+    "wrapper_action_clip": null
+  },
+  "action_chain": {
+    "formula": "raw_hw21204->candidate_hw21204->plain_sonic_raw_native->v11_safe_target_v2_once->safe_native_and_composite_hw",
+    "teacher_composite_formula_sha256": "07b0d87205ed0bef60c8e1b30c92923774eaabf6f4b91b22b4950bc3e47db154",
+    "teacher_composite_constants_sha256": "d9ea0d5d1c556b73ff584b087008c242ba9a77a4d2405b201c22d7597eee7db9",
+    "safe_target_formula_sha256": "4b12736401a2e8136dc1bbca52026dd66d1f107a3b48981a07c46d950ce88f7b",
+    "safe_target_constants_sha256": "a4fc1be0c95a244766ddd47b3e00f29591c044fbaa85cab35e538ce7d8515443",
+    "plain_action_term_required": false,
+    "safe_target_v11_action_term_required": true,
+    "environment_input_semantics": "plain_sonic_raw_native_pre_safe_transform",
+    "external_or_wrapper_clipping_permitted": false,
+    "plain_sonic_raw_abs_strict_max": 10.0,
+    "actual_action_atol": 0.0,
+    "actual_target_atol": 0.00001
+  },
+  "nominal_gate": {
+    "minimum_base_height_m": 0.45,
+    "maximum_base_tilt_rad": 1.0,
+    "maximum_joint_velocity_ratio": 1.0,
+    "maximum_tracking_rmse_rad": 0.75,
+    "inference_duration_ms_strict_max": 20.0,
+    "velocity_limit_hardware_radps": [
+      32.0,
+      20.0,
+      32.0,
+      20.0,
+      30.0,
+      30.0,
+      32.0,
+      20.0,
+      32.0,
+      20.0,
+      30.0,
+      30.0,
+      32.0,
+      37.0,
+      37.0,
+      37.0,
+      37.0,
+      37.0,
+      37.0,
+      37.0,
+      37.0,
+      37.0,
+      37.0
+    ],
+    "required_zero_counts": [
+      "termination_count",
+      "q9_discontinuity_count",
+      "nonfinite_count",
+      "raw_clip_required_count",
+      "action_semantics_mismatch_count",
+      "target_soft_limit_violation_count",
+      "actuator_target_soft_limit_violation_count",
+      "measured_soft_limit_violation_count",
+      "joint_velocity_limit_violation_count"
+    ]
+  },
+  "boundaries": {
+    "simulator_only": true,
+    "nominal_diagnostic_only": true,
+    "robot_or_network_commands_permitted": false,
+    "actuation_permitted": false,
+    "teacher_labels_admitted": false,
+    "support_qualified": false,
+    "deployment_ready": false,
+    "promotion_eligible": false,
+    "hardware_authorized": false
+  }
+}

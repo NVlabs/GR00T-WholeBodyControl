@@ -1,0 +1,29 @@
+# @package _global_
+
+defaults:
+  - critics/mlp@algo.config.critic
+  - quantizers/fsq@algo.config.actor.backbone.quantizer
+  - encoders/teleop_mlp@algo.config.actor.backbone.encoders
+  - decoders/g1_dyn_mlp_low_latency@algo.config.actor.backbone.decoders
+
+manager_env:
+  commands:
+    motion:
+      encoder_sample_probs:
+        teleop: 1.0
+
+algo:
+  config:
+    actor:
+      _target_: gear_sonic.trl.modules.actor_critic_modules.Actor
+      running_mean_std: false
+      input_obs_dict: true
+      has_aux_loss: false
+      backbone:
+        _target_: gear_sonic.trl.modules.universal_token_modules.UniversalTokenModule
+        num_future_frames: ${manager_env.commands.motion.num_future_frames}
+        proprioception_features: ["actor_obs"]
+        encoder_sample_probs: ${manager_env.commands.motion.encoder_sample_probs}
+        num_fsq_levels: 32
+        fsq_level_list: 32
+        max_num_tokens: 2

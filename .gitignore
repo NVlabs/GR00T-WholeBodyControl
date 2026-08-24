@@ -191,6 +191,10 @@ external_dependencies/doc/
 # XRoboToolkit pybind (cloned locally on aarch64 by install_pico.sh)
 external_dependencies/XRoboToolkit-PC-Service-Pybind/
 
+# Pinned local MJLab training checkouts (installed by setup_g1_23dof_mjlab_wsl.sh)
+external_dependencies/unitree_rl_mjlab/
+external_dependencies/mjlab/
+
 # UV
 uv.lock
 
@@ -200,6 +204,7 @@ uv.lock
 .venv_data_collection/
 .venv_camera/
 .venv_inference/
+.venv_mjlab/
 
 # XRoboToolkit-PC-Service-Pybind
 xrobotoolkit_sdk.cpython-*-*-*.so
@@ -219,3 +224,13 @@ models/
 # Downloaded from HuggingFace (hf download)
 sample_data/
 sonic_release/
+
+# Small, source-controlled G1 23-DoF rev-1.0 model contracts.
+!gear_sonic/data/
+gear_sonic/data/*
+!gear_sonic/data/robots/
+gear_sonic/data/robots/*
+!gear_sonic/data/robots/g1/
+gear_sonic/data/robots/g1/*
+!gear_sonic/data/robots/g1/g1_23dof_rev_1_0.urdf
+!gear_sonic/data/robots/g1/g1_23dof_rev_1_0.xml
