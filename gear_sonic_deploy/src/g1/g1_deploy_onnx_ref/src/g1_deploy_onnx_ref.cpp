@@ -2384,8 +2384,22 @@ class G1Deploy {
       // Set the encode_mode for all loaded reference motions based on encoder availability
       std::cout << "Setting encode_mode for " << motion_reader_.motions.size() << " loaded reference motions..." << std::endl;
       for (auto& motion : motion_reader_.motions) {
-        motion->SetEncodeMode(initial_encoder_mode_);
-        std::cout << "  Motion '" << motion->name << "' encode_mode set to: " << initial_encoder_mode_ << std::endl;
+        const bool has_smpl_reference =
+          motion->GetNumSmplJoints() > 0 &&
+          motion->GetNumSmplPoses() > 0 &&
+          motion->GetNumJoints() >= 29 &&
+          motion->GetNumBodyQuaternions() > 0;
+
+        const int motion_encoder_mode =
+          (initial_encoder_mode_ >= 0 && has_smpl_reference) ? 2 : initial_encoder_mode_;
+
+        motion->SetEncodeMode(motion_encoder_mode);
+        std::cout << "  Motion '" << motion->name << "' encode_mode set to: "
+                  << motion_encoder_mode;
+        if (has_smpl_reference && initial_encoder_mode_ >= 0) {
+          std::cout << " (SMPL reference detected)";
+        }
+        std::cout << std::endl;
       }
       
       // Set encode_mode for planner motion

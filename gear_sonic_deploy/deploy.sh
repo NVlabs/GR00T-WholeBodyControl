@@ -211,6 +211,7 @@ show_usage() {
     echo "  --input-type TYPE       Set the input type (default: zmq_manager)"
     echo "  --output-type TYPE      Set the output type (default: ros2)"
     echo "  --zmq-host HOST         Set the ZMQ host (default: localhost)"
+    echo "  --enable-motion-recording  Record ZMQ/planner motions to reference/recorded_motion/"
     echo ""
     echo "Interface modes:"
     echo "  sim              Use loopback interface for simulation (MuJoCo)"
@@ -251,6 +252,7 @@ MOTION_DATA="$MOTION_DATA_DEFAULT"
 INPUT_TYPE="$INPUT_TYPE_DEFAULT"
 OUTPUT_TYPE="$OUTPUT_TYPE_DEFAULT"
 ZMQ_HOST="$ZMQ_HOST_DEFAULT"
+EXTRA_ARGS=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -314,6 +316,10 @@ while [[ $# -gt 0 ]]; do
             fi
             ZMQ_HOST="$2"
             shift 2
+            ;;
+        --enable-motion-recording)
+            EXTRA_ARGS="$EXTRA_ARGS --enable-motion-recording"
+            shift
             ;;
         sim|real)
             INTERFACE_MODE="$1"
@@ -380,9 +386,8 @@ CHECKPOINT_ENCODER="${CHECKPOINT}_encoder.onnx"
 # ZMQ_HOST is already set from argument parsing above
 
 # Additional flags for simulation mode
-EXTRA_ARGS=""
 if [[ "$ENV_TYPE" == "sim" ]]; then
-    EXTRA_ARGS="--disable-crc-check"
+    EXTRA_ARGS="$EXTRA_ARGS --disable-crc-check"
     echo -e "${YELLOW}📋 Simulation mode: CRC check will be disabled${NC}"
     echo ""
 fi
