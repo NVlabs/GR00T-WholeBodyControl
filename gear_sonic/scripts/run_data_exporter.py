@@ -23,6 +23,7 @@ from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
 import json
+import threading
 import time
 
 import numpy as np
@@ -118,6 +119,24 @@ class TimeDeltaException(Exception):
         self.reset_timeout_sec = reset_timeout_sec
         self.message = f"{self.failure_count} failures in {self.reset_timeout_sec} seconds"
         super().__init__(self.message)
+
+
+def ring_terminal_bell(count: int, interval: float = 0.5) -> threading.Thread:
+    """Emit a terminal-bell pattern without blocking collection or saving."""
+
+    def emit_pattern():
+        for index in range(count):
+            print("\a", end="", flush=True)
+            if index + 1 < count:
+                time.sleep(interval)
+
+    thread = threading.Thread(
+        target=emit_pattern,
+        name="recording-bell",
+        daemon=True,
+    )
+    thread.start()
+    return thread
 
 
 def unpack_pose_message(packed_data: bytes, topic: str = "pose") -> dict:
@@ -289,6 +308,7 @@ class GrootDataCollector:
 
         self._last_latency_log_time = 0.0
         self._initial_yaw = None
+        self._next_recording_bell_time: float | None = None
 
         print(f"Recording to {self.data_exporter.meta.root}")
 
@@ -328,10 +348,13 @@ class GrootDataCollector:
             self._episode_state.change_state()
             if self._episode_state.get_state() == self._episode_state.RECORDING:
                 self._initial_yaw = None
+                self._next_recording_bell_time = time.monotonic()
                 self._print_and_say(
                     f"Started recording {self.current_episode_index}", blocking=False
                 )
             elif self._episode_state.get_state() == self._episode_state.NEED_TO_SAVE:
+                self._next_recording_bell_time = None
+                ring_terminal_bell(2)
                 self._print_and_say("Stopping recording, preparing to save", blocking=False)
             elif self._episode_state.get_state() == self._episode_state.IDLE:
                 self._print_and_say("Saved episode and back to idle state", blocking=False)
@@ -340,7 +363,23 @@ class GrootDataCollector:
                 self.data_exporter.save_episode_as_discarded()
                 self._episode_state.reset_state()
                 self._initial_yaw = None
+                self._next_recording_bell_time = None
                 self._print_and_say("Discarded episode", blocking=False)
+
+    def _update_recording_bell(self):
+        """Ring once per second while an episode is actively recording."""
+
+        if self._episode_state.get_state() != self._episode_state.RECORDING:
+            self._next_recording_bell_time = None
+            return
+
+        now = time.monotonic()
+        if (
+            self._next_recording_bell_time is None
+            or now >= self._next_recording_bell_time
+        ):
+            print("\a", end="", flush=True)
+            self._next_recording_bell_time = now + 1.0
 
     def _poll_sonic_zmq_messages(self):
         """Poll ZMQ for pose, planner, and manager_state messages (non-blocking)."""
@@ -892,6 +931,7 @@ class GrootDataCollector:
 
                     with self.telemetry.timer("check_recording_commands"):
                         self._check_recording_commands()
+                        self._update_recording_bell()
 
                     end_time = time.monotonic()
 
