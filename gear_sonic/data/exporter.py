@@ -21,6 +21,9 @@ from lerobot.common.datasets.lerobot_dataset import (
     compute_episode_stats,
 )
 from lerobot.common.datasets.utils import (
+    EPISODES_PATH,
+    EPISODES_STATS_PATH,
+    TASKS_PATH,
     check_timestamps_sync,
     get_episode_data_index,
     validate_episode_buffer,
@@ -123,6 +126,12 @@ class Gr00tDatasetMetadata(LeRobotDatasetMetadata):
         with open(obj.root / cls.MODALITY_CONFIG_REL_PATH, "w") as f:
             json.dump(modality_config, f, indent=4)
         obj.modality_config = modality_config
+
+        # LeRobot creates these JSONL files lazily when the first episode is
+        # saved.  Create them eagerly so a process that exits after dataset
+        # creation but before its first episode can be resumed locally.
+        for relative_path in (TASKS_PATH, EPISODES_PATH, EPISODES_STATS_PATH):
+            (obj.root / relative_path).touch(exist_ok=True)
         return obj
 
     @staticmethod
@@ -174,6 +183,38 @@ class Gr00tDataExporter(LeRobotDataset):
     def video_keys(self):
         return self.meta.video_keys
 
+    @staticmethod
+    def _repair_unstarted_dataset_metadata(save_root: str | Path) -> list[Path]:
+        """Restore lazy LeRobot metadata files for an unstarted local dataset.
+
+        Only datasets whose counters are all zero are eligible. Existing files
+        are never overwritten, and datasets containing episodes or frames are
+        left untouched so genuine corruption remains visible to the operator.
+        """
+        root = Path(save_root)
+        info_path = root / "meta" / "info.json"
+        if not info_path.is_file():
+            return []
+
+        try:
+            with info_path.open("r", encoding="utf-8") as f:
+                info = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            return []
+
+        counters = ("total_episodes", "total_frames", "total_tasks", "total_videos")
+        if any(info.get(counter) != 0 for counter in counters):
+            return []
+
+        repaired = []
+        for relative_path in (TASKS_PATH, EPISODES_PATH, EPISODES_STATS_PATH):
+            path = root / relative_path
+            if not path.exists():
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.touch()
+                repaired.append(path)
+        return repaired
+
     @classmethod
     def create(
         cls,
@@ -202,6 +243,13 @@ class Gr00tDataExporter(LeRobotDataset):
             shutil.rmtree(save_root)
 
         if (Path(save_root)).exists():
+            repaired_paths = cls._repair_unstarted_dataset_metadata(save_root)
+            if repaired_paths:
+                print(
+                    "[Dataset] Restored empty metadata files after an interrupted "
+                    "first startup: "
+                    + ", ".join(path.name for path in repaired_paths)
+                )
             try:
                 obj.meta = Gr00tDatasetMetadata(
                     repo_id=repo_id,

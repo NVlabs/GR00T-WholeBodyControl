@@ -8,7 +8,7 @@ Starts the full data collection stack in a single tmux session:
     │ Pane 0: C++ Deploy    │ Pane 2: Data Exporter │
     │ (gear_sonic_deploy)   │ (.venv_data_collection)│
     ├───────────────────────┼───────────────────────┤
-    │ Pane 1: Teleop        │ Pane 3: Camera Viewer │
+    │ Pane 1: Teleop        │ Pane 3: Camera Display│
     │ (.venv_teleop)        │ (.venv_data_collection)│
     └───────────────────────┴───────────────────────┘
 
@@ -58,6 +58,22 @@ def _bootstrap_venv():
         print(
             "ERROR: tyro is not installed and .venv_data_collection not found.\n"
             "  Run: bash install_scripts/install_data_collection.sh"
+        )
+        sys.exit(1)
+
+    # Re-execing an already active but incomplete environment would loop
+    # forever. Report the failed setup directly instead.
+    try:
+        already_in_data_venv = (
+            Path(sys.executable).resolve() == venv_python.resolve()
+            or Path(sys.prefix).resolve() == venv_python.parent.parent.resolve()
+        )
+    except OSError:
+        already_in_data_venv = False
+    if already_in_data_venv:
+        print(
+            "ERROR: .venv_data_collection exists but tyro is not installed.\n"
+            "  Re-run: bash install_scripts/install_data_collection.sh"
         )
         sys.exit(1)
 
@@ -113,6 +129,9 @@ class DataCollectionLaunchConfig:
     deploy_output_type: str = ""
     """Output type for deploy.sh. Leave empty for default."""
 
+    hand_type: str = "dex3"
+    """Unitree end effector used by deploy and teleop (dex3 or dex1)."""
+
     # Teleop streamer options
     pico_manager: bool = True
     """Run pico_manager_thread_server with --manager flag."""
@@ -145,15 +164,31 @@ class DataCollectionLaunchConfig:
     text_to_speech: bool = True
     """Enable voice feedback via espeak (data exporter)."""
 
-    # Camera viewer
+    # Camera display
     camera_viewer: bool = True
-    """Start the camera viewer pane."""
+    """Start the camera display pane. Uses the local OpenCV viewer for the
+    composed backend and the XRoboToolkit bridge for TeleImager."""
 
     camera_host: str = "localhost"
     """Camera server host (shared by data exporter and viewer)."""
 
     camera_port: int = 5555
     """Camera server port (shared by data exporter and viewer)."""
+
+    camera_backend: str = "composed"
+    """Camera client backend for data collection: composed or teleimager."""
+
+    xrobo_listen_host: str = "0.0.0.0"
+    """Listen address for the TeleImager-to-XRoboToolkit display bridge."""
+
+    xrobo_listen_port: int = 13579
+    """Control port advertised to the XRoboToolkit Remote Vision app."""
+
+    xrobo_show_wrist_cameras: bool = False
+    """Show the two wrist cameras beneath the head image in XRoboToolkit."""
+
+    xrobo_encoder: str = "auto"
+    """H.264 encoder for the XR bridge: auto, h264_nvenc, or libx264."""
 
 
 SESSION_NAME = "sonic_data_collection"
@@ -194,6 +229,18 @@ def _check_prerequisites(config: DataCollectionLaunchConfig):
 
     if config.pico_input_source not in {"xrt", "isaac-teleop"}:
         errors.append("--pico-input-source must be one of: xrt, isaac-teleop")
+
+    if config.hand_type not in {"dex3", "dex1"}:
+        errors.append("--hand-type must be one of: dex3, dex1")
+
+    if config.camera_backend not in {"composed", "teleimager"}:
+        errors.append("--camera-backend must be one of: composed, teleimager")
+
+    if config.xrobo_encoder not in {"auto", "h264_nvenc", "libx264"}:
+        errors.append("--xrobo-encoder must be one of: auto, h264_nvenc, libx264")
+
+    if not 1 <= config.xrobo_listen_port <= 65535:
+        errors.append("--xrobo-listen-port must be between 1 and 65535")
 
     if errors:
         print("ERROR: Prerequisites not met:\n")
@@ -295,9 +342,26 @@ def main(config: DataCollectionLaunchConfig):
     print(f"  Teleop input:    {config.pico_input_source}")
     if config.deploy_checkpoint:
         print(f"  Checkpoint:      {config.deploy_checkpoint}")
-    print(f"  Camera:          {config.camera_host}:{config.camera_port}")
+    print(
+        f"  Camera:          {config.camera_backend} "
+        f"{config.camera_host}:{config.camera_port}"
+    )
     print(f"  DC frequency:    {config.data_exporter_frequency} Hz")
-    print(f"  Camera viewer:   {'Yes' if config.camera_viewer else 'No'}")
+    viewer_enabled = config.camera_viewer
+    display_name = (
+        "OpenCV viewer" if config.camera_backend == "composed" else "XRobo bridge"
+    )
+    print(
+        f"  Camera display:  {display_name if viewer_enabled else 'No'}"
+    )
+    if viewer_enabled and config.camera_backend == "teleimager":
+        print(
+            f"    XR listen:     {config.xrobo_listen_host}:"
+            f"{config.xrobo_listen_port}"
+        )
+        print(
+            f"    XR wrists:     {'Yes' if config.xrobo_show_wrist_cameras else 'No'}"
+        )
     print(f"  Wrist cameras:   {'Yes' if config.record_wrist_cameras else 'No'}")
     print(f"  Text-to-speech:  {'Yes' if config.text_to_speech else 'No'}")
     print(f"  PC IP (for PICO): {_get_local_ip()}")
@@ -373,19 +437,35 @@ def main(config: DataCollectionLaunchConfig):
     if config.pico_waist_tracking:
         pico_cmd += " --waist_tracking"
 
-    print("Starting teleop streamer (pane 2)...")
+    print("Starting teleop streamer (pane 1)...")
     _send_to_pane(1, pico_cmd, wait=2.0)
 
-    # --- Pane 3 (bottom-right): Camera Viewer ---
+    # --- Pane 3 (bottom-right): Camera display ---
     if config.camera_viewer:
-        viewer_cmd = (
-            f"cd {repo_root} && "
-            f"source .venv_data_collection/bin/activate && "
-            f"python gear_sonic/scripts/run_camera_viewer.py "
-            f"--camera-host {config.camera_host} "
-            f"--camera-port {config.camera_port}"
-        )
-        print("Starting camera viewer (pane 3)...")
+        if config.camera_backend == "composed":
+            viewer_cmd = (
+                f"cd {repo_root} && "
+                f"source .venv_data_collection/bin/activate && "
+                f"python gear_sonic/scripts/run_camera_viewer.py "
+                f"--camera-host {config.camera_host} "
+                f"--camera-port {config.camera_port}"
+            )
+            viewer_label = "camera viewer"
+        else:
+            viewer_cmd = (
+                f"cd {repo_root} && "
+                f"source .venv_data_collection/bin/activate && "
+                f"python gear_sonic/scripts/run_xrobo_camera_bridge.py "
+                f"--camera-host {config.camera_host} "
+                f"--camera-port {config.camera_port} "
+                f"--listen-host {config.xrobo_listen_host} "
+                f"--listen-port {config.xrobo_listen_port} "
+                f"--encoder {config.xrobo_encoder}"
+            )
+            if config.xrobo_show_wrist_cameras:
+                viewer_cmd += " --show-wrist-cameras"
+            viewer_label = "XRobo camera bridge"
+        print(f"Starting {viewer_label} (pane 3)...")
         _send_to_pane(3, viewer_cmd, wait=2.0)
 
     # --- Pane 1 (top-right): Data Exporter ---
@@ -395,6 +475,7 @@ def main(config: DataCollectionLaunchConfig):
         f"python gear_sonic/scripts/run_data_exporter.py "
         f"--task-prompt '{config.task_prompt}' "
         f"--data-collection-frequency {config.data_exporter_frequency} "
+        f"--camera-backend {config.camera_backend} "
         f"--camera-host {config.camera_host} "
         f"--camera-port {config.camera_port}"
     )
@@ -405,7 +486,7 @@ def main(config: DataCollectionLaunchConfig):
     if not config.text_to_speech:
         exporter_cmd += " --no-text-to-speech"
 
-    print("Starting data exporter (pane 1)...")
+    print("Starting data exporter (pane 2)...")
     _send_to_pane(2, exporter_cmd, wait=1.0)
 
     # Select the data exporter pane so the user lands there for interactive input
@@ -428,7 +509,12 @@ def main(config: DataCollectionLaunchConfig):
     print("    Pane 1 (bottom-left):  Teleop Streamer")
     print("    Pane 2 (top-right):    Data Exporter  <-- you are here")
     if config.camera_viewer:
-        print("    Pane 3 (bottom-right): Camera Viewer")
+        display_label = (
+            "Camera Viewer"
+            if config.camera_backend == "composed"
+            else "XRobo Camera Bridge"
+        )
+        print(f"    Pane 3 (bottom-right): {display_label}")
     print()
     print("  ** deploy.sh (pane 0) is waiting for confirmation —")
     print("     click on pane 0 and press Enter to proceed **")

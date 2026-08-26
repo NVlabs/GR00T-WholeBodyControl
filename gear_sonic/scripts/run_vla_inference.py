@@ -5,11 +5,11 @@ Runs an Isaac-GR00T VLA policy against the Sonic whole-body control stack.
 All communication uses ZMQ:
   1. Robot state  -> ZMQ SUB on ``g1_debug`` topic (from C++ zmq_output_handler)
   2. Actions out  -> ZMQ PUB (latent protocol v4: motion token + hand joints)
-  3. Camera       -> ZMQ/TCP via ComposedCameraClientSensor
+  3. Camera       -> ZMQ/TCP via SONIC composed camera or Unitree TeleImager
   4. Keyboard     -> ZMQ SUB via ZMQKeyboardSubscriber
 
-Uses the Isaac-GR00T PolicyClient (ZMQ REQ/REP) to communicate with a
-running PolicyServer.
+Uses a lightweight, wire-compatible ZMQ REQ/REP client to communicate with a
+running Isaac-GR00T PolicyServer.
 
 Keyboard commands (received via ZMQ from the standalone keyboard publisher):
   p  -> pause / resume the policy loop
@@ -32,7 +32,7 @@ import numpy as np
 import tyro
 import zmq
 
-from gear_sonic.camera.composed_camera import ComposedCameraClientSensor
+from gear_sonic.camera.teleimager_client import create_camera_client
 from gear_sonic.data.robot_model.instantiation.g1 import instantiate_g1_robot_model
 from gear_sonic.utils.data_collection.keyboard_subscriber import (
     DEFAULT_ZMQ_KEYBOARD_PORT,
@@ -42,6 +42,7 @@ from gear_sonic.utils.data_collection.telemetry import Telemetry
 from gear_sonic.utils.data_collection.transforms import compute_projected_gravity
 from gear_sonic.utils.data_collection.zmq_state_subscriber import ZMQStateSubscriber
 from gear_sonic.utils.inference.initial_poses import LATENT_INITIAL_MOTION_TOKEN
+from gear_sonic.utils.inference.policy_client import PolicyClient
 from gear_sonic.utils.inference.vla_utils import (
     calculate_latency_compensated_index,
     concat_action,
@@ -83,7 +84,10 @@ class InferenceConfig:
     """Camera server host."""
 
     camera_port: int = 5555
-    """Camera server port."""
+    """Camera port (5555 for composed; TeleImager request port is normally 60000)."""
+
+    camera_backend: str = "composed"
+    """Camera client backend: composed or teleimager."""
 
     # ZMQ: Robot state (from C++ zmq_output_handler, g1_debug topic)
     state_zmq_host: str = "localhost"
@@ -109,6 +113,9 @@ class InferenceConfig:
     # Embodiment
     embodiment_tag: str = "unitree_g1_sonic"
     """Embodiment tag for policy inference."""
+
+    hand_type: str = "dex3"
+    """Unitree end effector expected by the trained policy (dex3 or dex1)."""
 
     # Prompt / eval
     prompt: str = "demo"
@@ -367,8 +374,10 @@ def main(config: InferenceConfig):
 
     robot_model = instantiate_g1_robot_model(waist_location="lower_and_upper_body")
 
-    # Isaac-GR00T PolicyClient
-    from gr00t.policy.server_client import PolicyClient
+    if config.hand_type not in ("dex3", "dex1"):
+        raise ValueError("--hand-type must be dex3 or dex1")
+    if config.camera_backend not in ("composed", "teleimager"):
+        raise ValueError("--camera-backend must be composed or teleimager")
 
     n1_policy = PolicyClient(host=config.host, port=config.port)
 
@@ -383,8 +392,10 @@ def main(config: InferenceConfig):
         port=config.state_zmq_port,
     )
 
-    camera_subscriber = ComposedCameraClientSensor(
-        server_ip=config.camera_host, port=config.camera_port
+    camera_subscriber = create_camera_client(
+        backend=config.camera_backend,
+        server_ip=config.camera_host,
+        port=config.camera_port,
     )
 
     zmq_context = zmq.Context()
@@ -760,6 +771,7 @@ def main(config: InferenceConfig):
         zmq_socket.close()
         zmq_context.term()
         state_subscriber.close()
+        camera_subscriber.close()
         keyboard_listener.close()
         print("Shutdown complete.")
 
