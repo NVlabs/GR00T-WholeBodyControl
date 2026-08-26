@@ -139,6 +139,9 @@ class InferenceLaunchConfig:
     camera_port: int = 5555
     """Camera server port."""
 
+    camera_backend: str = "composed"
+    """Camera client backend for inference: composed or teleimager."""
+
     # Data exporter (optional recording during inference)
     data_exporter: bool = True
     """Start the data exporter pane for recording during inference."""
@@ -268,7 +271,10 @@ def main(config: InferenceLaunchConfig):
     print(f"  Prompt:          {config.prompt}")
     print(f"  Action rate:     {config.action_publish_rate} Hz")
     print(f"  Action horizon:  {config.action_horizon}")
-    print(f"  Camera:          {config.camera_host}:{config.camera_port}")
+    print(
+        f"  Camera:          {config.camera_backend} "
+        f"{config.camera_host}:{config.camera_port}"
+    )
     print(f"  Data exporter:   {'Yes' if config.data_exporter else 'No'}")
     if config.data_exporter:
         print(f"    DC frequency:  {config.data_exporter_frequency} Hz")
@@ -363,6 +369,7 @@ def main(config: InferenceLaunchConfig):
             f"python gear_sonic/scripts/run_data_exporter.py "
             f"--task-prompt '{exporter_prompt}' "
             f"--data-collection-frequency {config.data_exporter_frequency} "
+            f"--camera-backend {config.camera_backend} "
             f"--camera-host {config.camera_host} "
             f"--camera-port {config.camera_port}"
         )
@@ -383,6 +390,7 @@ def main(config: InferenceLaunchConfig):
         f"--prompt '{config.prompt}' "
         f"--action-publish-rate {config.action_publish_rate} "
         f"--action-horizon {config.action_horizon} "
+        f"--camera-backend {config.camera_backend} "
         f"--camera-host {config.camera_host} "
         f"--camera-port {config.camera_port}"
     )
