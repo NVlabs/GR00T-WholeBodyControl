@@ -62,6 +62,23 @@ def _bootstrap_venv():
         )
         sys.exit(1)
 
+    # If we are already running under .venv_inference, re-execing the same
+    # interpreter cannot fix a missing dependency and causes an infinite loop.
+    try:
+        already_in_inference_venv = (
+            Path(sys.executable).resolve() == venv_python.resolve()
+            or Path(sys.prefix).resolve() == venv_python.parent.parent.resolve()
+        )
+    except OSError:
+        already_in_inference_venv = False
+    if already_in_inference_venv:
+        print(
+            "ERROR: .venv_inference exists but tyro is not installed.\n"
+            "  The inference environment setup did not finish successfully.\n"
+            "  Re-run: bash install_scripts/install_inference.sh"
+        )
+        sys.exit(1)
+
     print(f"Re-launching with {venv_python} ...")
     os.execv(str(venv_python), [str(venv_python)] + sys.argv)
 
