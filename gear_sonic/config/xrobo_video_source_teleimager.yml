@@ -1,0 +1,121 @@
+# XRoboToolkit 1.1.1 video-source configuration plus a low-latency profile for
+# Unitree TeleImager's standard side-by-side UVC head camera.
+- name: "PICO4U"
+  camera: "VR"
+  description: "PICO4U Video Stream Source"
+  properties:
+    - name: "visibleRatio"
+      type: "float"
+      value: 0.555
+    - name: "contentRatio"
+      type: "float"
+      value: 1.8
+    - name: "heightCompressionFactor"
+      type: "float"
+      value: 1.333333
+    - name: "RawImageRectSize"
+      type: "string"
+      value: "600x225"
+    - name: "CamWidth"
+      type: "int"
+      value: 2160
+    - name: "CamHeight"
+      type: "int"
+      value: 810
+    - name: "CamFPS"
+      type: "int"
+      value: 60
+    - name: "CamBitrate"
+      type: "int"
+      value: 20971520
+
+- name: "ZEDMINI"
+  camera: "ZED"
+  description: "ZED MINI Video Stream Source"
+  properties:
+    - name: "visibleRatio"
+      type: "float"
+      value: 0.439464
+    - name: "contentRatio"
+      type: "float"
+      value: 1.704850
+    - name: "heightCompressionFactor"
+      type: "float"
+      value: 1.777778
+    - name: "RawImageRectSize"
+      type: "string"
+      value: "600x168.75"
+    - name: "CamWidth"
+      type: "int"
+      value: 2560
+    - name: "CamHeight"
+      type: "int"
+      value: 720
+    - name: "CamFPS"
+      type: "int"
+      value: 60
+    - name: "CamBitrate"
+      type: "int"
+      value: 4000000
+
+- name: "TELEIMAGER_HEAD"
+  camera: "TELEIMAGER"
+  description: "TeleImager binocular UVC head camera"
+  properties:
+    - name: "visibleRatio"
+      type: "float"
+      value: 0.555
+    - name: "contentRatio"
+      type: "float"
+      value: 1.8
+    - name: "heightCompressionFactor"
+      type: "float"
+      value: 1.333333
+    - name: "RawImageRectSize"
+      type: "string"
+      value: "600x225"
+    - name: "CamWidth"
+      type: "int"
+      value: 1280
+    - name: "CamHeight"
+      type: "int"
+      value: 480
+    - name: "CamFPS"
+      type: "int"
+      value: 15
+    - name: "CamBitrate"
+      type: "int"
+      value: 1000000
+
+- name: "TELEIMAGER_HEAD_WRISTS"
+  camera: "TELEIMAGER"
+  description: "TeleImager binocular head plus two wrist cameras"
+  properties:
+    - name: "visibleRatio"
+      type: "float"
+      value: 0.555
+    - name: "contentRatio"
+      type: "float"
+      value: 1.8
+    - name: "heightCompressionFactor"
+      type: "float"
+      # XRoboToolkit's stereo shader uses this as a UV expansion factor
+      # inside its 4:3 visible window. Keep 4/3 so the complete 720-pixel
+      # composite is sampled; using the per-eye aspect ratio crops the top
+      # and bottom of the texture.
+      value: 1.333333
+    - name: "RawImageRectSize"
+      type: "string"
+      value: "600x225"
+    - name: "CamWidth"
+      type: "int"
+      value: 1920
+    - name: "CamHeight"
+      type: "int"
+      value: 720
+    - name: "CamFPS"
+      type: "int"
+      value: 15
+    - name: "CamBitrate"
+      type: "int"
+      value: 2000000
