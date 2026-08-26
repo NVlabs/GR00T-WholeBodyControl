@@ -61,6 +61,22 @@ def _bootstrap_venv():
         )
         sys.exit(1)
 
+    # Re-execing an already active but incomplete environment would loop
+    # forever. Report the failed setup directly instead.
+    try:
+        already_in_data_venv = (
+            Path(sys.executable).resolve() == venv_python.resolve()
+            or Path(sys.prefix).resolve() == venv_python.parent.parent.resolve()
+        )
+    except OSError:
+        already_in_data_venv = False
+    if already_in_data_venv:
+        print(
+            "ERROR: .venv_data_collection exists but tyro is not installed.\n"
+            "  Re-run: bash install_scripts/install_data_collection.sh"
+        )
+        sys.exit(1)
+
     print(f"Re-launching with {venv_python} ...")
     os.execv(str(venv_python), [str(venv_python)] + sys.argv)
 

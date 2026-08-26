@@ -3,8 +3,9 @@
 # Sets up the .venv_inference venv for running VLA inference with
 # Isaac-GR00T PolicyClient against a remote or local policy server.
 #
-# Installs gear_sonic[inference] which pulls in the Isaac-GR00T library,
-# PyZMQ, msgpack, Pinocchio, and other inference dependencies.
+# Installs the lightweight SONIC PolicyServer client, PyZMQ, msgpack,
+# Pinocchio, and other inference dependencies. The full Isaac-GR00T package is
+# only required in the separate PolicyServer environment.
 #
 # Usage:  bash install_scripts/install_inference.sh   (run from repo root)
 
@@ -56,8 +57,20 @@ echo "[INFO] Creating .venv_inference with uv-managed Python 3.10 …"
 uv venv .venv_inference --python "$MANAGED_PY" --prompt gear_sonic_inference
 # shellcheck disable=SC1091
 source .venv_inference/bin/activate
-echo "[INFO] Installing gear_sonic[inference] (this may take a few minutes) …"
-uv pip install -e "gear_sonic[inference]"
+echo "[INFO] Installing lightweight inference dependencies …"
+# Avoid installing the project's general Torch dependency: the client sends
+# observations to a separate PolicyServer and performs no model inference.
+uv pip install \
+    "numpy==1.26.4" \
+    "scipy==1.15.3" \
+    "pyzmq==27.0.1" \
+    "msgpack==1.1.0" \
+    "msgpack-numpy==0.4.8" \
+    "pin==2.7.0" \
+    "tyro==0.9.17" \
+    "opencv-python" \
+    joblib tqdm easydict loguru
+uv pip install --no-deps -e gear_sonic
 
 echo ""
 echo "══════════════════════════════════════════════════════════════"

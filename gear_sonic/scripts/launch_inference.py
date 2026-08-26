@@ -62,6 +62,23 @@ def _bootstrap_venv():
         )
         sys.exit(1)
 
+    # If we are already running under .venv_inference, re-execing the same
+    # interpreter cannot fix a missing dependency and causes an infinite loop.
+    try:
+        already_in_inference_venv = (
+            Path(sys.executable).resolve() == venv_python.resolve()
+            or Path(sys.prefix).resolve() == venv_python.parent.parent.resolve()
+        )
+    except OSError:
+        already_in_inference_venv = False
+    if already_in_inference_venv:
+        print(
+            "ERROR: .venv_inference exists but tyro is not installed.\n"
+            "  The inference environment setup did not finish successfully.\n"
+            "  Re-run: bash install_scripts/install_inference.sh"
+        )
+        sys.exit(1)
+
     print(f"Re-launching with {venv_python} ...")
     os.execv(str(venv_python), [str(venv_python)] + sys.argv)
 
@@ -138,6 +155,9 @@ class InferenceLaunchConfig:
 
     camera_port: int = 5555
     """Camera server port."""
+
+    camera_backend: str = "composed"
+    """Camera client backend for inference: composed or teleimager."""
 
     # Data exporter (optional recording during inference)
     data_exporter: bool = True
@@ -268,7 +288,10 @@ def main(config: InferenceLaunchConfig):
     print(f"  Prompt:          {config.prompt}")
     print(f"  Action rate:     {config.action_publish_rate} Hz")
     print(f"  Action horizon:  {config.action_horizon}")
-    print(f"  Camera:          {config.camera_host}:{config.camera_port}")
+    print(
+        f"  Camera:          {config.camera_backend} "
+        f"{config.camera_host}:{config.camera_port}"
+    )
     print(f"  Data exporter:   {'Yes' if config.data_exporter else 'No'}")
     if config.data_exporter:
         print(f"    DC frequency:  {config.data_exporter_frequency} Hz")
@@ -363,6 +386,7 @@ def main(config: InferenceLaunchConfig):
             f"python gear_sonic/scripts/run_data_exporter.py "
             f"--task-prompt '{exporter_prompt}' "
             f"--data-collection-frequency {config.data_exporter_frequency} "
+            f"--camera-backend {config.camera_backend} "
             f"--camera-host {config.camera_host} "
             f"--camera-port {config.camera_port}"
         )
@@ -383,6 +407,7 @@ def main(config: InferenceLaunchConfig):
         f"--prompt '{config.prompt}' "
         f"--action-publish-rate {config.action_publish_rate} "
         f"--action-horizon {config.action_horizon} "
+        f"--camera-backend {config.camera_backend} "
         f"--camera-host {config.camera_host} "
         f"--camera-port {config.camera_port}"
     )

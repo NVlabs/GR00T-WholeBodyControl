@@ -4,7 +4,7 @@ Sonic VLA data exporter for G1 -- NO ROS 2 DEPENDENCY.
 All data sources use ZMQ:
   1. Robot state  -> ZMQ SUB on ``g1_debug`` topic (port 5557, from C++ zmq_output_handler)
   2. SMPL pose    -> ZMQ SUB on ``pose`` topic     (port 5556, from pico_manager_thread_server)
-  3. Camera       -> ZMQ/TCP via ComposedCameraClientSensor
+  3. Camera       -> ZMQ/TCP via SONIC composed camera or Unitree TeleImager
 
 Robot config (``script_config`` in info.json) is read from the ``robot_config``
 ZMQ topic re-published every ~2 s by the C++ process.  If the config is not
@@ -23,6 +23,7 @@ from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
 import json
+import threading
 import time
 
 import numpy as np
@@ -38,7 +39,7 @@ from gear_sonic.data.features_sonic_vla import (
     get_wrist_camera_features,
     get_wrist_camera_modality_config,
 )
-from gear_sonic.camera.composed_camera import ComposedCameraClientSensor
+from gear_sonic.camera.teleimager_client import create_camera_client
 from gear_sonic.utils.data_collection.episode_state import EpisodeState
 from gear_sonic.utils.data_collection.keyboard_subscriber import ZMQKeyboardSubscriber
 from gear_sonic.utils.data_collection.telemetry import Telemetry
@@ -77,7 +78,10 @@ class SonicDataExporterConfig:
     """Camera server host."""
 
     camera_port: int = 5555
-    """Camera server port."""
+    """Camera port (5555 for composed; TeleImager request port is normally 60000)."""
+
+    camera_backend: str = "composed"
+    """Camera client backend: composed or teleimager."""
 
     # ZMQ: Sonic / SMPL pose (from pico_manager_thread_server)
     sonic_zmq_host: str = "localhost"
@@ -115,6 +119,24 @@ class TimeDeltaException(Exception):
         self.reset_timeout_sec = reset_timeout_sec
         self.message = f"{self.failure_count} failures in {self.reset_timeout_sec} seconds"
         super().__init__(self.message)
+
+
+def ring_terminal_bell(count: int, interval: float = 0.5) -> threading.Thread:
+    """Emit a terminal-bell pattern without blocking collection or saving."""
+
+    def emit_pattern():
+        for index in range(count):
+            print("\a", end="", flush=True)
+            if index + 1 < count:
+                time.sleep(interval)
+
+    thread = threading.Thread(
+        target=emit_pattern,
+        name="recording-bell",
+        daemon=True,
+    )
+    thread.start()
+    return thread
 
 
 def unpack_pose_message(packed_data: bytes, topic: str = "pose") -> dict:
@@ -219,6 +241,7 @@ class GrootDataCollector:
         self,
         camera_host: str,
         camera_port: int,
+        camera_backend: str,
         data_exporter: Gr00tDataExporter,
         robot_model,
         text_to_speech=None,
@@ -237,7 +260,11 @@ class GrootDataCollector:
         self._episode_state = EpisodeState()
         self._keyboard_listener = ZMQKeyboardSubscriber()
 
-        self._image_subscriber = ComposedCameraClientSensor(server_ip=camera_host, port=camera_port)
+        self._image_subscriber = create_camera_client(
+            backend=camera_backend,
+            server_ip=camera_host,
+            port=camera_port,
+        )
 
         self.obs_act_buffer = deque(maxlen=100)
         self.latest_image_msg = None
@@ -281,6 +308,7 @@ class GrootDataCollector:
 
         self._last_latency_log_time = 0.0
         self._initial_yaw = None
+        self._next_recording_bell_time: float | None = None
 
         print(f"Recording to {self.data_exporter.meta.root}")
 
@@ -320,10 +348,13 @@ class GrootDataCollector:
             self._episode_state.change_state()
             if self._episode_state.get_state() == self._episode_state.RECORDING:
                 self._initial_yaw = None
+                self._next_recording_bell_time = time.monotonic()
                 self._print_and_say(
                     f"Started recording {self.current_episode_index}", blocking=False
                 )
             elif self._episode_state.get_state() == self._episode_state.NEED_TO_SAVE:
+                self._next_recording_bell_time = None
+                ring_terminal_bell(2)
                 self._print_and_say("Stopping recording, preparing to save", blocking=False)
             elif self._episode_state.get_state() == self._episode_state.IDLE:
                 self._print_and_say("Saved episode and back to idle state", blocking=False)
@@ -332,7 +363,23 @@ class GrootDataCollector:
                 self.data_exporter.save_episode_as_discarded()
                 self._episode_state.reset_state()
                 self._initial_yaw = None
+                self._next_recording_bell_time = None
                 self._print_and_say("Discarded episode", blocking=False)
+
+    def _update_recording_bell(self):
+        """Ring once per second while an episode is actively recording."""
+
+        if self._episode_state.get_state() != self._episode_state.RECORDING:
+            self._next_recording_bell_time = None
+            return
+
+        now = time.monotonic()
+        if (
+            self._next_recording_bell_time is None
+            or now >= self._next_recording_bell_time
+        ):
+            print("\a", end="", flush=True)
+            self._next_recording_bell_time = now + 1.0
 
     def _poll_sonic_zmq_messages(self):
         """Poll ZMQ for pose, planner, and manager_state messages (non-blocking)."""
@@ -844,6 +891,10 @@ class GrootDataCollector:
             self._state_subscriber.close()
         except Exception:
             pass
+        try:
+            self._image_subscriber.close()
+        except Exception:
+            pass
         for sock in [self._sonic_zmq_socket]:
             if sock is not None:
                 try:
@@ -880,6 +931,7 @@ class GrootDataCollector:
 
                     with self.telemetry.timer("check_recording_commands"):
                         self._check_recording_commands()
+                        self._update_recording_bell()
 
                     end_time = time.monotonic()
 
@@ -936,7 +988,11 @@ def main(config: SonicDataExporterConfig):
         features=dataset_features,
         modality_config=modality_config,
         task=config.task_prompt,
-        script_config={**robot_config, "record_wrist_cameras": config.record_wrist_cameras},
+        script_config={
+            **robot_config,
+            "record_wrist_cameras": config.record_wrist_cameras,
+            "camera_backend": config.camera_backend,
+        },
     )
 
     data_collector = GrootDataCollector(
@@ -945,6 +1001,7 @@ def main(config: SonicDataExporterConfig):
         robot_model=g1_rm,
         camera_host=config.camera_host,
         camera_port=config.camera_port,
+        camera_backend=config.camera_backend,
         text_to_speech=text_to_speech,
         sonic_data_zmq_host=config.sonic_zmq_host,
         sonic_data_zmq_port=config.sonic_zmq_port,
