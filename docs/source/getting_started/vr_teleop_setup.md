@@ -149,3 +149,75 @@ source .venv_teleop/bin/activate   # prompt: (gear_sonic_teleop)
 ## Next Steps
 
 Your PICO hardware and software are now ready. Proceed to the [ZMQ Manager (`zmq_manager`) tutorial](../tutorials/vr_wholebody_teleop.md) to run whole-body teleoperation in simulation or on the real robot.
+
+## Optional: View TeleImager Cameras in XRoboToolkit
+
+XRoboToolkit does not consume TeleImager's ZMQ or WebRTC stream directly. The
+display-only bridge converts the existing TeleImager head-camera stream to the
+H.264/TCP Remote Vision protocol used by XRoboToolkit. It does not subscribe to
+robot state and cannot send robot or hand commands.
+
+XRoboToolkit 1.1.1's built-in camera profiles are much larger than this head
+camera, so install the supplied profile once while the PICO is connected over
+ADB:
+
+```bash
+adb push gear_sonic/config/xrobo_video_source_teleimager.yml \
+  /sdcard/Android/data/com.xrobotoolkit.client/files/video_source.yml
+```
+
+Close and reopen XRoboToolkit after pushing the file. To restore its built-in
+profiles, delete the copied file and reopen the app. The supplied wrist profile
+includes the stereo-shader parameters required to show the full height of the
+head-and-wrist composite without cropping.
+
+```bash
+adb shell rm \
+  /sdcard/Android/data/com.xrobotoolkit.client/files/video_source.yml
+```
+
+Keep the normal TeleImager server running on the G1, then run this command on
+the workstation in a separate terminal:
+
+```bash
+cd /home/ubuntu/work/robot/unitree/sonic/GR00T-WholeBodyControl
+source .venv_data_collection/bin/activate
+G1_CAMERA_HOST=192.168.123.164  # Replace with the TeleImager server address.
+
+python gear_sonic/scripts/run_xrobo_camera_bridge.py \
+  --camera-host "$G1_CAMERA_HOST" \
+  --camera-port 60000
+```
+
+To show the two D405 wrist cameras below the head view, use:
+
+```bash
+python gear_sonic/scripts/run_xrobo_camera_bridge.py \
+  --camera-host "$G1_CAMERA_HOST" \
+  --camera-port 60000 \
+  --show-wrist-cameras
+```
+
+In XRoboToolkit on the PICO:
+
+1. Open **Remote Vision**.
+2. Select **TELEIMAGER_HEAD** (`1280x480`) for the head-only command, or
+   **TELEIMAGER_HEAD_WRISTS** (`1920x720`) when using
+   `--show-wrist-cameras`. Both profiles are side-by-side at `15 fps`.
+3. Select **Listen**, enter the workstation's Wi-Fi IP address, and confirm.
+
+The bridge should print `OPEN_CAMERA`, followed by `Connected to PICO`. The
+same TeleImager server can continue feeding the data exporter at the same time.
+In the wrist layout, the binocular head view remains at the top and the left
+and right wrist views appear side by side below it in both eyes. This display
+composition does not alter the camera frames recorded by the data exporter.
+XRoboToolkit's stereo surface is fixed at 4:3 per eye, so the narrower
+head-and-wrist column is centered with black space at its left and right. This
+pillar-boxing preserves the aspect ratio of all three camera images.
+
+```{warning}
+XRoboToolkit uses the right-controller **B** button to change the Remote Vision
+stereo presentation. SONIC also interprets ABXY combinations as control-mode
+commands. Set the preferred camera presentation before enabling robot control,
+and do not press B merely to change the view while the real robot is active.
+```
