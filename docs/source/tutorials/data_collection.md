@@ -161,6 +161,30 @@ python gear_sonic/scripts/launch_data_collection.py \
     --task-prompt "pick up the cup"
 ```
 
+### Unitree TeleImager backend
+
+SONIC can subscribe to an existing Unitree TeleImager server that publishes a
+UVC `head_camera` and optional RealSense `left_wrist_camera` and
+`right_wrist_camera` streams over ZMQ. Install the official TeleImager client
+in the data-collection environment, then select the backend explicitly:
+
+```bash
+source .venv_data_collection/bin/activate
+uv pip install -e /path/to/xr_teleoperate/teleop/teleimager
+G1_CAMERA_HOST=192.168.123.164  # Replace with the TeleImager server address.
+
+python gear_sonic/scripts/run_data_exporter.py \
+    --task-prompt "pick up the cup" \
+    --camera-backend teleimager \
+    --camera-host "$G1_CAMERA_HOST" \
+    --camera-port 60000 \
+    --record-wrist-cameras
+```
+
+Port `60000` is TeleImager's configuration request port. The image ports and
+enabled camera names are read from the server configuration. SONIC does not
+start, stop, or reconfigure the TeleImager server.
+
 ### ZMQ message format
 
 The camera server publishes a single msgpack-encoded payload per frame cycle containing all camera images:
@@ -378,6 +402,10 @@ These buttons work in any manager mode (POSE, PLANNER, etc.) and are independent
 |---|---|
 | `c` | **Toggle** recording (same as Left Grip + A) |
 | `x` | **Discard** episode (same as Left Grip + B — flagged for removal) |
+
+While an episode is recording, the exporter emits one terminal BEL per second.
+Stopping a successful recording emits two BELs. Bell generation is asynchronous
+and does not block collection or episode saving.
 
 ```{note}
 Keyboard commands are sent via a separate ZMQ publisher (default port `5580`). The data exporter subscribes to this channel automatically. You can send keys from any ZMQ publisher on that port, or integrate with the C++ deployment's keyboard handler.
