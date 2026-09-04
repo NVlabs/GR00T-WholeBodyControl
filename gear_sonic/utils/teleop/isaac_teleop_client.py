@@ -129,6 +129,20 @@ class IsaacTeleopClient:
             # WebRTC media over the USB cable via `adb reverse`, so the headset
             # reaches the host on loopback without needing shared Wi-Fi. Needs
             # `coturn` and `adb` on PATH.
+            # Opt in to CloudXR's WebXR full-body skeleton before the runtime is
+            # launched. The check lives in the CloudXR server, i.e. the runtime
+            # process, and that process inherits its environment when it is
+            # started -- which CloudXRLauncher does below. Setting it after this
+            # point (for instance next to the OpenXR session) is too late: the
+            # runtime is already up with the variable absent, and it silently
+            # ignores a client offering the full-body skeleton.
+            #
+            # isaacteleop sets the same default on the runtime's environment from
+            # 1.5 on. setdefault means the two agree, this still works against an
+            # externally started runtime, and an operator who exports the variable
+            # -- including to "0" -- still wins.
+            os.environ.setdefault("NV_CXR_ENABLE_NON_CONFORMANT_META_BODY_TRACKING", "1")
+
             self._cloudxr_launcher = CloudXRLauncher(
                 install_dir=self._cloudxr_install_dir,
                 env_config=self._cloudxr_env_config,
@@ -183,18 +197,6 @@ class IsaacTeleopClient:
             required_extensions = deviceio.DeviceIOSession.get_required_extensions(
                 trackers, vendor_config
             )
-
-            # CloudXR withholds XR_META_body_tracking_full_body unless asked, because
-            # its support is not conformant: the joints are relayed from the connected
-            # client rather than produced by a conformant implementation. The Meta
-            # tracker above needs it, so opt in -- but only for this process, not via
-            # the shared ~/.cloudxr/run/cloudxr.env, which every CloudXR application
-            # sources.
-            #
-            # isaacteleop sets this itself before xrCreateInstance from 1.5 on. This
-            # covers .venv_teleop, which is still pinned to 1.3.131; setdefault means
-            # the two agree, and an operator who exports the variable still wins.
-            os.environ.setdefault("NV_CXR_ENABLE_NON_CONFORMANT_META_BODY_TRACKING", "1")
 
             oxr_session = stack.enter_context(
                 oxr.OpenXRSession(self._app_name, required_extensions)
