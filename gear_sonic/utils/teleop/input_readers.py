@@ -218,7 +218,7 @@ def _log_unrecognised_schema_once(body_data: Any) -> None:
 
 
 def _body_data_to_24x7(body_data: Any) -> np.ndarray | None:
-    """Convert ``FullBodyTracker.get_body_pose().data`` to a (24, 7) array.
+    """Convert ``FullBodyTracker.get_body_pose()`` to a (24, 7) array.
 
     Returns ``None`` while no joint is valid (typical when the headset isn't
     connected yet — every ``BodyJointPose.is_valid`` is False, the streamer

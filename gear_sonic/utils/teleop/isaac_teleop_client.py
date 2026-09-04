@@ -228,7 +228,7 @@ class IsaacTeleopClient:
         Returns:
             Dict with keys ``left_controller``, ``right_controller``, ``head``,
             ``left_hand``, ``right_hand``, ``full_body``. Each value is the
-            corresponding tracker's ``.data`` payload (raw DeviceIO type).
+            corresponding tracker's payload (raw DeviceIO type), or None.
         """
         if self._deviceio_session is None:
             return None
@@ -248,18 +248,23 @@ class IsaacTeleopClient:
         # exclusive), so exactly one of these is ever active; prefer it, and fall
         # back to BD for a Pico client. Re-derived every frame (not cached) so a
         # headset swap mid-session is picked up on the next poll.
-        full_body = self._body_tracker_meta.get_body_pose(session).data
+        # Each accessor returns the payload itself, or None when that tracker has
+        # produced no data -- isaacteleop deliberately spells absence as None
+        # rather than an empty handle, so that an inactive device cannot answer
+        # field reads with defaults indistinguishable from real zeroes. Every
+        # consumer below already treats None as "not present".
+        full_body = self._body_tracker_meta.get_body_pose(session)
         if full_body is not None:
             full_body_source = "quest"
         else:
-            full_body = self._body_tracker_bd.get_body_pose(session).data
+            full_body = self._body_tracker_bd.get_body_pose(session)
             full_body_source = "pico" if full_body is not None else None
         return {
-            "left_controller": self._controller_tracker.get_left_controller(session).data,
-            "right_controller": self._controller_tracker.get_right_controller(session).data,
-            "head": self._head_tracker.get_head(session).data,
-            "left_hand": self._hand_tracker.get_left_hand(session).data,
-            "right_hand": self._hand_tracker.get_right_hand(session).data,
+            "left_controller": self._controller_tracker.get_left_controller(session),
+            "right_controller": self._controller_tracker.get_right_controller(session),
+            "head": self._head_tracker.get_head(session),
+            "left_hand": self._hand_tracker.get_left_hand(session),
+            "right_hand": self._hand_tracker.get_right_hand(session),
             "full_body": full_body,
             "full_body_source": full_body_source,
         }
