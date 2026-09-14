@@ -13,11 +13,6 @@ mode, including a successful ground pickup.
 :align: center
 ```
 
-```{admonition} Isaac Teleop / CloudXR Scope
-:class: note
-The same `zmq_manager` workflow can also drive the headset through Isaac Teleop / CloudXR by launching `gear_sonic/scripts/pico_manager_thread_server.py --input-source isaac-teleop`. The streamer hosts the CloudXR runtime in-process via `isaacteleop[cloudxr]` — no separate publisher container required. That path is currently supported only for **G1 with a Thor backpack**; a regular G1 setup is not supported yet.
-```
-
 ```{admonition} Safety Warning
 :class: danger
 Whole-body teleoperation involves fast, agile motions. **Always** maintain a clear safety zone and keep a safety operator at the keyboard ready to trigger an emergency stop (**`O`** in the C++ terminal, or **A+B+X+Y** on the PICO controllers).
@@ -33,7 +28,7 @@ You **must wear tight-fitting pants or leggings** to guarantee line-of-sight for
 ## Prerequisites
 
 1. **Completed the [Quick Start](../getting_started/quickstart.md)** — you can run the sim2sim loop (includes [installing the deployment](../getting_started/installation_deploy.md) and [downloading model checkpoints](../getting_started/download_models.md)).
-2. **Completed the [VR Teleop Setup](../getting_started/vr_teleop_setup.md)** — `.venv_teleop` is ready. For the default path, PICO hardware is installed, calibrated, and connected. For Isaac Teleop / CloudXR, the `isaacteleop[cloudxr]` package is also installed (handled by `install_pico.sh`) and the headset connects to the in-process CloudXR runtime — see [Isaac Teleop Setup](isaac_teleop_publisher_setup.md).
+2. **Completed the [VR Teleop Setup](../getting_started/vr_teleop_setup.md):** `.venv_teleop` is ready, and the PICO hardware is paired and calibrated.
 
 ---
 
@@ -43,7 +38,7 @@ Run **three terminals** to teleoperate the simulated robot.
 
 ### Terminal 1 — Launch virtual robot in MuJoCo Simulator
 
-From the **repo root**:
+On the deployment host, from the **repo root**:
 
 ```bash
 # bash install_scripts/install_pico.sh
@@ -54,62 +49,49 @@ python gear_sonic/scripts/run_sim_loop.py
 
 ### Terminal 2 — C++ Deployment
 
-From `gear_sonic_deploy/`:
+Run native deployment with the TensorRT package for your platform from the [Installation Guide](../getting_started/installation_deploy.md):
 
 ```bash
 cd gear_sonic_deploy
+export TensorRT_ROOT=$HOME/TensorRT
+
 source scripts/setup_env.sh
-./deploy.sh --input-type zmq_manager sim
-# Wait until you see "Init done"
-```
-
-**Isaac Teleop / CloudXR alternative** (**G1 + Thor backpack only**) — run the C++ deployment from the project's ROS2 docker container instead of bare metal:
-
-```bash
-cd gear_sonic_deploy
-export TensorRT_ROOT=$HOME/TensorRT   # only if not already in ~/.bashrc
-./docker/run-ros2-dev.sh
-
-# inside the container (setup_env.sh is sourced automatically):
 just build                                  # first run only
 ./deploy.sh --input-type zmq_manager sim
 # Wait until you see "Init done"
 ```
 
-See [Installation (Deployment) → Docker (ROS2 Development Environment)](../getting_started/installation_deploy.md) for details on `run-ros2-dev.sh` and `TensorRT_ROOT`.
+(split-host-teleop)=
+```{admonition} Running on Separate Hosts
+:class: note
+The streamer receives PICO tracking data. The deployment host runs the C++ policy and, for Sim2Sim, the MuJoCo simulator.
 
-```{note}
-The `--zmq-host` flag defaults to `localhost`, which is correct when both C++ deployment scripts and teleop scripts (Terminal 3) run on the same machine. If the teleop script runs on a different machine, pass `--zmq-host <IP-of-teleop-machine>`.
+- On the deployment host, add `--zmq-host <streamer-ip>` to `./deploy.sh` to receive commands and poses from the streamer's TCP port **5556**.
+- On the streamer host, add `--zmq_feedback_host <deployment-ip>` to `pico_manager_thread_server.py` to receive robot-state feedback from the deployment host's TCP port **5557**.
+
+Both flags default to `localhost` for a single-host setup. These settings apply to both XRoboToolkit and IsaacTeleop.
+
+If a firewall is enabled, allow TCP **5556** on the streamer host from the deployment host, and TCP **5557** on the deployment host from the streamer host.
 ```
 
 ### Terminal 3 — PICO Teleop Streamer
 
-From the **repo root**:
+On the streamer host, from the **repo root**:
 
 ```bash
 source .venv_teleop/bin/activate
 
-# With full visualization (recommended for first run):
+# Add visualization for the first run:
 python gear_sonic/scripts/pico_manager_thread_server.py --manager \
     --vis_vr3pt --vis_smpl
 
-# Without visualization (for headless / onboard practice):
+# Without visualization:
 # python gear_sonic/scripts/pico_manager_thread_server.py --manager
 ```
 
-**Isaac Teleop / CloudXR alternative** (**G1 + Thor backpack only**) — connects the headset over CloudXR (no XRoboToolKit PC service required); the streamer launches the CloudXR runtime in-process via `isaacteleop[cloudxr]`:
+To use IsaacTeleop, add `--input-source isaac-teleop` and follow the [Isaac Teleop Setup](isaac_teleop_publisher_setup.md).
 
-```bash
-source .venv_teleop/bin/activate
-
-python gear_sonic/scripts/pico_manager_thread_server.py --manager \
-    --input-source isaac-teleop
-
-# If running offboard with a display, add visualization:
-#   --vis_vr3pt --vis_smpl
-```
-
-When you turn on the visualization, wait for a window to pop up showing a Unitree G1 mesh with all joints at the default angles. If no window shows up on the default PICO path, double-check the PICO's XRoboToolKit IP configuration in the [VR Teleop Setup](../getting_started/vr_teleop_setup.md). If you are using Isaac Teleop instead, verify the headset is connected to the in-process CloudXR runtime — see [Isaac Teleop Setup](isaac_teleop_publisher_setup.md) for connection steps.
+When you turn on visualization, wait for a window that shows a Unitree G1 mesh with all joints at the default angles. If poses are missing, check the XRoboToolkit PC service and the IP configuration in the headset application. For IsaacTeleop, verify that the Web Client is connected to the streamer.
 
 ### Your First Teleop Session
 
@@ -309,40 +291,29 @@ The real-robot workflow uses **two terminals** (no MuJoCo simulator).
 
 ### Terminal 1 — C++ Deployment (Real Robot)
 
-From `gear_sonic_deploy/`:
+Run native deployment with the TensorRT package for your platform from the [Installation Guide](../getting_started/installation_deploy.md):
 
 ```bash
 cd gear_sonic_deploy
+export TensorRT_ROOT=$HOME/TensorRT
+
 source scripts/setup_env.sh
+just build                                  # first run only
 
 # 'real' auto-detects the robot network interface (192.168.123.x).
 # If auto-detection fails, pass the G1's IP directly:
 #   ./deploy.sh --input-type zmq_manager <G1-IP>
 ./deploy.sh --input-type zmq_manager real
-
-# Wait until you see "Init done"
-```
-
-**Isaac Teleop / CloudXR alternative** (**G1 + Thor backpack only**) — run the C++ deployment from the project's ROS2 docker container instead of bare metal:
-
-```bash
-cd gear_sonic_deploy
-export TensorRT_ROOT=$HOME/TensorRT   # only if not already in ~/.bashrc
-./docker/run-ros2-dev.sh
-
-# inside the container (setup_env.sh is sourced automatically):
-just build                                   # first run only
-./deploy.sh --input-type zmq_manager real
 # Wait until you see "Init done"
 ```
 
 ```{note}
-If the teleop script (Terminal 2) runs on a different machine, add `--zmq-host <IP-of-teleop-machine>` so the C++ side knows where the ZMQ publisher is.
+If the deployment and streamer run on different machines, follow {ref}`Running on Separate Hosts <split-host-teleop>` to configure both ZMQ connections.
 ```
 
 ### Terminal 2 — PICO Teleop Streamer
 
-From the **repo root**:
+On the streamer host, from the **repo root**:
 
 ```bash
 # bash install_scripts/install_pico.sh
@@ -354,15 +325,6 @@ python gear_sonic/scripts/pico_manager_thread_server.py --manager
 #   --vis_vr3pt --vis_smpl
 ```
 
-**Isaac Teleop / CloudXR alternative** (**G1 + Thor backpack only**) — in-process CloudXR runtime via `isaacteleop[cloudxr]`, no XRoboToolKit PC service required:
-
-```bash
-source .venv_teleop/bin/activate
-python gear_sonic/scripts/pico_manager_thread_server.py --manager --input-source isaac-teleop
-```
-
-```{note}
-Update the IP in the PICO's XRoboToolKit app to match this machine before starting the default PICO path. For Isaac Teleop, make sure the headset is connected to the in-process CloudXR runtime — see [Isaac Teleop Setup](isaac_teleop_publisher_setup.md).
-```
+Select the PC service when prompted in the XRoboToolkit headset application. To use IsaacTeleop, add `--input-source isaac-teleop` and follow the [Isaac Teleop Setup](isaac_teleop_publisher_setup.md).
 
 Follow the same start sequence: calibration pose → **A+B+X+Y** → **A+X** for POSE mode. See [Complete PICO Controls](#pico-controls) for all available commands.

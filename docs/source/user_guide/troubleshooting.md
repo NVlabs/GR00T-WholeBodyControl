@@ -111,8 +111,9 @@ not installed.
    |---|---|
    | x86_64 (Desktop) | **10.13** (required) |
    | Jetson / G1 onboard Orin | **10.7** (required; JetPack 6) |
+   | Jetson / G1 onboard Thor | **10.13** (required) |
 
-2. Extract and set the environment variable:
+2. Extract the TAR package to `~/TensorRT` and set the environment variable:
    ```bash
    export TensorRT_ROOT=$HOME/TensorRT
    echo 'export TensorRT_ROOT=$HOME/TensorRT' >> ~/.bashrc
@@ -206,17 +207,20 @@ without errors but outputs incorrect actions.
 |---|---|
 | x86_64 (Desktop) | **TensorRT 10.13** |
 | Jetson / G1 onboard Orin | **TensorRT 10.7** (JetPack 6) |
+| Jetson / G1 onboard Thor | **TensorRT 10.13** |
 
 Verify your version:
 
 ```bash
 echo $TensorRT_ROOT
-ls $TensorRT_ROOT/lib/libnvinfer.so*
+find -L "$TensorRT_ROOT/lib" "$TensorRT_ROOT/lib/aarch64-linux-gnu" \
+    -maxdepth 1 -name 'libnvinfer.so*' -print 2>/dev/null
 ```
 
 If the version is wrong, download the correct one from
-[NVIDIA Developer](https://developer.nvidia.com/tensorrt/download/10x) and
-rebuild the C++ deployment binary.
+[NVIDIA Developer](https://developer.nvidia.com/tensorrt/download/10x), extract
+it to `~/TensorRT`, and rebuild the C++ deployment binary after correcting
+`TensorRT_ROOT`.
 
 ---
 

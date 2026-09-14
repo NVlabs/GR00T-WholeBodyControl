@@ -5,8 +5,8 @@ OpenXR session, and starts the DeviceIO trackers (head, hands, controllers,
 full body). Provides synchronous getters that the gear_sonic teleop
 readers poll on a background thread.
 
-This replaces the legacy multi-container path (``run_cloudxr_via_docker.sh``
-plus the ROS2 ``teleop_ros2_ref`` publisher) — see
+This replaces the separate multi-container path (``run_cloudxr_via_docker.sh``
+plus the ROS2 ``teleop_ros2_ref`` publisher). See
 ``docs/source/tutorials/isaac_teleop_publisher_setup.md`` for the in-process
 setup. Requires ``isaacteleop[cloudxr]`` from ``pypi.nvidia.com`` (installed
 by ``install_scripts/install_pico.sh``).

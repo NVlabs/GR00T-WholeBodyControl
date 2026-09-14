@@ -31,9 +31,10 @@ This is the codebase for the **GR00T Whole-Body Control (WBC)** projects. It hos
 
 ## News
 
+- **[2026-09-14]** **IsaacTeleop 1.4 and AGX Orin support**: Added IsaacTeleop 1.4 and Jetson AGX Orin support for PICO teleoperation.
 - **[2026-08-31]** **SONIC deployment update** — added per-motor Kp/Kd scaling to reduce stumbling.
 - **[2026-07-23]** **SONIC v1.1 checkpoint** — released a robot-heading-normalized SONIC controller trained with wrist-pose augmentation for whole-body teleoperation and SONIC-backed VLA execution. See the [Model Card](#model-card) and [Download Models](https://nvlabs.github.io/GR00T-WholeBodyControl/getting_started/download_models.html#sonic-v11-checkpoint).
-- **[06/16]** **Isaac Teleop Setup (CloudXR / DeviceIO, in-process)** — added bring-up docs for the in-process CloudXR path via `isaacteleop[cloudxr]`, with no separate publisher container. See [Isaac Teleop Setup](https://nvlabs.github.io/GR00T-WholeBodyControl/tutorials/isaac_teleop_publisher_setup.html).
+- **[2026-06-16]** **Isaac Teleop Setup (CloudXR / DeviceIO, in-process)** — added bring-up docs for the in-process CloudXR path via `isaacteleop[cloudxr]`, with no separate publisher container. See [Isaac Teleop Setup](https://nvlabs.github.io/GR00T-WholeBodyControl/tutorials/isaac_teleop_publisher_setup.html).
 - **[2026-06-16]** **Low-latency teleoperation checkpoint** — released a SONIC checkpoint with 4-frame SMPL reference lookahead for more responsive whole-body teleoperation. See the [Model Card](#model-card), [Download Models](https://nvlabs.github.io/GR00T-WholeBodyControl/getting_started/download_models.html#low-latency-teleoperation-checkpoint), and [VLA Inference](https://nvlabs.github.io/GR00T-WholeBodyControl/tutorials/vla_inference.html#low-latency-teleoperation-checkpoint).
 - **[2026-05-07]** 🤖 **End-to-end VLA workflow on G1** — collect teleop data, fine-tune Isaac-GR00T N1.7, and deploy with SONIC whole-body control. See [Data Collection](https://nvlabs.github.io/GR00T-WholeBodyControl/tutorials/data_collection.html), [VLA Workflow](https://nvlabs.github.io/GR00T-WholeBodyControl/tutorials/vla_workflow.html), and [VLA Inference](https://nvlabs.github.io/GR00T-WholeBodyControl/tutorials/vla_inference.html).
 - **[2026-04-27]** 🧩 **MotionBricks preview** — interactive G1 demo, pretrained checkpoints (VQVAE · pose · root), synthetic training code, and motion-representation docs. See [`motionbricks/`](motionbricks/) and the [project page](https://nvlabs.github.io/motionbricks/).
@@ -214,7 +215,7 @@ SONIC supports real-time whole-body teleoperation via PICO VR headset, enabling 
 
 <p align="center"><em><strong>SONIC Low Latency:</strong> Whole-body teleoperation mode with a successful ground pickup.</em></p>
 
-This repo can also drive the headset over Isaac Teleop / CloudXR by launching `gear_sonic/scripts/pico_manager_thread_server.py --input-source isaac-teleop`. The streamer hosts the CloudXR runtime in-process via `isaacteleop[cloudxr]` — no separate publisher container required. That path is currently documented and supported only for **G1 with a Thor backpack**. The Isaac Teleop bring-up steps are documented in [`docs/source/tutorials/isaac_teleop_publisher_setup.md`](docs/source/tutorials/isaac_teleop_publisher_setup.md).
+For PICO teleoperation, follow the [`VR Teleop Setup`](docs/source/getting_started/vr_teleop_setup.md). To use IsaacTeleop 1.4, follow the [`Isaac Teleop Setup`](docs/source/tutorials/isaac_teleop_publisher_setup.md) and launch the streamer with `--input-source isaac-teleop`.
 
 <div align="center">
 <table>
