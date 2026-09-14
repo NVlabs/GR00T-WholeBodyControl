@@ -187,8 +187,8 @@ def _quat_xyzw(orientation: Any) -> tuple[float, float, float, float] | None:
         return None
 
 
-# Number of joints in the IsaacTeleop FullBodyPosePicoT (XR_BD_body_tracking).
-# Mirrors core.BodyJointPico.NUM_JOINTS in IsaacTeleop's schema bindings.
+# Number of joints in the Isaac Teleop FullBodyPoseT (XR_BD_body_tracking).
+# Mirrors core.BodyJoint.NUM_JOINTS in Isaac Teleop's schema bindings.
 _NUM_BODY_JOINTS = 24
 
 _UNRECOGNISED_SCHEMA_LOGGED: set[str] = set()
@@ -212,7 +212,7 @@ def _log_unrecognised_schema_once(body_data: Any) -> None:
 
 
 def _body_data_to_24x7(body_data: Any) -> np.ndarray | None:
-    """Convert ``FullBodyTrackerPico.get_body_pose().data`` to a (24, 7) array.
+    """Convert ``FullBodyTracker.get_body_pose().data`` to a (24, 7) array.
 
     Returns ``None`` while no joint is valid (typical when the headset isn't
     connected yet — every ``BodyJointPose.is_valid`` is False, the streamer
@@ -220,12 +220,12 @@ def _body_data_to_24x7(body_data: Any) -> np.ndarray | None:
 
     Two accepted schemas:
 
-    Schema A — IsaacTeleop ``FullBodyPosePicoT`` (DeviceIO direct).
+    Schema A — Isaac Teleop ``FullBodyPoseT`` (DeviceIO direct).
         Defined in IsaacTeleop's ``schema/full_body.fbs`` /
         ``schema/python/full_body_bindings.h``::
 
-            FullBodyPosePicoT.joints                → BodyJointsPico (attr)
-            BodyJointsPico.joints(index)            → BodyJointPose  (METHOD; index 0..23)
+            FullBodyPoseT.joints                    → BodyJoints (attr)
+            BodyJoints.joints(index)                → BodyJointPose (METHOD; index 0..23)
             BodyJointPose.is_valid                  → bool
             BodyJointPose.pose.position             → Point (.x .y .z)
             BodyJointPose.pose.orientation          → Quaternion (.x .y .z .w)
@@ -254,8 +254,8 @@ def _body_data_to_24x7(body_data: Any) -> np.ndarray | None:
             body_poses[i, 3:] = quat
         return body_poses
 
-    # Schema A: native FullBodyPosePicoT — joints exposed via
-    # BodyJointsPico.joints(index) method (one BodyJointPose per call).
+    # Schema A: native FullBodyPoseT — joints exposed via
+    # BodyJoints.joints(index) method (one BodyJointPose per call).
     joints_container = getattr(body_data, "joints", None)
     if joints_container is None:
         _log_unrecognised_schema_once(body_data)
@@ -363,7 +363,7 @@ class IsaacTeleopReader:
             raise RuntimeError(
                 "isaacteleop is required for --input-source isaac-teleop but was not "
                 "found. Install via install_scripts/install_pico.sh, which runs:\n"
-                "  uv pip install 'isaacteleop[cloudxr]~=1.3.0' --prerelease=allow "
+                "  uv pip install 'isaacteleop[cloudxr]~=1.4.0' --prerelease=allow "
                 "--extra-index-url https://pypi.nvidia.com"
             )
 
@@ -489,5 +489,4 @@ class IsaacTeleopReader:
                 last_report = now
 
             time.sleep(self._period)
-
 

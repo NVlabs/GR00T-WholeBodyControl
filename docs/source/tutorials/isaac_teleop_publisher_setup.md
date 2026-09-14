@@ -53,7 +53,7 @@ For reference, `install_pico.sh` installs the package from the public NVIDIA ind
 
 ```bash
 # Already wired into install_pico.sh; shown here for reference
-uv pip install 'isaacteleop[cloudxr]~=1.3.0' --prerelease=allow \
+uv pip install 'isaacteleop[cloudxr]~=1.4.0' --prerelease=allow \
     --extra-index-url https://pypi.nvidia.com
 ```
 
@@ -185,7 +185,7 @@ just build
 
 ### `isaacteleop` import error
 
-Re-run `install_pico.sh` to reinstall `isaacteleop[cloudxr]~=1.3.0` into `.venv_teleop`. If `pypi.nvidia.com` is unreachable, check your network and the `--extra-index-url` flag.
+Re-run `install_pico.sh` to reinstall `isaacteleop[cloudxr]~=1.4.0` into `.venv_teleop`. If `pypi.nvidia.com` is unreachable, check your network and the `--extra-index-url` flag.
 
 ### Body data not arriving
 
@@ -193,5 +193,4 @@ The streamer logs `[IsaacTeleopReader] No DeviceIO data for 5.0s, flagging disco
 
 1. The headset is still connected to CloudXR (Step 5).
 2. The Pico body trackers are paired and calibrated (see [VR Teleop Setup → Motion Tracker Setup](../getting_started/vr_teleop_setup.md)).
-3. The first time the schema runs, watch for `[IsaacTeleopReader] Unrecognised body_data schema: type=...` — if you see it, the upstream `FullBodyTrackerPico.get_body_pose().data` shape changed and `_body_data_to_24x7()` in `gear_sonic/utils/teleop/input_readers.py` needs an extra branch for the new layout.
-
+3. The first time the schema runs, watch for `[IsaacTeleopReader] Unrecognised body_data schema: type=...` — if you see it, the upstream `FullBodyTracker.get_body_pose().data` shape changed and `_body_data_to_24x7()` in `gear_sonic/utils/teleop/input_readers.py` needs an extra branch for the new layout.

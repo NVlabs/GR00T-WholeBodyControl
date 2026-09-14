@@ -116,8 +116,8 @@ uv pip install --no-build-isolation -e external_dependencies/XRoboToolkit-PC-Ser
 #       (--input-source isaac-teleop in pico_manager_thread_server.py).
 # Hosted on pypi.nvidia.com (public index, no auth). Replaces the legacy
 # multi-container path (./scripts/run_cloudxr_via_docker.sh + teleop_ros2_ref).
-echo "[INFO] Installing isaacteleop[cloudxr]~=1.3.0 from pypi.nvidia.com …"
-uv pip install 'isaacteleop[cloudxr]~=1.3.0' --prerelease=allow \
+echo "[INFO] Installing isaacteleop[cloudxr]~=1.4.0 from pypi.nvidia.com …"
+uv pip install 'isaacteleop[cloudxr]~=1.4.0' --prerelease=allow \
     --extra-index-url https://pypi.nvidia.com
 
 # Seed ~/cloudxr.env with the device profile CloudXRLauncher negotiates against.

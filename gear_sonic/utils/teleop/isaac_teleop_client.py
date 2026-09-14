@@ -2,7 +2,7 @@
 
 Launches the CloudXR runtime in-process (via ``CloudXRLauncher``), opens an
 OpenXR session, and starts the DeviceIO trackers (head, hands, controllers,
-full-body Pico). Provides synchronous getters that the gear_sonic teleop
+full body). Provides synchronous getters that the gear_sonic teleop
 readers poll on a background thread.
 
 This replaces the legacy multi-container path (``run_cloudxr_via_docker.sh``
@@ -137,7 +137,7 @@ class IsaacTeleopClient:
             self._head_tracker = deviceio.HeadTracker()
             self._hand_tracker = deviceio.HandTracker()
             self._controller_tracker = deviceio.ControllerTracker()
-            self._body_tracker = deviceio.FullBodyTrackerPico()
+            self._body_tracker = deviceio.FullBodyTracker()
             trackers = [
                 self._head_tracker,
                 self._hand_tracker,
@@ -286,7 +286,7 @@ class IsaacTeleopClient:
         return [float(inp.thumbstick_x), float(inp.thumbstick_y)]
 
     def get_full_body_data(self) -> Any | None:
-        """Return the raw DeviceIO ``FullBodyTrackerPico`` data payload (or None).
+        """Return the raw DeviceIO ``FullBodyTracker`` data payload (or None).
 
         Body-joint extraction (24×7 pose array) lives in
         ``input_readers.IsaacTeleopReader``, which knows the gear_sonic schema.
