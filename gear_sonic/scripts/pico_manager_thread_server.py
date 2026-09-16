@@ -558,6 +558,12 @@ class YawAccumulator:
         return self.heading
 
 
+#: Skeleton sources whose G1 wrist bias is non-zero upstream
+#: (isaacteleop.retargeters.G1.wrist_bias.WRIST_BIAS_RAD). For anything else the
+#: bias is zero, so an isaacteleop without the table costs nothing.
+_WRIST_BIAS_REQUIRED_SOURCES = frozenset({"quest"})
+
+
 def load_wrist_bias(skeleton_source: str):
     """Return ((L roll, L pitch, L yaw), (R roll, R pitch, R yaw)) in radians.
 
@@ -570,11 +576,29 @@ def load_wrist_bias(skeleton_source: str):
     try:
         from isaacteleop.retargeters.G1 import wrist_bias_for
     except ImportError as exc:
-        raise input_readers.SkeletonCorrectionUnavailable(
-            "the isaacteleop G1 wrist bias is not available.\n"
-            "  Run ./install_scripts/install_isaacteleop_skeleton_correction.sh "
-            "with ~/IsaacTeleop on jsepulveda/quest_remapping."
-        ) from exc
+        # An isaacteleop older than #921 has no bias table. Only sources whose
+        # bias is actually non-zero can be harmed by that: "pico" is zero by
+        # intent upstream, and wrist_bias_for() itself returns zeros for any
+        # profile it does not know rather than raising, because an unbiased
+        # wrist is the pre-existing behaviour and is safe. So fall back to zeros
+        # for those and keep running -- refusing to start would block BD/Pico
+        # teleop, and the degeneracy guards with it, over a value that would
+        # have been all zeros anyway.
+        profile = skeleton_source or "pico"
+        if profile in _WRIST_BIAS_REQUIRED_SOURCES:
+            raise input_readers.SkeletonCorrectionUnavailable(
+                f"the isaacteleop G1 wrist bias is not available, and "
+                f"{profile!r} needs a non-zero one.\n"
+                "  Run ./install_scripts/install_isaacteleop_skeleton_correction.sh "
+                "with ~/IsaacTeleop on jsepulveda/quest_remapping."
+            ) from exc
+        print(
+            f"[skeleton] isaacteleop G1 wrist bias unavailable; using zero bias "
+            f"for {profile!r}, which is what it specifies anyway. "
+            f"Upgrade isaacteleop before using a headset that needs a non-zero "
+            f"bias ({', '.join(sorted(_WRIST_BIAS_REQUIRED_SOURCES))})."
+        )
+        return ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
 
     bias = wrist_bias_for(skeleton_source or "pico")
     if any(any(side) for side in bias):
