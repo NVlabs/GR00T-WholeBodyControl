@@ -141,7 +141,7 @@ class IsaacTeleopClient:
             # 1.5 on. setdefault means the two agree, this still works against an
             # externally started runtime, and an operator who exports the variable
             # -- including to "0" -- still wins.
-            os.environ.setdefault("NV_CXR_ENABLE_NON_CONFORMANT_META_BODY_TRACKING", "1")
+            os.environ.setdefault("NV_CXR_ENABLE_NON_CONFORMANT_WEBXR_BODY_TRACKING", "1")
 
             self._cloudxr_launcher = CloudXRLauncher(
                 install_dir=self._cloudxr_install_dir,
