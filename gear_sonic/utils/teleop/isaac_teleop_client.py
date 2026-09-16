@@ -66,6 +66,42 @@ def _controller_inputs(snapshot: Any) -> Any | None:
     return snapshot.inputs
 
 
+_WEBXR_BODY_VENDOR = "body.quest-cloudxr"
+_BD_BODY_VENDOR = "body.pico-xr"
+
+
+def _webxr_body_vendor_available() -> bool:
+    """Whether this isaacteleop registers the WebXR/Quest full-body vendor.
+
+    The WebXR full-body tracker arrived in IsaacTeleop #921. IsaacTeleop ships on
+    a versioned cadence, so a deployment can easily be running a release that
+    predates it, and asking for an unregistered vendor is not a soft failure:
+    ``get_required_extensions`` raises ``ValueError`` before any session exists,
+    which used to be swallowed by the broad ``except Exception`` in connect().
+    The visible symptom was a single "failed to start sessions" line followed by
+    waiting forever for body data -- indistinguishable from a network or headset
+    problem. Probing instead lets BD/Pico body tracking (and the degeneracy
+    guards built on it) work on any isaacteleop, with WebXR simply dormant.
+
+    isaacteleop exposes no way to enumerate vendors, so this asks the factory to
+    resolve the vendor for a throwaway tracker. ``get_required_extensions`` only
+    inspects the tracker/vendor pairing -- it creates no session and has no side
+    effects. Only the factory's "unknown vendor id" ValueError is treated as
+    absence; anything else is a real fault and propagates.
+    """
+    probe = deviceio.FullBodyTracker()
+    try:
+        deviceio.DeviceIOSession.get_required_extensions(
+            [probe],
+            deviceio.VendorConfig([(probe, deviceio.TrackerVendor(_WEBXR_BODY_VENDOR))]),
+        )
+    except ValueError as exc:
+        if "unknown vendor id" in str(exc):
+            return False
+        raise
+    return True
+
+
 class IsaacTeleopClient:
     """Single-process CloudXR + DeviceIO + OpenXR session.
 
@@ -169,9 +205,10 @@ class IsaacTeleopClient:
             self._head_tracker = deviceio.HeadTracker()
             self._hand_tracker = deviceio.HandTracker()
             self._controller_tracker = deviceio.ControllerTracker()
-            # Both full-body vendors are requested up front: which headset connects
-            # (Pico vs Quest) is not known until the browser session negotiates, so
-            # both trackers are created and polled every frame. The server keeps BD
+            # Both full-body vendors are requested up front when isaacteleop has
+            # them: which headset connects (Pico vs Quest) is not known until the
+            # browser session negotiates, so both trackers are created and polled
+            # every frame. The server keeps BD
             # and Meta full-body data mutually exclusive (only the vendor a client is
             # actually sending reports active), so exactly one of these is ever active
             # at a time; _get_tracker_data() below prefers Meta when both are present.
@@ -180,20 +217,32 @@ class IsaacTeleopClient:
             # selection CloudXR.js used to do in the browser), so both come back in
             # an identical layout and no downstream code needs to know which fired.
             self._body_tracker_bd = deviceio.FullBodyTracker()
-            self._body_tracker_meta = deviceio.FullBodyTracker()
-            vendor_config = deviceio.VendorConfig(
-                [
-                    (self._body_tracker_bd, deviceio.TrackerVendor("body.pico-xr")),
-                    (self._body_tracker_meta, deviceio.TrackerVendor("body.quest-cloudxr")),
-                ]
-            )
+            vendor_pairs = [(self._body_tracker_bd, deviceio.TrackerVendor(_BD_BODY_VENDOR))]
             trackers = [
                 self._head_tracker,
                 self._hand_tracker,
                 self._controller_tracker,
                 self._body_tracker_bd,
-                self._body_tracker_meta,
             ]
+            # Only request the WebXR vendor from an isaacteleop that has it;
+            # see _webxr_body_vendor_available(). Without it the Quest path is
+            # dormant and BD/Pico is untouched, rather than the whole session
+            # failing to start.
+            if _webxr_body_vendor_available():
+                self._body_tracker_meta = deviceio.FullBodyTracker()
+                vendor_pairs.append(
+                    (self._body_tracker_meta, deviceio.TrackerVendor(_WEBXR_BODY_VENDOR))
+                )
+                trackers.append(self._body_tracker_meta)
+            else:
+                self._body_tracker_meta = None
+                print(
+                    f"[IsaacTeleopClient] this isaacteleop does not provide the "
+                    f"{_WEBXR_BODY_VENDOR!r} full-body vendor, so Quest/WebXR body "
+                    f"tracking is unavailable; Pico/BD body tracking is unaffected. "
+                    f"Upgrade isaacteleop to enable it."
+                )
+            vendor_config = deviceio.VendorConfig(vendor_pairs)
             required_extensions = deviceio.DeviceIOSession.get_required_extensions(
                 trackers, vendor_config
             )
@@ -253,7 +302,13 @@ class IsaacTeleopClient:
         # rather than an empty handle, so that an inactive device cannot answer
         # field reads with defaults indistinguishable from real zeroes. Every
         # consumer below already treats None as "not present".
-        full_body = self._body_tracker_meta.get_body_pose(session)
+        # _body_tracker_meta is None when this isaacteleop has no WebXR vendor,
+        # in which case every frame resolves to BD/Pico.
+        full_body = (
+            self._body_tracker_meta.get_body_pose(session)
+            if self._body_tracker_meta is not None
+            else None
+        )
         if full_body is not None:
             full_body_source = "quest"
         else:
