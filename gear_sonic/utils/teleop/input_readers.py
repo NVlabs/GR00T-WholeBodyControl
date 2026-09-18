@@ -410,7 +410,7 @@ class IsaacTeleopReader:
         # actually delivered active data this frame is a fact the runtime states,
         # not an inference -- see IsaacTeleopClient._get_tracker_data()'s
         # "full_body_source". This supersedes the old geometry-based detector
-        # (AutoSkeletonSource); geometry is repurposed below as a degeneracy
+        # which has been removed; geometry is repurposed below as a degeneracy
         # guard instead. An explicit --skeleton-source pico|quest is honored
         # regardless of what the extension reports, and never changes for the
         # life of this reader.
@@ -599,7 +599,7 @@ class IsaacTeleopReader:
             body_poses = _body_data_to_24x7(raw.get("full_body"))
 
             # Geometry degeneracy guard. This used to be the primary detection
-            # mechanism (AutoSkeletonSource, still in skeleton_source_detect.py);
+            # mechanism; that driver has been removed, but its comparison is kept;
             # now that the OpenXR Extension Method says definitively which vendor
             # produced this frame, geometry is repurposed as a safety check: does
             # this skeleton's orientation convention actually match the resolved
