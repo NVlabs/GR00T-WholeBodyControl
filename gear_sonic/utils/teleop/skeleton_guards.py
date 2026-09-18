@@ -1,30 +1,52 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Identify which headset produced a body-tracking skeleton, from the data itself.
+"""Two guards that refuse a body-tracking frame that cannot be trusted.
 
-CloudXR converts a Quest skeleton into the ByteDance 24-joint layout, so the
-stream is device-agnostic in every obvious respect: joint order, positions,
-validity flags, sample rate and quantisation are indistinguishable between a
-PICO 4 Ultra and a Quest 3. What does differ is the per-joint orientation
-convention -- which is exactly what the isaacteleop skeleton correction
-fixes (isaacteleop.retargeting_engine.utilities.correct_body_orientations).
+Neither of these decides which headset is connected. That is settled by the
+OpenXR Extension Method -- which full-body vendor tracker actually delivered
+data this frame (``body.pico-xr`` vs ``body.quest-cloudxr``), a fact the runtime
+states rather than something inferred from the poses. See
+``IsaacTeleopReader`` in input_readers.py. An earlier geometry-based detector
+(``AutoSkeletonSource``) did make that decision and has been removed; what
+survives here is the comparison it was built on, kept because it fails
+differently from the extension and so catches things the extension cannot.
 
-So classify on the relationship between the two: express each bone's direction
-(from positions, device-agnostic) in its parent joint's own frame (from the
-quaternions, device-specific). The result is a fixed per-device signature.
+``classify()`` -- per-frame, orientation convention.
+    CloudXR converts a Quest skeleton into the ByteDance 24-joint layout, so the
+    stream is device-agnostic in every obvious respect: joint order, positions,
+    validity flags, sample rate and quantisation are indistinguishable between a
+    PICO 4 Ultra and a Quest 3. What does differ is the per-joint orientation
+    convention -- exactly what the isaacteleop skeleton correction fixes
+    (``isaacteleop.retargeting_engine.utilities.correct_body_orientations``).
 
-Measured on 68 recorded captures (34 paired poses, both headsets): 100%
-accurate from a single frame, with the two classes ~60 deg apart and a worst
-observed margin of 50 deg. Correcting a Quest capture makes it classify as
-PICO, which is what confirms the signature tracks the orientation convention
-rather than something incidental.
+    So classify on the relationship between the two: express each bone's
+    direction (from positions, device-agnostic) in its parent joint's own frame
+    (from the quaternions, device-specific). The result is a fixed per-device
+    signature. Asked here as a cross-check -- does this frame's convention match
+    the source the extension reported? -- a disagreement means a misbehaving
+    tracker, a skeleton arriving over the wrong extension, or an operator
+    override that does not match the headset actually connected. It can only
+    refuse a frame; it never decides one.
 
-Two limits worth knowing. The references come from one operator on two
+    Measured on 68 recorded captures (34 paired poses, both headsets): 100%
+    accurate from a single frame, with the two classes ~60 deg apart and a worst
+    observed margin of 50 deg -- which is what MIN_MARGIN_DEG (20) is set
+    against. Correcting a Quest capture makes it classify as PICO, confirming
+    the signature tracks the orientation convention rather than something
+    incidental.
+
+``TrackersDisconnectedDetector`` -- temporal, frozen pose.
+    A Pico whose motion trackers are disconnected does not mark joints invalid;
+    it freezes the whole skeleton to a constant pose. That is invisible to a
+    per-frame check, so it needs a rolling window. BD-only. See the comment
+    block above the class for the capture evidence.
+
+Two limits worth knowing. The reference signatures come from one operator on two
 headsets, so an unusual body could in principle sit closer to the wrong class;
 the margin threshold exists to make that a refusal rather than a wrong answer.
-And this needs body tracking to be flowing -- it cannot answer before the
-first frame arrives.
+And both guards need body tracking to be flowing -- neither can answer before
+the first frame arrives.
 """
 
 import collections

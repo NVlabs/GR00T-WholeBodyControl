@@ -11,7 +11,7 @@ from typing import Any
 
 import numpy as np
 
-from gear_sonic.utils.teleop.skeleton_source_detect import TrackersDisconnectedDetector, classify
+from gear_sonic.utils.teleop.skeleton_guards import TrackersDisconnectedDetector, classify
 
 logger = logging.getLogger(__name__)
 
@@ -420,7 +420,7 @@ class IsaacTeleopReader:
         self._last_degenerate_log_ns = 0
         self._last_seen_full_body_source: str | None = "<unset>"  # sentinel so the first frame always logs
 
-        # Pico "motion trackers disconnected" guard (skeleton_source_detect.py):
+        # Pico "motion trackers disconnected" guard (skeleton_guards.py):
         # a separate, temporal check from the geometry mismatch guard above --
         # see that guard's comment in _run() for why the two are independent.
         self._trackers_disconnected_detector = TrackersDisconnectedDetector()
@@ -634,7 +634,7 @@ class IsaacTeleopReader:
             # mismatch guard above: that one is a per-frame check of orientation
             # convention (does this frame look like pico or quest), this one is a
             # temporal check (has the torso been frozen to a constant pose for the
-            # last several frames) -- see skeleton_source_detect.py for how the
+            # last several frames) -- see skeleton_guards.py for how the
             # signature was characterized and why it's BD-only for now. Only makes
             # sense while resolved to pico, so the window is reset whenever we're
             # not, to avoid a stale window from a previous pico session bleeding
