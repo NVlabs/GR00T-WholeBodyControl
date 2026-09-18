@@ -563,9 +563,18 @@ class YawAccumulator:
 #: bias is zero, so an isaacteleop without the table costs nothing.
 _WRIST_BIAS_REQUIRED_SOURCES = frozenset({"quest"})
 
+#: Identity bias, used when the correction is switched off or not needed.
+_ZERO_WRIST_BIAS = ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
 
-def load_wrist_bias(skeleton_source: str):
+
+def load_wrist_bias(skeleton_source: str, enabled: bool = True):
     """Return ((L roll, L pitch, L yaw), (R roll, R pitch, R yaw)) in radians.
+
+    ``enabled=False`` returns zeros without consulting isaacteleop at all. The
+    bias is under review: it compensates for wrist neutral after the fact, and
+    the policy model may end up handling wrist behaviour directly instead, which
+    would make this redundant. Kept switchable rather than deleted so the two can
+    be compared on hardware.
 
     Added to the commanded G1 wrist joints. The table lives upstream in
     isaacteleop.retargeters.G1 (NVIDIA/IsaacTeleop#921), beside the skeleton
@@ -573,6 +582,9 @@ def load_wrist_bias(skeleton_source: str):
     corrected skeleton get it too. See that module for how the values were
     measured and why Pico is deliberately zero.
     """
+    if not enabled:
+        return _ZERO_WRIST_BIAS
+
     try:
         from isaacteleop.retargeters.G1 import wrist_bias_for
     except ImportError as exc:
@@ -598,7 +610,7 @@ def load_wrist_bias(skeleton_source: str):
             f"Upgrade isaacteleop before using a headset that needs a non-zero "
             f"bias ({', '.join(sorted(_WRIST_BIAS_REQUIRED_SOURCES))})."
         )
-        return ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
+        return _ZERO_WRIST_BIAS
 
     bias = wrist_bias_for(skeleton_source or "pico")
     if any(any(side) for side in bias):
@@ -1317,6 +1329,7 @@ class PoseStreamer:
         # unset: "pico" keeps that path uncorrected, matching the flag's
         # documented "Manager mode only" scope.
         skeleton_source: str = "pico",
+        wrist_bias_enabled: bool = True,
     ):
         self.socket = socket
         self.reader = reader
@@ -1349,8 +1362,15 @@ class PoseStreamer:
         # The skeleton correction itself lives upstream, in the reader. Only the
         # wrist bias stays here: it is expressed in G1 wrist joint commands, not
         # in skeleton space, so it is robot-specific rather than headset-specific.
+        self._wrist_bias_enabled = wrist_bias_enabled
+        if not wrist_bias_enabled:
+            print(
+                "[skeleton] wrist bias DISABLED (--wrist-bias off); commanded G1 wrist "
+                "joints are used as retargeted, with no post-hoc neutral correction."
+            )
         self.wrist_bias = load_wrist_bias(
-            "pico" if skeleton_source == "auto" else skeleton_source
+            "pico" if skeleton_source == "auto" else skeleton_source,
+            enabled=wrist_bias_enabled,
         )
         self.parent_indices = [
             -1,
@@ -1431,7 +1451,7 @@ class PoseStreamer:
             resolved = getattr(self.reader, "resolved_skeleton_source", None)
             if resolved is not None and resolved != self._last_resolved_skeleton_source:
                 print(f"[skeleton] auto mode: source is now {resolved!r} (OpenXR Extension Method)")
-                self.wrist_bias = load_wrist_bias(resolved)
+                self.wrist_bias = load_wrist_bias(resolved, enabled=self._wrist_bias_enabled)
                 self._last_resolved_skeleton_source = resolved
 
         latest_data = compute_from_body_poses(
@@ -2016,6 +2036,7 @@ def run_pico_manager(
     enable_smpl_vis: bool = False,
     input_source: str = "xrt",
     skeleton_source: str = "auto",
+    wrist_bias_enabled: bool = False,
 ):
     """
     Manager: creates shared PUB socket and runs pose/planner streamers based on current mode.
@@ -2062,6 +2083,7 @@ def run_pico_manager(
         record_format=record_format,
         log_prefix="PoseLoop",
         skeleton_source=skeleton_source,
+        wrist_bias_enabled=wrist_bias_enabled,
     )
     planner_streamer = PlannerStreamer(
         socket=socket,
@@ -2361,6 +2383,21 @@ if __name__ == "__main__":
         ),
     )
     parser.add_argument(
+        "--wrist-bias",
+        type=str,
+        default="off",
+        choices=["on", "off"],
+        help=(
+            "Post-hoc G1 wrist neutral correction, added to the commanded wrist "
+            "joints (Manager mode only). Currently 'off' by default while the "
+            "approach is under review: the policy model may handle wrist behaviour "
+            "directly, which would make this redundant. 'on' restores the "
+            "per-headset bias from isaacteleop.retargeters.G1 (zero for Pico, "
+            "non-zero for Quest). The code is retained either way so the two can "
+            "be compared on hardware."
+        ),
+    )
+    parser.add_argument(
         "--skeleton-source",
         type=str,
         default="auto",
@@ -2417,6 +2454,7 @@ if __name__ == "__main__":
             enable_smpl_vis=args.vis_smpl,
             input_source=args.input_source,
             skeleton_source=args.skeleton_source,
+            wrist_bias_enabled=(args.wrist_bias == "on"),
         )
     else:
         # Run legacy single-thread pose streaming
