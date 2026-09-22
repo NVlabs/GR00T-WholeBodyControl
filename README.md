@@ -1,21 +1,21 @@
-# Simple Custom README — BrainCo teleoperation
+# Simple Custom README — BrainCo Teleoperation
 
 ## tmux launchers
 
-Используются два отдельных скрипта:
+Two separate scripts are used:
 
 ```text
-gear_sonic/scripts/launch_brainco_robot_tmux.sh  # запускать на роботе
-gear_sonic/scripts/launch_brainco_host_tmux.sh   # запускать на host-компьютере
+gear_sonic/scripts/launch_brainco_robot_tmux.sh  # run on the robot
+gear_sonic/scripts/launch_brainco_host_tmux.sh   # run on the host computer
 ```
 
-Установить `tmux` нужно на обеих машинах:
+Install `tmux` on both machines:
 
 ```bash
 sudo apt install tmux
 ```
 
-Запуск robot stack:
+Start the robot stack:
 
 ```bash
 cd /home/unitree/teleop-ws/Teleop-Data-Collection
@@ -23,7 +23,7 @@ bash gear_sonic/scripts/launch_brainco_robot_tmux.sh
 tmux attach -t brainco_robot
 ```
 
-Запуск host stack:
+Start the host stack:
 
 ```bash
 cd /home/nikita/Skoltech/MWS/Teleop-Data-Collection
@@ -32,21 +32,22 @@ bash gear_sonic/scripts/launch_brainco_host_tmux.sh
 tmux attach -t brainco_host
 ```
 
-Default-профиль обоих launcher’ов:
+Default profile for both launchers:
 
-- robot `192.168.50.132` отправляет RGB с `ego_view` RealSense `1280x720` и
-  `head` USB `/dev/video6` `1600x896`; обе камеры работают при `15 FPS`;
-- RealSense depth-потоки на роботе отключены и по сети не отправляются;
-- host записывает обе RGB-камеры, локальную `/dev/video4` как
-  `external-view-camera` и G1 telemetry;
-- viewer показывает `ego_view`, `head` и `external-view-camera`;
-- raw depth и depth preview video не сохраняются.
+- Robot `192.168.50.132` sends RGB from the `ego_view` RealSense at `1280x720`
+  and the `head` USB camera at `/dev/video6` and `1600x896`; both cameras run
+  at `15 FPS`.
+- RealSense depth streams are disabled on the robot and are not sent over the network.
+- The host records both RGB cameras, the local `/dev/video4` as
+  `external-view-camera`, and G1 telemetry.
+- The viewer shows `ego_view`, `head`, and `external-view-camera`.
+- Raw depth and depth preview video are not saved.
 
-Если внешняя камера имеет другой путь, задайте его через
-`EXTERNAL_VIEW_CAMERA_DEVICE`. Пустое значение отключает external camera.
-Путь можно проверить на host командой `v4l2-ctl --list-devices`.
+If the external camera uses a different path, set it with
+`EXTERNAL_VIEW_CAMERA_DEVICE`. An empty value disables the external camera.
+Check the path on the host with `v4l2-ctl --list-devices`.
 
-`--replace` останавливает сессию с тем же именем и создаёт её заново:
+`--replace` stops the session with the same name and creates it again:
 
 
 # Robot
@@ -65,8 +66,9 @@ bash gear_sonic/scripts/launch_brainco_host_tmux.sh --replace
 tmux attach -t brainco_host
 ```
 
-Переключение tmux-окон: `Ctrl+b`, затем номер окна, либо `Ctrl+b`, затем `n` / `p`.
-Отсоединение без остановки: `Ctrl+b`, затем `d`.
+To switch tmux windows, press `Ctrl+b` and then the window number, or press
+`Ctrl+b` and then `n` / `p`. To detach without stopping the session, press
+`Ctrl+b` and then `d`.
 
 ```bash
 tmux attach -t brainco_robot
@@ -77,9 +79,9 @@ tmux kill-session -t brainco_host
 
 ---
 
-# Робот
+# Robot
 
-## 1. Подготовка
+## 1. Setup
 
 ```bash
 cd /home/unitree/teleop-ws/Teleop-Data-Collection
@@ -104,33 +106,33 @@ v4l2-ctl --list-devices
 bash gear_sonic/scripts/launch_brainco_robot_tmux.sh
 ```
 
-Переменные launcher’а:
+Launcher variables:
 
-| Переменная | Default | Возможные значения / назначение |
+| Variable | Default | Values / purpose |
 |---|---:|---|
-| `TMUX_SESSION` | `brainco_robot` | Имя tmux-сессии. |
-| `CAMERA_MODE` | `realsense-usb` | `two-realsense`, `realsense-usb`, `head-realsense`, `none`. |
-| `EGO_VIEW_DEVICE_ID` | `243422071979` | Серийный номер ego RealSense. |
-| `HEAD_DEVICE_ID` | `135122071874` | Серийный номер head RealSense. |
-| `USB_HEAD_DEVICE_ID` | `/dev/video6` | Индекс или путь USB head camera. |
-| `CAMERA_FPS` | `15` | Частота ego camera и базовая частота camera server. |
-| `REALSENSE_WIDTH`, `REALSENSE_HEIGHT` | `1280`, `720` | RGB-разрешение ego RealSense. |
-| `HEAD_CAMERA_WIDTH`, `HEAD_CAMERA_HEIGHT` | `1600`, `896` | Отдельное RGB-разрешение head USB/RealSense. |
-| `HEAD_CAMERA_FPS` | `15` | Отдельная частота head USB/RealSense. |
-| `HEAD_CAMERA_QUALITY` | `80` | JPEG quality head-потока, от `1` до `100`. |
-| `HEAD_CAMERA_FOURCC` | `MJPG` | Формат захвата USB head camera. Для RealSense игнорируется. |
-| `REALSENSE_DEPTH` | `0` | `0` — depth sensor не запускается и depth не отправляется; `1` — включить. |
-| `HEAD_REALSENSE_DEPTH_WIDTH`, `HEAD_REALSENSE_DEPTH_HEIGHT` | `640`, `480` | Depth-разрешение для `head-realsense`. |
-| `PICO_INTERFACE` | `wlxfc23cd997021` | Сетевой интерфейс для BrainCo DDS. |
-| `PICO_PORT` | `5556` | Порт Pico manager. |
-| `TELEMETRY_PORT` | `5560` | Порт G1 telemetry publisher. |
-| `TELEMETRY_HZ` | `50` | Целевая частота telemetry. |
-| `BRAINCO_CONTAINER` | `g1-brainco-hand-server` | Имя Docker container. |
-| `BRAINCO_MAX_ATTEMPTS` | `10` | Число проверок BrainCo state перед ошибкой. |
-| `BRAINCO_DDS_INTERFACE` | `PICO_INTERFACE` | DDS-интерфейс для BrainCo state check. |
-| `TELEOP_VENV`, `CAMERA_VENV`, `DEPLOY_DIR` | пути Unitree | Пути окружений и deploy. |
+| `TMUX_SESSION` | `brainco_robot` | Name of the tmux session. |
+| `CAMERA_MODE` | `realsense-usb` | `two-realsense`, `realsense-usb`, `head-realsense`, or `none`. |
+| `EGO_VIEW_DEVICE_ID` | `243422071979` | Serial number of the ego RealSense camera. |
+| `HEAD_DEVICE_ID` | `135122071874` | Serial number of the head RealSense camera. |
+| `USB_HEAD_DEVICE_ID` | `/dev/video6` | Index or path of the USB head camera. |
+| `CAMERA_FPS` | `15` | Ego camera frame rate and base frame rate of the camera server. |
+| `REALSENSE_WIDTH`, `REALSENSE_HEIGHT` | `1280`, `720` | RGB resolution of the ego RealSense camera. |
+| `HEAD_CAMERA_WIDTH`, `HEAD_CAMERA_HEIGHT` | `1600`, `896` | Separate RGB resolution for the USB or RealSense head camera. |
+| `HEAD_CAMERA_FPS` | `15` | Separate frame rate for the USB or RealSense head camera. |
+| `HEAD_CAMERA_QUALITY` | `80` | JPEG quality of the head stream, from `1` to `100`. |
+| `HEAD_CAMERA_FOURCC` | `MJPG` | Capture format for the USB head camera. Ignored for RealSense. |
+| `REALSENSE_DEPTH` | `0` | `0` does not start the depth sensor or send depth; `1` enables it. |
+| `HEAD_REALSENSE_DEPTH_WIDTH`, `HEAD_REALSENSE_DEPTH_HEIGHT` | `640`, `480` | Depth resolution for `head-realsense`. |
+| `PICO_INTERFACE` | `wlxfc23cd997021` | Network interface for BrainCo DDS. |
+| `PICO_PORT` | `5556` | Pico manager port. |
+| `TELEMETRY_PORT` | `5560` | G1 telemetry publisher port. |
+| `TELEMETRY_HZ` | `50` | Target telemetry frequency. |
+| `BRAINCO_CONTAINER` | `g1-brainco-hand-server` | Docker container name. |
+| `BRAINCO_MAX_ATTEMPTS` | `10` | Number of BrainCo state checks before reporting an error. |
+| `BRAINCO_DDS_INTERFACE` | `PICO_INTERFACE` | DDS interface for the BrainCo state check. |
+| `TELEOP_VENV`, `CAMERA_VENV`, `DEPLOY_DIR` | Unitree paths | Paths to environments and deployment files. |
 
-Примеры:
+Examples:
 
 ```bash
 # ego RealSense + USB head camera
@@ -144,11 +146,11 @@ HEAD_CAMERA_QUALITY=90 \
 HEAD_CAMERA_FOURCC=MJPG \
 bash gear_sonic/scripts/launch_brainco_robot_tmux.sh --replace
 
-# camera server запускается отдельно либо на другой машине
+# The camera server runs separately or on another machine.
 CAMERA_MODE=none \
 bash gear_sonic/scripts/launch_brainco_robot_tmux.sh --replace
 
-# Только head RealSense: RGB 1280x960, без depth
+# Head RealSense only: RGB 1280x960, no depth.
 CAMERA_MODE=head-realsense \
 HEAD_DEVICE_ID=135122071874 \
 HEAD_CAMERA_WIDTH=1280 \
@@ -158,12 +160,12 @@ HEAD_CAMERA_QUALITY=90 \
 bash gear_sonic/scripts/launch_brainco_robot_tmux.sh --replace
 ```
 
-tmux-окна robot launcher: `brainco`, `camera` (кроме `CAMERA_MODE=none`),
-`pico`, `telemetry`, `deploy`.
+Robot launcher tmux windows: `brainco`, `camera` (except for `CAMERA_MODE=none`),
+`pico`, `telemetry`, and `deploy`.
 
 ## 3. Camera server
 
-### Two RealSense
+### Two RealSense cameras
 
 ```bash
 source /home/unitree/GR00T-WholeBodyControl/.venv_camera/bin/activate
@@ -185,15 +187,15 @@ python -m gear_sonic.camera.composed_camera \
   --port 5555
 ```
 
-Основные аргументы: `--ego-view-camera`, `--ego-view-device-id`,
+Main arguments: `--ego-view-camera`, `--ego-view-device-id`,
 `--head-camera`, `--head-device-id`, `--realsense-width`,
 `--realsense-height`, `--head-camera-width`, `--head-camera-height`,
 `--head-camera-fps`, `--head-camera-quality`, `--head-camera-fourcc`,
 `--realsense-depth` / `--no-realsense-depth`, `--realsense-depth-width`,
 `--realsense-depth-height`, `--fps`, `--port`.
 
-В default-команде используется `--no-realsense-depth`: depth sensor не
-запускается, depth-кадры не кодируются и не отправляются на host.
+The default command uses `--no-realsense-depth`: the depth sensor is not
+started, and depth frames are not encoded or sent to the host.
 
 ### RealSense + USB head camera
 
@@ -215,7 +217,7 @@ python -m gear_sonic.camera.composed_camera \
   --port 5555
 ```
 
-### Только head RealSense
+### Head RealSense only
 
 ```bash
 python -m gear_sonic.camera.composed_camera \
@@ -231,13 +233,13 @@ python -m gear_sonic.camera.composed_camera \
   --port 5555
 ```
 
-`None` здесь чувствителен к регистру. Для opt-in depth используйте
-`--realsense-depth` и задайте поддерживаемые размеры через
+`None` is case-sensitive here. To enable depth, use
+`--realsense-depth` and set supported dimensions with
 `--realsense-depth-width` / `--realsense-depth-height`.
 
-Если `--head-camera usb`, настройки depth относятся только к другим RealSense
-камерам: USB head никогда не создаёт и не отправляет `head_depth`. Перед выбором
-разрешения/FPS проверьте поддерживаемые сочетания командой
+When `--head-camera usb` is used, depth settings apply only to other RealSense
+cameras: a USB head camera never creates or sends `head_depth`. Before choosing
+a resolution and FPS, check supported combinations with
 `v4l2-ctl --device /dev/video6 --list-formats-ext`.
 
 ## 4. BrainCo service
@@ -247,21 +249,21 @@ cd /home/unitree/teleop-ws/Teleop-Data-Collection
 bash gear_sonic/scripts/start_brainco_and_check.sh
 ```
 
-Скрипт перезапускает `g1-brainco-hand-server`, если container уже запущен;
-иначе запускает его. Затем проверяет состояния обеих рук и при ошибке снова
-перезапускает container. Максимум — 10 проверок.
+The script restarts `g1-brainco-hand-server` if the container is already
+running; otherwise, it starts it. It then checks the state of both hands and
+restarts the container again if there is an error. The maximum is 10 checks.
 
-Аргументы: `--container`, `--attempts`, `--interface`, `--restart-wait`,
+Arguments: `--container`, `--attempts`, `--interface`, `--restart-wait`,
 `--python`.
 
-Примеры:
+Examples:
 
 ```bash
-# Другой DDS-интерфейс
+# Another DDS interface
 bash gear_sonic/scripts/start_brainco_and_check.sh \
   --interface wlxfc23cd997021
 
-# Другой container и пять попыток
+# Another container and five attempts
 BRAINCO_CONTAINER=my-brainco-service \
 bash gear_sonic/scripts/start_brainco_and_check.sh \
   --container my-brainco-service \
@@ -283,13 +285,13 @@ python -m gear_sonic.scripts.pico_manager_brainco_dexterous \
   --brainco_network_interface wlxfc23cd997021
 ```
 
-Основные аргументы: `--manager`, `--port`, `--target_fps`,
+Main arguments: `--manager`, `--port`, `--target_fps`,
 `--input-source {xrt,isaac-teleop}`, `--brainco_dds_domain`,
 `--brainco_network_interface`, `--brainco_trigger_threshold`,
 `--brainco_trigger_range`, `--brainco_excluded_fingers`,
 `--disable_brainco_hand`, `--zmq_feedback_host`, `--zmq_feedback_port`.
 
-Пример порога trigger:
+Example trigger threshold:
 
 ```bash
 --brainco_trigger_threshold 0.5
@@ -306,7 +308,7 @@ python -m gear_sonic.g1_upper_body_telemetry.robot_publisher \
   --port 5560
 ```
 
-Аргументы: `--publish-hz`, `--bind-host`, `--port`, `--dds-domain-id`,
+Arguments: `--publish-hz`, `--bind-host`, `--port`, `--dds-domain-id`,
 `--network-interface`, `--state-topic`, `--command-topic`, `--stale-seconds`.
 
 ## 7. Gear Sonic deploy
@@ -318,7 +320,7 @@ source scripts/setup_env.sh
 ./deploy.sh --input-type zmq_manager real
 ```
 
-Основные аргументы: `--input-type zmq_manager`, режим `real` или `sim`.
+Main arguments: `--input-type zmq_manager` and mode `real` or `sim`.
 
 ## 8. Video streaming server
 
@@ -333,15 +335,15 @@ REALSENSE_FPS=30 \
 ./server_realsense.sh 192.168.50.132
 ```
 
-Аргументы задаются переменными: `REALSENSE_DEVICE`, `REALSENSE_FORMAT`,
-`REALSENSE_WIDTH`, `REALSENSE_HEIGHT`, `REALSENSE_FPS`; последний аргумент —
-IP host-компьютера.
+Arguments are set through variables: `REALSENSE_DEVICE`, `REALSENSE_FORMAT`,
+`REALSENSE_WIDTH`, `REALSENSE_HEIGHT`, and `REALSENSE_FPS`. The final argument
+is the IP address of the host computer.
 
 ---
 
-# Host-компьютер
+# Host computer
 
-## 1. Подготовка
+## 1. Setup
 
 ```bash
 cd /home/nikita/Skoltech/MWS/Teleop-Data-Collection
@@ -355,43 +357,43 @@ ROBOT_HOST=192.168.50.132 \
 bash gear_sonic/scripts/launch_brainco_host_tmux.sh --replace
 ```
 
-Переменные launcher’а:
+Launcher variables:
 
-| Переменная | Default | Возможные значения / назначение |
+| Variable | Default | Values / purpose |
 |---|---:|---|
-| `TMUX_SESSION` | `brainco_host` | Имя tmux-сессии. |
-| `ROBOT_HOST` | `192.168.50.132` | Общий адрес робота. |
-| `CAMERA_HOST`, `SONIC_HOST`, `STATE_HOST`, `TELEMETRY_HOST` | `ROBOT_HOST` | Адреса отдельных ZMQ источников. |
-| `CAMERA_PORT`, `SONIC_PORT`, `STATE_PORT`, `TELEMETRY_PORT` | `5555`, `5556`, `5557`, `5560` | Порты источников. |
-| `PICO_INTERFACE` | `wlp128s20f3` | DDS-интерфейс BrainCo на host. |
-| `ENABLE_CAMERA_VIEWER` | `1` | `1` — создать окно viewer, `0` — не создавать. |
-| `SHOW_MOTOR_STATES` | `0` | `0` — скрыть motor-state/tau панель; `1` — включить её и соответствующие subscribers. |
-| `CAMERA_STREAMS` | `head ego_view` | RGB-потоки робота для viewer; external view добавляется автоматически. |
-| `HEAD_CAMERA_WIDTH`, `HEAD_CAMERA_HEIGHT` | `1600`, `896` | Ожидаемый exporter размер robot head stream; должен совпадать с robot launcher. |
-| `EXPORTER_EXTRA_ARGS` | пусто | Дополнительные аргументы exporter. |
-| `EXTERNAL_VIEW_CAMERA_DEVICE` | `/dev/video4` | Путь к локальной камере host; пустая строка отключает её. |
-| `EXTERNAL_VIEW_CAMERA_WIDTH`, `EXTERNAL_VIEW_CAMERA_HEIGHT`, `EXTERNAL_VIEW_CAMERA_FPS` | `1280`, `960`, `15` | Запрашиваемый V4L2-профиль локальной камеры. |
-| `EXTERNAL_VIEW_CAMERA_FOURCC` | `MJPG` | V4L2 FourCC внешней камеры. |
-| `EXTERNAL_VIEW_CAMERA_HOST`, `EXTERNAL_VIEW_CAMERA_PORT` | `localhost`, `5582` | ZMQ-поток standalone external-view-camera для exporter и viewer. |
-| `DATA_COLLECTION_VENV` | `.venv_data_collection` | Путь к окружению exporter. |
+| `TMUX_SESSION` | `brainco_host` | Name of the tmux session. |
+| `ROBOT_HOST` | `192.168.50.132` | Main robot address. |
+| `CAMERA_HOST`, `SONIC_HOST`, `STATE_HOST`, `TELEMETRY_HOST` | `ROBOT_HOST` | Addresses of separate ZMQ sources. |
+| `CAMERA_PORT`, `SONIC_PORT`, `STATE_PORT`, `TELEMETRY_PORT` | `5555`, `5556`, `5557`, `5560` | Source ports. |
+| `PICO_INTERFACE` | `wlp128s20f3` | BrainCo DDS interface on the host. |
+| `ENABLE_CAMERA_VIEWER` | `1` | `1` creates the viewer window; `0` does not. |
+| `SHOW_MOTOR_STATES` | `0` | `0` hides the motor-state/tau panel; `1` enables it and its subscribers. |
+| `CAMERA_STREAMS` | `head ego_view` | Robot RGB streams for the viewer; external view is added automatically. |
+| `HEAD_CAMERA_WIDTH`, `HEAD_CAMERA_HEIGHT` | `1600`, `896` | Expected robot head stream size for the exporter; must match the robot launcher. |
+| `EXPORTER_EXTRA_ARGS` | empty | Extra exporter arguments. |
+| `EXTERNAL_VIEW_CAMERA_DEVICE` | `/dev/video4` | Path to the local host camera; an empty string disables it. |
+| `EXTERNAL_VIEW_CAMERA_WIDTH`, `EXTERNAL_VIEW_CAMERA_HEIGHT`, `EXTERNAL_VIEW_CAMERA_FPS` | `1280`, `960`, `15` | Requested V4L2 profile for the local camera. |
+| `EXTERNAL_VIEW_CAMERA_FOURCC` | `MJPG` | V4L2 FourCC of the external camera. |
+| `EXTERNAL_VIEW_CAMERA_HOST`, `EXTERNAL_VIEW_CAMERA_PORT` | `localhost`, `5582` | ZMQ stream of the standalone external-view camera for the exporter and viewer. |
+| `DATA_COLLECTION_VENV` | `.venv_data_collection` | Path to the exporter environment. |
 
-Примеры:
+Examples:
 
 ```bash
-# Только ego_view, без viewer
+# ego_view only, without the viewer
 ROBOT_HOST=192.168.50.132 \
 ENABLE_CAMERA_VIEWER=0 \
 EXPORTER_EXTRA_ARGS="--ignore-head --record-raw-depth" \
 bash gear_sonic/scripts/launch_brainco_host_tmux.sh --replace
 
-# Источники находятся на разных машинах
+# Sources are on different machines
 CAMERA_HOST=192.168.50.132 \
 SONIC_HOST=192.168.50.132 \
 STATE_HOST=192.168.50.132 \
 TELEMETRY_HOST=192.168.50.132 \
 bash gear_sonic/scripts/launch_brainco_host_tmux.sh --replace
 
-# Локальная external-view-camera на host в 1280x960
+# Local external-view camera on the host at 1280x960
 EXTERNAL_VIEW_CAMERA_DEVICE=/dev/video4 \
 EXTERNAL_VIEW_CAMERA_WIDTH=1280 \
 EXTERNAL_VIEW_CAMERA_HEIGHT=960 \
@@ -401,10 +403,10 @@ SHOW_MOTOR_STATES=0 \
 bash gear_sonic/scripts/launch_brainco_host_tmux.sh --replace
 ```
 
-tmux-окна host launcher: `exporter`, `external_camera` (если задано
-`EXTERNAL_VIEW_CAMERA_DEVICE`) и `viewer` (если `ENABLE_CAMERA_VIEWER=1`).
+Host launcher tmux windows: `exporter`, `external_camera` (when
+`EXTERNAL_VIEW_CAMERA_DEVICE` is set), and `viewer` (when `ENABLE_CAMERA_VIEWER=1`).
 
-### Standalone external-view-camera
+### Standalone external-view camera
 
 ```bash
 source .venv_data_collection/bin/activate
@@ -419,8 +421,8 @@ python gear_sonic/scripts/run_external_view_camera.py \
   --port 5582
 ```
 
-Этот процесс единственный открывает `/dev/video4`. Exporter и viewer
-независимо подписываются на его ZMQ-поток.
+This process is the only one that opens `/dev/video4`. The exporter and viewer
+subscribe to its ZMQ stream independently.
 
 ## 3. BrainCo data exporter
 
@@ -450,49 +452,48 @@ python -m gear_sonic.scripts.brainco_data_exporter \
   --external-view-camera-height 960
 ```
 
-Перед подключением к источникам exporter запрашивает task, пол,
-возраст, рост и вес. После проверки можно подтвердить данные,
-изменить одно поле или ввести всё заново. Имя датасета формируется
-автоматически.
-Допустимы task `none`, `handshake`, `fist_bump`, `hug`; пол `f` или `m`;
-возраст 1–120 лет; рост 120–230 см; вес 40–120 кг.
-Для возраста, роста и веса можно ввести `n`; в metadata и имени датасета
-это значение будет записано как `none`.
-Пример имени:
+Before connecting to sources, the exporter asks for the task, sex, age, height,
+and weight. After checking the values, you can confirm them, change one field,
+or enter all values again. The dataset name is generated automatically.
+Allowed tasks are `none`, `handshake`, `fist_bump`, and `hug`; sex is `f` or
+`m`; age is 1–120 years; height is 120–230 cm; and weight is 40–120 kg.
+For age, height, and weight, you can enter `n`. This value is saved as `none`
+in the metadata and dataset name.
+Example name:
 
 ```text
 handshake-m-age28-height182-weight78-20260910-153045
 ```
 
-Основные аргументы:
+Main arguments:
 
-| Группа | Аргументы |
+| Group | Arguments |
 |---|---|
-| Dataset | `--root-output-dir`, `--data-collection-frequency`; task и имя задаются интерактивно. |
+| Dataset | `--root-output-dir`, `--data-collection-frequency`; the task and name are set interactively. |
 | ZMQ | `--camera-host`, `--camera-port`, `--sonic-zmq-host`, `--sonic-zmq-port`, `--state-zmq-host`, `--state-zmq-port`. |
 | BrainCo DDS | `--brainco-dds-domain-id`, `--brainco-network-interface`, `--brainco-message-timeout`. |
 | G1 telemetry | `--g1-telemetry-zmq-host`, `--g1-telemetry-zmq-port`, `--g1-telemetry-expected-hz`, `--g1-telemetry-max-age`, `--g1-telemetry-message-timeout`. |
-| Cameras | `--ignore-head`, `--ignore-ego-view`, `--record-wrist-cameras`, размеры RGB/depth потоков. |
+| Cameras | `--ignore-head`, `--ignore-ego-view`, `--record-wrist-cameras`, and RGB/depth stream sizes. |
 | External camera stream | `--external-view-camera-host`, `--external-view-camera-port`, `--external-view-camera-width`, `--external-view-camera-height`, `--external-view-camera-timeout`. |
 | Depth | `--record-raw-depth`, `--record-depth-video`, `--depth-video-max-meters`. |
 | Raw telemetry | `--record-raw-telemetry`, `--no-record-raw-telemetry`. |
 | Other | `--text-to-speech`, `--no-text-to-speech`, `--episode-status-zmq-port`. |
 
-Одновременно `--ignore-head` и `--ignore-ego-view` использовать нельзя.
+Do not use `--ignore-head` and `--ignore-ego-view` at the same time.
 
-Примеры:
+Examples:
 
 ```bash
-# Только ego_view и raw depth только этой камеры
+# ego_view only, with raw depth only for this camera
 --ignore-head --record-raw-depth
 
-# Только head camera
+# Head camera only
 --ignore-ego-view
 
-# Не-default: явно включить сохранение уже доступных depth-потоков
+# Non-default: explicitly save available depth streams
 --record-raw-depth --record-depth-video
 
-# Standalone camera stream. В датасете modality называется external-view-camera.
+# Standalone camera stream. The dataset modality is called external-view-camera.
 --external-view-camera-host localhost \
 --external-view-camera-port 5582 \
 --external-view-camera-width 1280 \
@@ -511,13 +512,13 @@ python -m gear_sonic.g1_upper_body_telemetry.host_receiver \
   --timeout 10
 ```
 
-Аргументы: `--host`, `--port`, `--timeout`.
+Arguments: `--host`, `--port`, `--timeout`.
 
-Этот receiver не требуется для exporter: exporter сам подписывается на тот же
-ZMQ topic и может работать одновременно с diagnostic receiver.
+This receiver is not required for the exporter: the exporter subscribes to the
+same ZMQ topic itself and can run at the same time as the diagnostic receiver.
 
-Проверка raw `rt/lowstate` напрямую через Unitree Python SDK запускается на
-роботе:
+The raw `rt/lowstate` can be checked directly with the Unitree Python SDK on
+the robot:
 
 ```bash
 cd /home/unitree/teleop-ws/Teleop-Data-Collection
@@ -527,15 +528,15 @@ python -m gear_sonic.g1_upper_body_telemetry.inspect_upper_body_state \
   --print-hz 2
 ```
 
-При запуске с другого компьютера, который видит DDS, добавьте интерфейс:
+When running on another computer that can access DDS, add the interface:
 
 ```bash
 --network-interface wlp128s20f3
 ```
 
-Скрипт выводит state `q`, `dq`, `ddq`, `tau_est` и command `q`, `dq`,
-`tau`, `kp`, `kd` для 17 upper-body моторов. `--once` напечатает одну
-пару LowState/LowCmd и завершится.
+The script prints state `q`, `dq`, `ddq`, `tau_est` and command `q`, `dq`,
+`tau`, `kp`, `kd` for 17 upper-body motors. `--once` prints one
+LowState/LowCmd pair and exits.
 
 ## 5. Camera viewer
 
@@ -554,16 +555,16 @@ python gear_sonic/scripts/run_camera_viewer.py \
   --no-motor-states
 ```
 
-Основные аргументы: `--camera-host`, `--camera-port`, `--camera-streams`,
+Main arguments: `--camera-host`, `--camera-port`, `--camera-streams`,
 `--external-view-camera-host`, `--external-view-camera-port`, `--grid-columns`,
 `--depth-display-min-meters`, `--depth-display-max-meters`,
-`--show-tau-plot` / `--no-show-tau-plot` и алиас `--no-motor-states`.
+`--show-tau-plot` / `--no-show-tau-plot`, and the `--no-motor-states` alias.
 
-Viewer и exporter получают `external-view-camera` напрямую от
-standalone publisher. Устройство `/dev/video*` открывает только
-`run_external_view_camera.py`, поэтому перезапуск exporter камеру не закрывает.
+The viewer and exporter receive `external-view-camera` directly from the
+standalone publisher. Only `run_external_view_camera.py` opens `/dev/video*`,
+so restarting the exporter does not close the camera.
 
-Для одной ego camera:
+For one ego camera:
 
 ```bash
 --camera-streams ego_view --no-depth
@@ -577,31 +578,31 @@ raw-telemetry/chunk-NNN/episode_NNNNNN.npz
 meta/interaction_metadata.jsonl
 ```
 
-`meta/interaction_metadata.jsonl` содержит отдельную строку для
-каждого эпизода: профиль участника, `interaction_class` и нулевые
-`approach_start`, `contact_active_start`, `release_start`, `idle_start` для
-последующей разметки.
+`meta/interaction_metadata.jsonl` contains one line for each episode: the
+participant profile, `interaction_class`, and zero-valued `approach_start`,
+`contact_active_start`, `release_start`, and `idle_start` fields for later
+annotation.
 
-В Parquet и `raw-telemetry` для upper body сохраняются `q_cmd`, `kp`, `kd`,
-`q_est`, `dq_est`, `tau_est`, `q_residual` и служебные
-timestamp/sequence ID. Изменение применяется только к новым эпизодам.
+For the upper body, Parquet and `raw-telemetry` save `q_cmd`, `kp`, `kd`,
+`q_est`, `dq_est`, `tau_est`, `q_residual`, and internal timestamp/sequence
+IDs. The change applies only to new episodes.
 
-В default-профиле папки `depth/` и `depth_head/` не создаются.
+In the default profile, the `depth/` and `depth_head/` folders are not created.
 
-## 7. Управление эпизодами и временными метками
+## 7. Episode and timestamp controls
 
-- `левый grip + A` — начать или остановить запись эпизода;
-- `левый grip + B` — сохранить текущий эпизод как discarded;
-- нажатие правого grip — поставить временную метку;
-- удержание правого grip создаёт одну метку, используется фронт нажатия;
-- левый grip сам по себе метку не создаёт и остаётся частью команд `A/B`;
-- нажатия и отпускания левого и правого trigger сохраняются независимо;
-- граница нажатия trigger задаётся в Pico manager через
-  `--brainco_trigger_threshold` и по умолчанию равна `0.5`.
+- `left grip + A` — start or stop episode recording;
+- `left grip + B` — save the current episode as discarded;
+- press the right grip — add a timestamp;
+- holding the right grip creates one timestamp; the press edge is used;
+- the left grip alone does not create a timestamp and remains part of the `A/B` commands;
+- press and release events for the left and right triggers are saved separately;
+- the trigger press threshold is set in Pico manager with
+  `--brainco_trigger_threshold`; the default is `0.5`.
 
 ---
 
-## Копирование проекта на Unitree по SSH
+## Copying the project to Unitree over SSH
 
 ```bash
 rsync -avh --partial --info=progress2 \
@@ -613,32 +614,32 @@ rsync -avh --partial --info=progress2 \
 
 ---
 
-## Troubleshooting / устранение проблем
+## Troubleshooting
 
-### Робот подлагивает при телеуправлении через Pico
+### The robot lags during Pico teleoperation
 
-Захват камеры и JPEG-кодирование могут конкурировать за CPU с Pico и inference
-GearSonic. На роботе найдите фактические PID процессов:
+Camera capture and JPEG encoding can compete for CPU with Pico and GearSonic
+inference. On the robot, find the actual process PIDs:
 
 ```bash
 pgrep -af 'deploy|gear_sonic|composed_camera|pico_manager'
 ```
 
-После старта всех tmux-окон проще всего запустить helper: он сам находит PID,
-запрашивает `sudo` один раз и выставляет нужные значения.
+After starting all tmux windows, the easiest option is to run the helper. It
+finds the PIDs, asks for `sudo` once, and applies the required values.
 
 ```bash
 cd /home/unitree/teleop-ws/Teleop-Data-Collection
 bash gear_sonic/scripts/set_runtime_priorities.sh
 ```
 
-Helper требует ровно по одному процессу GearSonic deploy, Pico manager, camera
-server и telemetry publisher. Если одновременно работают две tmux-сессии, он
-ничего не меняет и выводит найденные дубликаты.
+The helper requires exactly one GearSonic deploy process, Pico manager, camera
+server, and telemetry publisher. If two tmux sessions run at the same time, it
+does not change anything and prints the duplicate processes it found.
 
-При необходимости те же значения можно применить вручную. Поднимите
-CPU-приоритет фактического бинарника `g1_deploy_onnx_ref` и Pico manager, а
-для camera server снизьте его. Замените заполнители на PID из команды выше:
+You can apply the same values manually if needed. Increase the CPU priority of
+the actual `g1_deploy_onnx_ref` binary and Pico manager, and lower it for the
+camera server. Replace the placeholders with PIDs from the command above:
 
 ```bash
 sudo renice -n -5 -p <DEPLOY_PID>
@@ -647,8 +648,8 @@ sudo renice -n 10 -p <CAMERA_SERVER_PID>
 sudo renice -n 5 -p <TELEMETRY_PID>
 ```
 
-Например, если у `g1_deploy_onnx_ref` PID `17612`, у Pico manager — `16999`,
-у camera server — `17012`, а у telemetry publisher — `17010`:
+For example, if `g1_deploy_onnx_ref` has PID `17612`, Pico manager has `16999`,
+the camera server has `17012`, and the telemetry publisher has `17010`:
 
 ```bash
 sudo renice -n -5 -p 17612
@@ -657,30 +658,29 @@ sudo renice -n 10 -p 17012
 sudo renice -n 5 -p 17010
 ```
 
-Проверить применённые приоритеты:
+Check the applied priorities:
 
 ```bash
 ps -o pid,ni,cls,cmd -p <DEPLOY_PID>,<PICO_MANAGER_PID>,<CAMERA_SERVER_PID>,<TELEMETRY_PID>
 ```
 
-`nice` меняет только планирование CPU: TensorRT/GPU kernels специального
-приоритета не получают. После перезапуска PID и приоритеты меняются, поэтому
-команды нужно повторить после создания новой tmux-сессии. Не используйте
-realtime scheduling через `chrt` без отдельной проверки: он может вытеснить
-DDS/Pico процессы и ухудшить задержку управления.
+`nice` changes only CPU scheduling: TensorRT/GPU kernels do not receive a
+special priority. After a restart, PIDs and priorities change, so run the
+commands again after creating a new tmux session. Do not use real-time
+scheduling with `chrt` without separate testing: it can block DDS/Pico
+processes and increase control latency.
 
-### Проверка BrainCo DDS не проходит
+### BrainCo DDS check fails
 
-Если `start_brainco_and_check.sh` не проходит DDS-проверку, остановите его
-через `Ctrl+C` (либо дождитесь завершения), затем один раз вручную остановите
-container:
+If `start_brainco_and_check.sh` fails the DDS check, stop it with `Ctrl+C` (or
+wait until it finishes), then stop the container manually once:
 
 ```bash
 docker stop g1-brainco-hand-server
 ```
 
-После этого заново запустите check script. Он сам поднимет container из
-чистого остановленного состояния:
+Then run the check script again. It starts the container from a clean stopped
+state:
 
 ```bash
 cd /home/unitree/teleop-ws/Teleop-Data-Collection
@@ -688,5 +688,4 @@ bash gear_sonic/scripts/start_brainco_and_check.sh \
   --interface wlxfc23cd997021
 ```
 
-Вместо `wlxfc23cd997021` укажите фактический интерфейс Pico/DDS, если он
-отличается.
+Replace `wlxfc23cd997021` with the actual Pico/DDS interface if it is different.
