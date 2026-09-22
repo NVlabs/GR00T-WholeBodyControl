@@ -50,16 +50,30 @@ class ImagePublishProcess:
         for camera_name, camera_config in camera_configs.items():
             height = camera_config["height"]
             width = camera_config["width"]
-            size = height * width * 3
-
-            shm = shared_memory.SharedMemory(create=True, size=size)
-            self.shared_memory_blocks[camera_name] = shm
-            self.shared_memory_info[camera_name] = {
-                "name": shm.name,
-                "size": size,
-                "shape": (height, width, 3),
-                "dtype": np.uint8,
+            stream_configs = {
+                camera_name: {
+                    "shape": (height, width, 3),
+                    "dtype": np.dtype(np.uint8),
+                    "render_key": f"{camera_name}_image",
+                },
+                f"{camera_name}_depth": {
+                    "shape": (height, width),
+                    "dtype": np.dtype(np.float32),
+                    "render_key": f"{camera_name}_depth",
+                },
             }
+
+            for stream_name, stream_config in stream_configs.items():
+                size = int(np.prod(stream_config["shape"])) * stream_config["dtype"].itemsize
+                shm = shared_memory.SharedMemory(create=True, size=size)
+                self.shared_memory_blocks[stream_name] = shm
+                self.shared_memory_info[stream_name] = {
+                    "name": shm.name,
+                    "size": size,
+                    "shape": stream_config["shape"],
+                    "dtype": stream_config["dtype"],
+                    "render_key": stream_config["render_key"],
+                }
 
     def start_process(self):
         """Start the image publishing subprocess"""
@@ -79,18 +93,14 @@ class ImagePublishProcess:
     def update_shared_memory(self, render_caches: Dict[str, np.ndarray]):
         """Update shared memory with new rendered images"""
         images_updated = 0
-        for camera_name in self.camera_configs.keys():
-            image_key = f"{camera_name}_image"
-            if image_key in render_caches:
-                image = render_caches[image_key]
-
-                if image.dtype != np.uint8:
-                    image = (image * 255).astype(np.uint8)
-
-                shm = self.shared_memory_blocks[camera_name]
+        for stream_name, info in self.shared_memory_info.items():
+            render_key = info["render_key"]
+            if render_key in render_caches:
+                image = np.asarray(render_caches[render_key], dtype=info["dtype"])
+                shm = self.shared_memory_blocks[stream_name]
                 shared_array = np.ndarray(
-                    self.shared_memory_info[camera_name]["shape"],
-                    dtype=self.shared_memory_info[camera_name]["dtype"],
+                    info["shape"],
+                    dtype=info["dtype"],
                     buffer=shm.buf,
                 )
 
@@ -141,7 +151,7 @@ class ImagePublishProcess:
                 )
 
             print(
-                f"Image publishing subprocess started with {len(shared_arrays)} cameras "
+                f"Image publishing subprocess started with {len(shared_arrays)} streams "
                 f"on ZMQ port {zmq_port}"
             )
 
@@ -179,8 +189,11 @@ class ImagePublishProcess:
 
                         serialized_data = image_msg.serialize()
 
-                        for camera_name, image_copy in image_copies.items():
-                            serialized_data[f"{camera_name}"] = ImageUtils.encode_image(image_copy)
+                        # Preserve the legacy top-level RGB fields. Depth is available
+                        # in serialized_data["images"]["<camera>_depth"].
+                        for stream_name, image_copy in image_copies.items():
+                            if not stream_name.endswith("_depth"):
+                                serialized_data[stream_name] = ImageUtils.encode_image(image_copy)
 
                         sensor_server.send_message(serialized_data)
 

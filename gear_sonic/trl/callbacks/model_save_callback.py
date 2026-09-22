@@ -120,9 +120,8 @@ class ModelSaveCallback(TrainerCallback):
     ):
         if model is not None:
             # Save model, optimizer, scheduler and training state
-            state_without_log_history = copy.copy(state)
-            state_without_log_history.__dict__.pop("log_history")
-            _state = copy.deepcopy(state_without_log_history)
+            _state = copy.deepcopy(state)
+            _state.__dict__.pop("log_history")
             checkpoint = {
                 "policy_state_dict": model.policy.state_dict(),
                 "value_state_dict": (

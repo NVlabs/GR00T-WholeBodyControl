@@ -105,4 +105,3 @@ struct PlannerMessage {
   /// Used to detect planner timeouts (stale data → fallback to IDLE).
   std::chrono::steady_clock::time_point timestamp{};
 };
-

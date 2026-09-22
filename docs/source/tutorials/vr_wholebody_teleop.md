@@ -2,6 +2,17 @@
 
 Full whole-body teleoperation using PICO VR headset and controllers. To teleop, use the option  `--input-type zmq_manager` during deployment. The `zmq_manager` input type switches between a **planner mode** (locomotion commands via ZMQ) and a **streamed motion mode** (full-body SMPL poses from PICO).
 
+## SONIC Low Latency
+
+The sequence below shows 3-point VR teleoperation with SONIC Low Latency,
+including whole-body tracking and a successful ground pickup.
+
+```{image} ../_static/sonic_low_latency_demo.gif
+:alt: SONIC Low Latency whole-body teleoperation and ground pickup
+:width: 640px
+:align: center
+```
+
 ```{admonition} Isaac Teleop / CloudXR Scope
 :class: note
 The same `zmq_manager` workflow can also drive the headset through Isaac Teleop / CloudXR by launching `gear_sonic/scripts/pico_manager_thread_server.py --input-source isaac-teleop`. The streamer hosts the CloudXR runtime in-process via `isaacteleop[cloudxr]` — no separate publisher container required. That path is currently supported only for **G1 with a Thor backpack**; a regular G1 setup is not supported yet.

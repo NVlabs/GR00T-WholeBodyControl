@@ -603,14 +603,36 @@ def quaternion_multiply_np(a, b):
 
 
 def decompose_rotation_aa(rotation_aa, v2):
-    angle = np.linalg.norm(rotation_aa, axis=1)[:, None]
+    rotation_aa = np.asarray(rotation_aa)
+    angle = np.linalg.norm(rotation_aa, axis=1, keepdims=True)
     w = np.cos(angle / 2)
-    v = np.sin(angle / 2) * rotation_aa / angle
+
+    # sin(angle / 2) / angle tends to 1/2 as angle -> 0.  Dividing
+    # directly by ``angle`` produced NaNs for a valid identity rotation
+    # (axis-angle [0, 0, 0]) and later a zero-norm SciPy quaternion.
+    scale = np.empty_like(angle)
+    small_angle = angle < 1e-8
+    scale[small_angle] = 0.5
+    np.divide(
+        np.sin(angle / 2),
+        angle,
+        out=scale,
+        where=~small_angle,
+    )
+    v = scale * rotation_aa
     q = np.concatenate([w, v], axis=1)
 
     v_twist = np.dot(v, v2)[:, None] * v2
     q_twist = np.concatenate([w, v_twist], axis=1)
-    q_twist = q_twist / np.linalg.norm(q_twist, axis=1)[:, None]
+    twist_norm = np.linalg.norm(q_twist, axis=1, keepdims=True)
+    degenerate_twist = twist_norm[:, 0] < 1e-8
+    q_twist = np.divide(
+        q_twist,
+        twist_norm,
+        out=np.zeros_like(q_twist),
+        where=twist_norm >= 1e-8,
+    )
+    q_twist[degenerate_twist, 0] = 1.0
 
     q_twist_inv = q_twist * np.array([1, -1, -1, -1])
     q_swing = quaternion_multiply_np(q_twist_inv, q)

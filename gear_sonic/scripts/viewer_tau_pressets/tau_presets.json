@@ -1,0 +1,59 @@
+{
+    "left_arm_no_waist_test": [
+      "left_shoulder_pitch_joint",
+      "left_shoulder_roll_joint",
+      "left_shoulder_yaw_joint",
+      "left_elbow_joint",
+      "left_wrist_roll_joint",
+      "left_wrist_pitch_joint",
+      "left_wrist_yaw_joint"
+  ],
+    "left_arm_waist_test": [
+    "waist_yaw_joint",
+    "waist_roll_joint",
+    "waist_pitch_joint",
+    "left_shoulder_pitch_joint",
+    "left_shoulder_roll_joint",
+    "left_shoulder_yaw_joint"
+  ],
+  "left_arm_waist": [
+    "waist_yaw_joint",
+    "waist_roll_joint",
+    "waist_pitch_joint",
+    "left_shoulder_pitch_joint",
+    "left_shoulder_roll_joint",
+    "left_shoulder_yaw_joint",
+    "left_elbow_joint",
+    "left_wrist_roll_joint",
+    "left_wrist_pitch_joint",
+    "left_wrist_yaw_joint"
+  ],
+  "right_arm_waist": [
+    "waist_yaw_joint",
+    "waist_roll_joint",
+    "waist_pitch_joint",
+    "right_shoulder_pitch_joint",
+    "right_shoulder_roll_joint",
+    "right_shoulder_yaw_joint",
+    "right_elbow_joint",
+    "right_wrist_roll_joint",
+    "right_wrist_pitch_joint",
+    "right_wrist_yaw_joint"
+  ],
+  "left_fingers": [
+    "left_brainco_thumb",
+    "left_brainco_thumb_aux",
+    "left_brainco_index",
+    "left_brainco_middle",
+    "left_brainco_ring",
+    "left_brainco_pinky"
+  ],
+  "right_fingers": [
+    "right_brainco_thumb",
+    "right_brainco_thumb_aux",
+    "right_brainco_index",
+    "right_brainco_middle",
+    "right_brainco_ring",
+    "right_brainco_pinky"
+  ]
+}

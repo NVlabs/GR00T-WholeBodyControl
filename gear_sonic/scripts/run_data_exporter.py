@@ -49,6 +49,8 @@ from gear_sonic.utils.data_collection.zmq_state_subscriber import (
     poll_robot_config_zmq,
 )
 
+EPISODE_STATUS_TOPIC = "episode_status"
+
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
@@ -102,6 +104,12 @@ class SonicDataExporterConfig:
 
     text_to_speech: bool = True
     """Use text-to-speech voice feedback."""
+
+    episode_status_zmq_port: int = 5581
+    """ZMQ PUB port for current episode status consumed by the camera viewer."""
+
+    episode_status_publish_hz: float = 10.0
+    """Episode status publish rate in Hz."""
 
 
 # ---------------------------------------------------------------------------
@@ -199,6 +207,52 @@ class TimingThresholdMonitor:
         return False
 
 
+class EpisodeStatusPublisher:
+    """Small JSON-over-ZMQ publisher for the current data-collection episode."""
+
+    def __init__(self, port: int, topic: str = EPISODE_STATUS_TOPIC):
+        self._topic = topic
+        self._ctx = None
+        self._socket = None
+
+        try:
+            self._ctx = zmq.Context()
+            self._socket = self._ctx.socket(zmq.PUB)
+            self._socket.setsockopt(zmq.SNDHWM, 10)
+            self._socket.setsockopt(zmq.LINGER, 0)
+            self._socket.bind(f"tcp://*:{port}")
+            print(f"[EpisodeStatus] Publishing on tcp://*:{port} topic '{topic}'")
+        except Exception as e:
+            print(f"[EpisodeStatus] Warning: failed to start publisher on port {port}: {e}")
+            self.close()
+
+    def publish(self, status: dict) -> None:
+        if self._socket is None:
+            return
+
+        try:
+            payload = json.dumps(status, separators=(",", ":"))
+            self._socket.send_string(f"{self._topic} {payload}", flags=zmq.NOBLOCK)
+        except zmq.Again:
+            pass
+        except Exception as e:
+            print(f"[EpisodeStatus] Warning: failed to publish status: {e}")
+
+    def close(self) -> None:
+        if self._socket is not None:
+            try:
+                self._socket.close()
+            except Exception:
+                pass
+            self._socket = None
+        if self._ctx is not None:
+            try:
+                self._ctx.term()
+            except Exception:
+                pass
+            self._ctx = None
+
+
 # ---------------------------------------------------------------------------
 # Data Collector
 # ---------------------------------------------------------------------------
@@ -227,6 +281,8 @@ class GrootDataCollector:
         sonic_data_zmq_port: int = 5556,
         state_zmq_host: str = "localhost",
         state_zmq_port: int = 5557,
+        episode_status_zmq_port: int = 5581,
+        episode_status_publish_hz: float = 10.0,
     ):
         self.text_to_speech = text_to_speech
         self.frequency = frequency
@@ -236,6 +292,8 @@ class GrootDataCollector:
 
         self._episode_state = EpisodeState()
         self._keyboard_listener = ZMQKeyboardSubscriber()
+        self._episode_recording_started_monotonic = None
+        self._last_episode_duration_sec = 0.0
 
         self._image_subscriber = ComposedCameraClientSensor(server_ip=camera_host, port=camera_port)
 
@@ -281,6 +339,12 @@ class GrootDataCollector:
 
         self._last_latency_log_time = 0.0
         self._initial_yaw = None
+        self._episode_status_publisher = EpisodeStatusPublisher(episode_status_zmq_port)
+        self._episode_status_publish_period = (
+            1.0 / episode_status_publish_hz if episode_status_publish_hz > 0 else 0.0
+        )
+        self._last_episode_status_publish_time = 0.0
+        self._episode_status_sequence = 0
 
         print(f"Recording to {self.data_exporter.meta.root}")
 
@@ -293,6 +357,47 @@ class GrootDataCollector:
             self.text_to_speech.print_and_say(message, say, blocking=blocking)
         else:
             print(message)
+
+    def _current_episode_duration_sec(self) -> float:
+        if self._episode_recording_started_monotonic is not None:
+            return max(0.0, time.monotonic() - self._episode_recording_started_monotonic)
+        return self._last_episode_duration_sec
+
+    def _build_episode_status(self) -> dict:
+        state = self._episode_state.get_state()
+        frame_count = int(self.data_exporter.episode_buffer.get("size", 0))
+        return {
+            "timestamp": time.time(),
+            "sequence": self._episode_status_sequence,
+            "state": state,
+            "is_recording": state == self._episode_state.RECORDING,
+            "episode_index": int(self.current_episode_index),
+            "duration_sec": float(self._current_episode_duration_sec()),
+            "frame_count": frame_count,
+            "dataset_root": str(self.data_exporter.meta.root),
+        }
+
+    def _publish_episode_status(self, force: bool = False) -> None:
+        now = time.monotonic()
+        if (
+            not force
+            and self._episode_status_publish_period > 0
+            and now - self._last_episode_status_publish_time < self._episode_status_publish_period
+        ):
+            return
+
+        self._episode_status_sequence += 1
+        status = self._build_episode_status()
+        self._episode_status_publisher.publish(status)
+        self._last_episode_status_publish_time = now
+        if force:
+            print(
+                "[EpisodeStatus] "
+                f"episode={status['episode_index']} "
+                f"state={status['state']} "
+                f"duration={status['duration_sec']:.1f}s "
+                f"frames={status['frame_count']}"
+            )
 
     def _poll_state_zmq(self):
         """Poll the ``g1_debug`` ZMQ topic for robot state (non-blocking)."""
@@ -319,20 +424,31 @@ class GrootDataCollector:
         if key == "c":
             self._episode_state.change_state()
             if self._episode_state.get_state() == self._episode_state.RECORDING:
+                self._episode_recording_started_monotonic = time.monotonic()
+                self._last_episode_duration_sec = 0.0
                 self._initial_yaw = None
                 self._print_and_say(
                     f"Started recording {self.current_episode_index}", blocking=False
                 )
             elif self._episode_state.get_state() == self._episode_state.NEED_TO_SAVE:
+                self._last_episode_duration_sec = self._current_episode_duration_sec()
+                self._episode_recording_started_monotonic = None
                 self._print_and_say("Stopping recording, preparing to save", blocking=False)
             elif self._episode_state.get_state() == self._episode_state.IDLE:
+                self._episode_recording_started_monotonic = None
+                self._last_episode_duration_sec = 0.0
                 self._print_and_say("Saved episode and back to idle state", blocking=False)
+            self._publish_episode_status(force=True)
         elif key == "x":
             if self._episode_state.get_state() == self._episode_state.RECORDING:
+                self._last_episode_duration_sec = self._current_episode_duration_sec()
                 self.data_exporter.save_episode_as_discarded()
                 self._episode_state.reset_state()
+                self._episode_recording_started_monotonic = None
+                self._last_episode_duration_sec = 0.0
                 self._initial_yaw = None
                 self._print_and_say("Discarded episode", blocking=False)
+                self._publish_episode_status(force=True)
 
     def _poll_sonic_zmq_messages(self):
         """Poll ZMQ for pose, planner, and manager_state messages (non-blocking)."""
@@ -552,10 +668,19 @@ class GrootDataCollector:
             else:
                 self._print_and_say("Skipping save: no frames collected", say=False)
             self._episode_state.change_state()
+            self._episode_recording_started_monotonic = None
+            self._last_episode_duration_sec = 0.0
+            self._publish_episode_status(force=True)
         return True
 
     def _add_data_frame(self):
         t_start = time.monotonic()
+
+        # Saving (including an empty episode) must not depend on receiving fresh
+        # camera/proprio messages. Otherwise NEED_TO_SAVE can remain stuck
+        # forever when one input disappears immediately before the stop command.
+        if self._episode_state.get_state() == self._episode_state.NEED_TO_SAVE:
+            return self._finalize_frame(t_start)
 
         if self.latest_proprio_msg is None or self.latest_image_msg is None:
             self._print_and_say(
@@ -857,6 +982,8 @@ class GrootDataCollector:
                 except Exception:
                     pass
 
+        self._episode_status_publisher.close()
+
         self._print_and_say("Shutting down data exporter...", say=False)
 
     def run(self):
@@ -881,6 +1008,9 @@ class GrootDataCollector:
                     with self.telemetry.timer("check_recording_commands"):
                         self._check_recording_commands()
 
+                    with self.telemetry.timer("publish_episode_status"):
+                        self._publish_episode_status()
+
                     end_time = time.monotonic()
 
                 elapsed = time.monotonic() - t_start
@@ -898,6 +1028,10 @@ class GrootDataCollector:
             buffer_size = self.data_exporter.episode_buffer.get("size", 0)
             if buffer_size > 0:
                 self.data_exporter.save_episode_as_discarded()
+            self._episode_state.reset_state()
+            self._episode_recording_started_monotonic = None
+            self._last_episode_duration_sec = 0.0
+            self._publish_episode_status(force=True)
 
         finally:
             self.save_and_cleanup()
@@ -950,6 +1084,8 @@ def main(config: SonicDataExporterConfig):
         sonic_data_zmq_port=config.sonic_zmq_port,
         state_zmq_host=config.state_zmq_host,
         state_zmq_port=config.state_zmq_port,
+        episode_status_zmq_port=config.episode_status_zmq_port,
+        episode_status_publish_hz=config.episode_status_publish_hz,
     )
     data_collector.run()
 

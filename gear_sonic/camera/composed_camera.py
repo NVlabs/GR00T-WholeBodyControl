@@ -56,13 +56,28 @@ class ComposedCameraConfig:
     """Camera type for ego view: oak, oak_mono, realsense, zed, usb, or None."""
 
     ego_view_device_id: str | None = None
-    """Device ID for ego view camera (OAK MxID, RealSense serial, USB /dev/video index)."""
+    """Device ID for ego view camera (OAK MxID, RealSense serial, USB index)."""
 
     head_camera: str | None = None
     """Camera type for head view."""
 
     head_device_id: str | None = None
-    """Device ID for head camera."""
+    """RealSense serial, USB index, or USB device path such as /dev/video4."""
+
+    head_camera_width: int | None = None
+    """Head RGB width. Defaults to realsense_width for backward compatibility."""
+
+    head_camera_height: int | None = None
+    """Head RGB height. Defaults to realsense_height for backward compatibility."""
+
+    head_camera_fps: int | None = None
+    """Head capture FPS. Defaults to the global fps value."""
+
+    head_camera_quality: int = 80
+    """JPEG transport quality (1-100) for the head RGB stream."""
+
+    head_camera_fourcc: str | None = None
+    """Optional USB head camera FourCC, for example MJPG."""
 
     left_wrist_camera: str | None = None
     """Camera type for left wrist view."""
@@ -77,7 +92,22 @@ class ComposedCameraConfig:
     """Device ID for right wrist camera."""
 
     fps: int = 30
-    """Publish rate.  OAK cameras run at 30 FPS; lower values add latency."""
+    """Non-head capture FPS and base publish rate."""
+
+    realsense_width: int = 640
+    """RGB width for non-head RealSense cameras and fallback for head."""
+
+    realsense_height: int = 480
+    """RGB height for non-head RealSense cameras and fallback for head."""
+
+    realsense_depth_width: int = 640
+    """Width of both RealSense depth streams."""
+
+    realsense_depth_height: int = 480
+    """Height of both RealSense depth streams."""
+
+    realsense_depth: bool = True
+    """Enable RealSense depth capture and transmission."""
 
     run_as_server: bool = True
     """Run as ZMQ PUB server (set False for in-process usage)."""
@@ -102,6 +132,66 @@ class ComposedCameraConfig:
 
     def __post_init__(self):
         self.run_as_server = self.server
+        if self.fps <= 0:
+            raise ValueError("fps must be positive")
+        if self.head_camera_fps is not None and self.head_camera_fps <= 0:
+            raise ValueError("head_camera_fps must be positive")
+        if not 1 <= self.head_camera_quality <= 100:
+            raise ValueError("head_camera_quality must be between 1 and 100")
+        if (
+            self.head_camera == "usb"
+            and self.head_camera_fourcc is not None
+            and len(self.head_camera_fourcc) != 4
+        ):
+            raise ValueError("head_camera_fourcc must contain exactly four characters")
+
+        if self.head_camera is not None:
+            if self.head_camera_width is not None and self.head_camera_width <= 0:
+                raise ValueError("head_camera_width must be positive")
+            if self.head_camera_height is not None and self.head_camera_height <= 0:
+                raise ValueError("head_camera_height must be positive")
+
+        camera_types = {
+            self.ego_view_camera,
+            self.head_camera,
+            self.left_wrist_camera,
+            self.right_wrist_camera,
+        }
+        if "realsense" not in camera_types:
+            return
+
+        realsense_dimensions = []
+        if any(
+            camera_type == "realsense"
+            for camera_type in (
+                self.ego_view_camera,
+                self.left_wrist_camera,
+                self.right_wrist_camera,
+            )
+        ):
+            realsense_dimensions.extend((self.realsense_width, self.realsense_height))
+        if self.head_camera == "realsense":
+            realsense_dimensions.extend(self.head_image_dim)
+        if self.realsense_depth:
+            realsense_dimensions.extend(
+                (
+                    self.realsense_depth_width,
+                    self.realsense_depth_height,
+                )
+            )
+        if any(dimension <= 0 for dimension in realsense_dimensions):
+            raise ValueError("Enabled RealSense stream dimensions must be positive")
+
+    @property
+    def head_image_dim(self) -> tuple[int, int]:
+        return (
+            self.head_camera_width or self.realsense_width,
+            self.head_camera_height or self.realsense_height,
+        )
+
+    @property
+    def effective_head_fps(self) -> int:
+        return self.head_camera_fps or self.fps
 
 
 class ComposedCameraSensor(Sensor, SensorServer):
@@ -117,6 +207,7 @@ class ComposedCameraSensor(Sensor, SensorServer):
         self._observation_spaces: dict[str, Any] = {}
 
         camera_configs = self._get_camera_configs()
+        self._validate_realsense_selection(camera_configs)
 
         for _idx, (mount_position, camera_config) in enumerate(camera_configs.items()):
             camera_queue = queue.Queue(maxsize=config.queue_size)
@@ -186,6 +277,27 @@ class ComposedCameraSensor(Sensor, SensorServer):
             }
 
         return camera_configs
+
+    @staticmethod
+    def _validate_realsense_selection(camera_configs: dict[str, dict]) -> None:
+        realsense_configs = [
+            camera_config
+            for camera_config in camera_configs.values()
+            if camera_config["camera_type"] == "realsense"
+        ]
+        if len(realsense_configs) < 2:
+            return
+        device_ids = [camera_config["device_id"] for camera_config in realsense_configs]
+        if any(device_id is not None for device_id in device_ids) and not all(
+            device_id is not None for device_id in device_ids
+        ):
+            raise ValueError(
+                "For multiple RealSense cameras, specify serial numbers for all cameras "
+                "or leave all device IDs unset to select them by sorted index"
+            )
+        configured_ids = [device_id for device_id in device_ids if device_id is not None]
+        if len(configured_ids) != len(set(configured_ids)):
+            raise ValueError("Each RealSense camera must use a different serial number")
 
     def _wait_for_all_cameras_ready(self, timeout: float = 60.0):
         expected_cameras = set(self.camera_queues.keys())
@@ -303,9 +415,7 @@ class ComposedCameraSensor(Sensor, SensorServer):
                     else:
                         if warmup_period:
                             if time.time() - warmup_start_time > warmup_timeout:
-                                print(
-                                    f"[{mount_position}] Warmup timeout — will attempt reconnect"
-                                )
+                                print(f"[{mount_position}] Warmup timeout — will attempt reconnect")
                                 break
                             time.sleep(0.1)
                         else:
@@ -373,10 +483,45 @@ class ComposedCameraSensor(Sensor, SensorServer):
             return OAKSensor(config=oak_config, mount_position=mount_position, device_id=device_id)
 
         elif camera_type == "realsense":
-            from gear_sonic.camera.drivers.realsense import RealSenseSensor
+            from gear_sonic.camera.drivers.realsense import (
+                RealSenseConfig,
+                RealSenseSensor,
+            )
 
-            print(f"Initializing RealSense sensor for camera type: {camera_type}")
-            return RealSenseSensor(mount_position=mount_position)
+            realsense_mounts = [
+                mount
+                for mount, camera_config in self._get_camera_configs().items()
+                if camera_config["camera_type"] == "realsense"
+            ]
+            fallback_device_index = realsense_mounts.index(mount_position)
+            selection = (
+                f"serial {device_id}"
+                if device_id is not None
+                else f"sorted device index {fallback_device_index}"
+            )
+            print(f"Initializing RealSense {mount_position} using {selection}")
+            realsense_config = RealSenseConfig()
+            realsense_config.color_image_dim = (
+                self.config.head_image_dim
+                if mount_position == CameraMountPosition.HEAD.value
+                else (self.config.realsense_width, self.config.realsense_height)
+            )
+            realsense_config.depth_image_dim = (
+                self.config.realsense_depth_width,
+                self.config.realsense_depth_height,
+            )
+            realsense_config.fps = (
+                self.config.effective_head_fps
+                if mount_position == CameraMountPosition.HEAD.value
+                else self.config.fps
+            )
+            realsense_config.enable_depth = self.config.realsense_depth
+            return RealSenseSensor(
+                config=realsense_config,
+                mount_position=mount_position,
+                id=fallback_device_index,
+                device_id=device_id,
+            )
 
         elif camera_type.endswith(".mp4"):
             from gear_sonic.camera.drivers.dummy import ReplayDummySensor
@@ -387,11 +532,28 @@ class ComposedCameraSensor(Sensor, SensorServer):
         elif camera_type == "usb":
             from gear_sonic.camera.drivers.usb_camera import USBCameraConfig, USBCameraSensor
 
-            usb_config = USBCameraConfig()
-            device_idx = int(device_id) if device_id else 0
-            print(f"Initializing USB camera for type: {camera_type}, device: {device_idx}")
+            if mount_position == CameraMountPosition.HEAD.value:
+                image_dim = self.config.head_image_dim
+                fps = self.config.effective_head_fps
+                fourcc = self.config.head_camera_fourcc
+            else:
+                image_dim = (self.config.realsense_width, self.config.realsense_height)
+                fps = self.config.fps
+                fourcc = None
+            usb_config = USBCameraConfig(image_dim=image_dim, fps=fps, fourcc=fourcc)
+            if device_id is None:
+                device = 0
+            else:
+                try:
+                    device = int(device_id)
+                except ValueError:
+                    device = device_id
+            print(
+                f"Initializing USB {mount_position}: device={device}, "
+                f"RGB={image_dim[0]}x{image_dim[1]}@{fps}, depth=disabled"
+            )
             return USBCameraSensor(
-                config=usb_config, mount_position=mount_position, device_index=device_idx
+                config=usb_config, mount_position=mount_position, device_index=device
             )
 
         else:
@@ -454,7 +616,11 @@ class ComposedCameraSensor(Sensor, SensorServer):
         for _mount, camera_data in message.items():
             all_timestamps.update(camera_data.get("timestamps", {}))
             all_images.update(camera_data.get("images", {}))
-        img_schema = ImageMessageSchema(timestamps=all_timestamps, images=all_images)
+        img_schema = ImageMessageSchema(
+            timestamps=all_timestamps,
+            images=all_images,
+            jpeg_qualities={CameraMountPosition.HEAD.value: self.config.head_camera_quality},
+        )
         return img_schema.serialize()
 
     def run_server(self):
@@ -462,7 +628,11 @@ class ComposedCameraSensor(Sensor, SensorServer):
         idx = 0
         server_start_time = time.monotonic()
         fps_print_time = time.monotonic()
-        frame_interval = 1.0 / self.config.fps
+        publish_fps = max(
+            self.config.fps,
+            self.config.effective_head_fps if self.config.head_camera is not None else 0,
+        )
+        frame_interval = 1.0 / publish_fps
 
         while True:
             target_time = server_start_time + (idx + 1) * frame_interval
@@ -596,9 +766,7 @@ class _MjpegGrabber:
                     break
                 jpeg_bytes = buf[soi : eoi + 2]
                 buf = buf[eoi + 2 :]
-                frame = cv2.imdecode(
-                    np.frombuffer(jpeg_bytes, dtype=np.uint8), cv2.IMREAD_COLOR
-                )
+                frame = cv2.imdecode(np.frombuffer(jpeg_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
                 if frame is not None:
                     with self.lock:
                         self.frame = frame

@@ -186,18 +186,6 @@ class UniversalTokenModule(nn.Module):
         self.reencode_smpl_g1_recon = reencode_smpl_g1_recon
         self.tokenizer_obs_dims = self.env_config.obs.group_obs_dims["tokenizer"]
         self.tokenizer_obs_names = self.env_config.obs.group_obs_names["tokenizer"]
-        # The tokenizer observation schema is fixed after module construction.
-        tokenizer_obs_specs = []
-        tokenizer_obs_offset = 0
-        for name in self.tokenizer_obs_names:
-            dims = tuple(self.tokenizer_obs_dims[name])
-            flat_dim = int(np.prod(dims))
-            tokenizer_obs_specs.append(
-                (name, tokenizer_obs_offset, tokenizer_obs_offset + flat_dim, dims)
-            )
-            tokenizer_obs_offset += flat_dim
-        self.tokenizer_obs_specs = tuple(tokenizer_obs_specs)
-        self.tokenizer_obs_total_dim = tokenizer_obs_offset
         self.actions_dim = self.env_config.robot.actions_dim
         self.meta_action_dim = (
             meta_action_dim  # Can be different from actions_dim for hierarchical policies
@@ -494,13 +482,15 @@ class UniversalTokenModule(nn.Module):
         """
         tokenizer_obs = input_data["tokenizer"]
         tokenizer_obs_dict = {}
-        for name, start, end, dims in self.tokenizer_obs_specs:
-            tokenizer_obs_dict[name] = tokenizer_obs[..., start:end].reshape(
+        index = 0
+        for name in self.tokenizer_obs_names:
+            dims = tuple(self.tokenizer_obs_dims[name])
+            all_dim = np.prod(self.tokenizer_obs_dims[name])
+            tokenizer_obs_dict[name] = tokenizer_obs[..., index : index + all_dim].reshape(
                 tokenizer_obs.shape[:-1] + dims
             )
-        assert self.tokenizer_obs_total_dim == tokenizer_obs.shape[-1], (
-            f"{self.tokenizer_obs_total_dim=}, {tokenizer_obs.shape[-1]=}"
-        )
+            index += all_dim
+        assert index == tokenizer_obs.shape[-1], f"{index=}, {tokenizer_obs.shape[-1]=}"
         return tokenizer_obs_dict
 
     def create_encoder_masks(self, tokenizer_obs):

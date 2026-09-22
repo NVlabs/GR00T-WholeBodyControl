@@ -110,18 +110,24 @@ class ImageMessageSchema:
 
     * **str** – legacy base64-encoded JPEG.
     * **bytes** – raw JPEG from on-device MJPEG encoder (e.g. OAK).
+    * **dict** – lossless ``uint16_mm_png`` depth, decoded to float32 metres.
     """
 
     timestamps: dict[str, float]
     images: dict[str, np.ndarray]
+    jpeg_qualities: dict[str, int] = field(default_factory=dict, repr=False)
 
     def serialize(self) -> dict[str, Any]:
         serialized_msg: dict[str, Any] = {"timestamps": self.timestamps, "images": {}}
         for key, image in self.images.items():
             if isinstance(image, bytes | bytearray):
                 serialized_msg["images"][key] = image
+            elif key.endswith("_depth"):
+                serialized_msg["images"][key] = ImageUtils.encode_depth_image(image)
             else:
-                serialized_msg["images"][key] = ImageUtils.encode_image(image)
+                serialized_msg["images"][key] = ImageUtils.encode_image(
+                    image, quality=self.jpeg_qualities.get(key, 80)
+                )
         return serialized_msg
 
     @staticmethod
@@ -129,7 +135,10 @@ class ImageMessageSchema:
         timestamps = data.get("timestamps", {})
         images = {}
         for key, value in data.get("images", {}).items():
-            if isinstance(value, bytes | bytearray):
+            if isinstance(value, dict) and value.get("encoding") == "uint16_mm_png":
+                depth_mm = ImageUtils.decode_depth_image(value["data"])
+                images[key] = depth_mm.astype(np.float32) * 0.001
+            elif isinstance(value, bytes | bytearray):
                 mat = cv2.imdecode(np.frombuffer(value, dtype=np.uint8), cv2.IMREAD_COLOR)
                 images[key] = mat[..., ::-1]  # BGR -> RGB
             elif isinstance(value, str):
@@ -221,14 +230,40 @@ class CameraMountPosition(Enum):
 
 class ImageUtils:
     @staticmethod
-    def encode_image(image: np.ndarray) -> str:
-        _, color_buffer = cv2.imencode(".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+    def encode_image(image: np.ndarray, quality: int = 80) -> str:
+        if not 1 <= quality <= 100:
+            raise ValueError("JPEG quality must be between 1 and 100")
+        ok, color_buffer = cv2.imencode(".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+        if not ok:
+            raise RuntimeError("Failed to encode RGB image as JPEG")
         return base64.b64encode(color_buffer).decode("utf-8")
 
     @staticmethod
-    def encode_depth_image(image: np.ndarray) -> str:
-        depth_compressed = cv2.imencode(".png", image)[1].tobytes()
-        return base64.b64encode(depth_compressed).decode("utf-8")
+    def encode_depth_image(image: np.ndarray) -> dict[str, str]:
+        """Encode depth losslessly as a 16-bit millimetre PNG.
+
+        Integer input is interpreted as millimetres. Floating-point input is
+        interpreted as metres, matching the client-side decoded representation.
+        Zero denotes an invalid depth sample.
+        """
+        depth = np.asarray(image)
+        if np.issubdtype(depth.dtype, np.integer):
+            depth_mm = np.clip(depth, 0, np.iinfo(np.uint16).max).astype(np.uint16)
+        else:
+            depth_m = depth.astype(np.float32)
+            valid = np.isfinite(depth_m) & (depth_m > 0.0)
+            depth_mm = np.zeros(depth_m.shape, dtype=np.uint16)
+            depth_mm[valid] = np.rint(
+                np.clip(depth_m[valid] * 1000.0, 1.0, np.iinfo(np.uint16).max)
+            ).astype(np.uint16)
+
+        ok, depth_compressed = cv2.imencode(".png", depth_mm)
+        if not ok:
+            raise RuntimeError("Failed to encode depth image as PNG16")
+        return {
+            "encoding": "uint16_mm_png",
+            "data": base64.b64encode(depth_compressed.tobytes()).decode("utf-8"),
+        }
 
     @staticmethod
     def decode_image(image: str) -> np.ndarray:

@@ -487,7 +487,15 @@ class DefaultEnv:
                 renderer.update_scene(self.mj_data, camera=camera_config["mjcf_name"])
             else:
                 renderer.update_scene(self.mj_data, camera=camera_name)
+
+            renderer.disable_depth_rendering()
             render_caches[camera_name + "_image"] = renderer.render()
+            renderer.enable_depth_rendering()
+            try:
+                # MuJoCo returns metric camera depth as float32, shape (H, W).
+                render_caches[camera_name + "_depth"] = renderer.render()
+            finally:
+                renderer.disable_depth_rendering()
 
         if self.image_publish_process is not None:
             self.image_publish_process.update_shared_memory(render_caches)

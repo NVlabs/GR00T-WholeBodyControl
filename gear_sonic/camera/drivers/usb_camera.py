@@ -4,6 +4,7 @@ No hardware SDK needed — works with any UVC-compatible camera visible as
 ``/dev/video*``.  Only requires ``opencv-python``.
 """
 
+from dataclasses import dataclass
 import time
 from typing import Any
 
@@ -19,12 +20,14 @@ from gear_sonic.camera.sensor import Sensor
 from gear_sonic.camera.sensor_server import CameraMountPosition
 
 
+@dataclass
 class USBCameraConfig:
     """Configuration for generic USB camera."""
 
-    image_dim: tuple = (640, 480)
+    image_dim: tuple[int, int] = (640, 480)
     fps: int = 30
-    device_index: int = 0
+    device_index: int | str = 0
+    fourcc: str | None = None
 
 
 class USBCameraSensor(Sensor):
@@ -32,10 +35,11 @@ class USBCameraSensor(Sensor):
 
     def __init__(
         self,
-        config: USBCameraConfig = USBCameraConfig(),
+        config: USBCameraConfig | None = None,
         mount_position: str = CameraMountPosition.EGO_VIEW.value,
-        device_index: int | None = None,
+        device_index: int | str | None = None,
     ):
+        config = config or USBCameraConfig()
         self.config = config
         self.mount_position = mount_position
 
@@ -43,8 +47,10 @@ class USBCameraSensor(Sensor):
 
         self.cap = cv2.VideoCapture(idx)
         if not self.cap.isOpened():
-            raise RuntimeError(f"Failed to open USB camera at index {idx}")
+            raise RuntimeError(f"Failed to open USB camera at device {idx}")
 
+        if config.fourcc is not None:
+            self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*config.fourcc))
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, config.image_dim[0])
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, config.image_dim[1])
         self.cap.set(cv2.CAP_PROP_FPS, config.fps)
@@ -57,11 +63,26 @@ class USBCameraSensor(Sensor):
                 break
             time.sleep(0.1)
 
-        print(f"[{mount_position}] USB camera opened at index {idx}")
+        print(f"[{mount_position}] USB camera opened at device {idx}")
         width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        actual_fps = self.cap.get(cv2.CAP_PROP_FPS)
         print(f"  Resolution: {width}x{height}")
-        print(f"  FPS: {self.cap.get(cv2.CAP_PROP_FPS)}")
+        print(f"  FPS: {actual_fps}")
+        if config.fourcc is not None:
+            print(f"  FourCC: {config.fourcc}")
+        if (width, height) != config.image_dim:
+            self.cap.release()
+            raise RuntimeError(
+                f"USB camera {idx} does not provide requested resolution "
+                f"{config.image_dim[0]}x{config.image_dim[1]}; driver selected "
+                f"{width}x{height}. Check v4l2-ctl formats or set --head-camera-fourcc MJPG."
+            )
+        if actual_fps > 0 and abs(actual_fps - config.fps) > 1.0:
+            print(
+                f"[WARNING] USB camera requested {config.fps} FPS but reports "
+                f"{actual_fps:.2f} FPS"
+            )
 
     def read(self) -> dict[str, Any] | None:
         ret, frame = self.cap.read()
