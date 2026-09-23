@@ -28,6 +28,8 @@ algo:
       has_aux_loss: true
       backbone:
         _target_: gear_sonic.trl.modules.universal_token_modules.UniversalTokenModule
+        cache_encoded_outputs: false  # Set to true to restore the original behavior.
+        cache_full_latent: false  # Set to true to restore the original behavior; residual/full_latent_rate_l2 must be true.
         num_future_frames: ${manager_env.commands.motion.num_future_frames}
         proprioception_features: ["actor_obs"]
         encoder_sample_probs: ${manager_env.commands.motion.encoder_sample_probs}
