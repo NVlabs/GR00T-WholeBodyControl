@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|ARM">
+      <Configuration>Debug</Configuration>
+      <Platform>ARM</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|ARM">
+      <Configuration>Release</Configuration>
+      <Platform>ARM</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|ARM64">
+      <Configuration>Debug</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|ARM64">
+      <Configuration>Release</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="ClientPlatformSpecific.cpp" />
+    <ClCompile Include="SDKClient.cpp" />
+    <ClCompile Include="Main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="ClientLogging.hpp" />
+    <ClInclude Include="ClientPlatformSpecific.hpp" />
+    <ClInclude Include="ClientPlatformSpecificTypes.hpp" />
+    <ClInclude Include="SDKClient.hpp" />
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{DADD0545-4F93-41DE-B0B7-C28B8497D16B}</ProjectGuid>
+    <Keyword>Linux</Keyword>
+    <RootNamespace>SDKClient_Linux</RootNamespace>
+    <MinimumVisualStudioVersion>15.0</MinimumVisualStudioVersion>
+    <ApplicationType>Linux</ApplicationType>
+    <ApplicationTypeRevision>1.0</ApplicationTypeRevision>
+    <TargetLinuxPlatform>Generic</TargetLinuxPlatform>
+    <LinuxProjectType>{D51BCBC9-82E9-4017-911E-C93873C4EA2B}</LinuxProjectType>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>Remote_Clang_1_0</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM'" Label="Configuration">
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>Remote_Clang_1_0</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>Remote_GCC_1_0</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>Remote_GCC_1_0</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'" Label="Configuration">
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>Remote_Clang_1_0</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>Remote_Clang_1_0</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings" />
+  <ImportGroup Label="Shared" />
+  <ImportGroup Label="PropertySheets" />
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <RemoteDebuggerCommand>$(RemoteRootDir)/$(RemoteOutRelDir)/$(TargetName)$(TargetExt)</RemoteDebuggerCommand>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'">
+    <OutDir>$(SolutionDir)Output\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)Temp\$(ProjectGuid)\$(Platform)\$(Configuration)\</IntDir>
+    <MultiProcNumber>8</MultiProcNumber>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM'">
+    <OutDir>$(SolutionDir)Output\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)Temp\$(ProjectGuid)\$(Platform)\$(Configuration)\</IntDir>
+    <MultiProcNumber>8</MultiProcNumber>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
+    <OutDir>$(SolutionDir)Output\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)Temp\$(ProjectGuid)\$(Platform)\$(Configuration)\</IntDir>
+    <MultiProcNumber>8</MultiProcNumber>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
+    <OutDir>$(SolutionDir)Output\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)Temp\$(ProjectGuid)\$(Platform)\$(Configuration)\</IntDir>
+    <MultiProcNumber>8</MultiProcNumber>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <OutDir>$(SolutionDir)Output\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)Temp\$(ProjectGuid)\$(Platform)\$(Configuration)\</IntDir>
+    <MultiProcNumber>8</MultiProcNumber>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <OutDir>$(SolutionDir)Output\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)Temp\$(ProjectGuid)\$(Platform)\$(Configuration)\</IntDir>
+    <MultiProcNumber>8</MultiProcNumber>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>~/ManusSDK/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <CppLanguageStandard>c++17</CppLanguageStandard>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>~/ManusSDK/lib/libManusSDK.so;%(AdditionalDependencies)</AdditionalDependencies>
+      <LibraryDependencies>ncurses</LibraryDependencies>
+      <AdditionalOptions>-pthread</AdditionalOptions>
+    </Link>
+    <PreBuildEvent>
+      <Command>rem Copy SDK client base files
+        copy /Y "$(SolutionDir)SDKClient_Windows\Main.cpp" "$(ProjectDir)\Main.cpp"
+        copy /Y "$(SolutionDir)SDKClient_Windows\SDKClient.hpp" "$(ProjectDir)\SDKClient.hpp"
+        copy /Y "$(SolutionDir)SDKClient_Windows\SDKClient.cpp" "$(ProjectDir)\SDKClient.cpp"
+
+        rem Copy platform specific files
+        copy /Y "$(SolutionDir)SDKClient_Windows\PlatformSpecific\ClientPlatformSpecific.hpp" "$(ProjectDir)\ClientPlatformSpecific.hpp"
+        copy /Y "$(SolutionDir)SDKClient_Windows\PlatformSpecific\Linux\ClientPlatformSpecific.cpp" "$(ProjectDir)\ClientPlatformSpecific.cpp"
+        copy /Y "$(SolutionDir)SDKClient_Windows\PlatformSpecific\Linux\ClientPlatformSpecificTypes.hpp" "$(ProjectDir)\ClientPlatformSpecificTypes.hpp"</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>~/ManusSDK/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <CppLanguageStandard>c++17</CppLanguageStandard>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>~/ManusSDK/lib/libManusSDK.so;%(AdditionalDependencies)</AdditionalDependencies>
+      <LibraryDependencies>ncurses</LibraryDependencies>
+      <AdditionalOptions>-pthread</AdditionalOptions>
+    </Link>
+    <PreBuildEvent>
+      <Command>rem Copy SDK client base files
+        copy /Y "$(SolutionDir)SDKClient_Windows\Main.cpp" "$(ProjectDir)\Main.cpp"
+        copy /Y "$(SolutionDir)SDKClient_Windows\SDKClient.hpp" "$(ProjectDir)\SDKClient.hpp"
+        copy /Y "$(SolutionDir)SDKClient_Windows\SDKClient.cpp" "$(ProjectDir)\SDKClient.cpp"
+
+        rem Copy platform specific files
+        copy /Y "$(SolutionDir)SDKClient_Windows\PlatformSpecific\ClientPlatformSpecific.hpp" "$(ProjectDir)\ClientPlatformSpecific.hpp"
+        copy /Y "$(SolutionDir)SDKClient_Windows\PlatformSpecific\Linux\ClientPlatformSpecific.cpp" "$(ProjectDir)\ClientPlatformSpecific.cpp"
+        copy /Y "$(SolutionDir)SDKClient_Windows\PlatformSpecific\Linux\ClientPlatformSpecificTypes.hpp" "$(ProjectDir)\ClientPlatformSpecificTypes.hpp"</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>~/ManusSDK/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <CppLanguageStandard>c++17</CppLanguageStandard>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>~/ManusSDK/lib/libManusSDK.so;%(AdditionalDependencies)</AdditionalDependencies>
+      <LibraryDependencies>ncurses</LibraryDependencies>
+      <AdditionalOptions>-pthread</AdditionalOptions>
+    </Link>
+    <PreBuildEvent>
+      <Command>rem Copy SDK client base files
+        copy /Y "$(SolutionDir)SDKClient_Windows\Main.cpp" "$(ProjectDir)\Main.cpp"
+        copy /Y "$(SolutionDir)SDKClient_Windows\SDKClient.hpp" "$(ProjectDir)\SDKClient.hpp"
+        copy /Y "$(SolutionDir)SDKClient_Windows\SDKClient.cpp" "$(ProjectDir)\SDKClient.cpp"
+
+        rem Copy platform specific files
+        copy /Y "$(SolutionDir)SDKClient_Windows\PlatformSpecific\ClientPlatformSpecific.hpp" "$(ProjectDir)\ClientPlatformSpecific.hpp"
+        copy /Y "$(SolutionDir)SDKClient_Windows\PlatformSpecific\Linux\ClientPlatformSpecific.cpp" "$(ProjectDir)\ClientPlatformSpecific.cpp"
+        copy /Y "$(SolutionDir)SDKClient_Windows\PlatformSpecific\Linux\ClientPlatformSpecificTypes.hpp" "$(ProjectDir)\ClientPlatformSpecificTypes.hpp"</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>~/ManusSDK/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <CppLanguageStandard>c++17</CppLanguageStandard>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>~/ManusSDK/lib/libManusSDK.so;%(AdditionalDependencies)</AdditionalDependencies>
+      <LibraryDependencies>ncurses</LibraryDependencies>
+      <AdditionalOptions>-pthread</AdditionalOptions>
+    </Link>
+    <PreBuildEvent>
+      <Command>rem Copy SDK client base files
+        copy /Y "$(SolutionDir)SDKClient_Windows\Main.cpp" "$(ProjectDir)\Main.cpp"
+        copy /Y "$(SolutionDir)SDKClient_Windows\SDKClient.hpp" "$(ProjectDir)\SDKClient.hpp"
+        copy /Y "$(SolutionDir)SDKClient_Windows\SDKClient.cpp" "$(ProjectDir)\SDKClient.cpp"
+
+        rem Copy platform specific files
+        copy /Y "$(SolutionDir)SDKClient_Windows\PlatformSpecific\ClientPlatformSpecific.hpp" "$(ProjectDir)\ClientPlatformSpecific.hpp"
+        copy /Y "$(SolutionDir)SDKClient_Windows\PlatformSpecific\Linux\ClientPlatformSpecific.cpp" "$(ProjectDir)\ClientPlatformSpecific.cpp"
+        copy /Y "$(SolutionDir)SDKClient_Windows\PlatformSpecific\Linux\ClientPlatformSpecificTypes.hpp" "$(ProjectDir)\ClientPlatformSpecificTypes.hpp"</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>~/ManusSDK/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <CppLanguageStandard>c++17</CppLanguageStandard>
+      <PreprocessorDefinitions>FMT_HEADER_ONLY;DEBUG;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>~/ManusSDK/lib/libManusSDK.so;%(AdditionalDependencies)</AdditionalDependencies>
+      <LibraryDependencies>ncurses</LibraryDependencies>
+      <AdditionalOptions>-pthread</AdditionalOptions>
+    </Link>
+    <PreBuildEvent>
+      <Command>rem Copy SDK client base files
+        copy /Y "$(SolutionDir)SDKClient_Windows\Main.cpp" "$(ProjectDir)\Main.cpp"
+        copy /Y "$(SolutionDir)SDKClient_Windows\SDKClient.hpp" "$(ProjectDir)\SDKClient.hpp"
+        copy /Y "$(SolutionDir)SDKClient_Windows\SDKClient.cpp" "$(ProjectDir)\SDKClient.cpp"
+
+        rem Copy platform specific files
+        copy /Y "$(SolutionDir)SDKClient_Windows\PlatformSpecific\ClientPlatformSpecific.hpp" "$(ProjectDir)\ClientPlatformSpecific.hpp"
+        copy /Y "$(SolutionDir)SDKClient_Windows\PlatformSpecific\Linux\ClientPlatformSpecific.cpp" "$(ProjectDir)\ClientPlatformSpecific.cpp"
+        copy /Y "$(SolutionDir)SDKClient_Windows\PlatformSpecific\Linux\ClientPlatformSpecificTypes.hpp" "$(ProjectDir)\ClientPlatformSpecificTypes.hpp"</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>~/ManusSDK/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <CppLanguageStandard>c++17</CppLanguageStandard>
+      <PreprocessorDefinitions>FMT_HEADER_ONLY;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>~/ManusSDK/lib/libManusSDK.so;%(AdditionalDependencies)</AdditionalDependencies>
+      <LibraryDependencies>ncurses</LibraryDependencies>
+      <AdditionalOptions>-pthread</AdditionalOptions>
+    </Link>
+    <PreBuildEvent>
+      <Command>rem Copy SDK client base files
+        copy /Y "$(SolutionDir)SDKClient_Windows\Main.cpp" "$(ProjectDir)\Main.cpp"
+        copy /Y "$(SolutionDir)SDKClient_Windows\SDKClient.hpp" "$(ProjectDir)\SDKClient.hpp"
+        copy /Y "$(SolutionDir)SDKClient_Windows\SDKClient.cpp" "$(ProjectDir)\SDKClient.cpp"
+
+        rem Copy platform specific files
+        copy /Y "$(SolutionDir)SDKClient_Windows\PlatformSpecific\ClientPlatformSpecific.hpp" "$(ProjectDir)\ClientPlatformSpecific.hpp"
+        copy /Y "$(SolutionDir)SDKClient_Windows\PlatformSpecific\Linux\ClientPlatformSpecific.cpp" "$(ProjectDir)\ClientPlatformSpecific.cpp"
+        copy /Y "$(SolutionDir)SDKClient_Windows\PlatformSpecific\Linux\ClientPlatformSpecificTypes.hpp" "$(ProjectDir)\ClientPlatformSpecificTypes.hpp"</Command>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets" />
+</Project>

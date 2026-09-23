@@ -1,0 +1,16 @@
+<mujoco model="mjc_sim">
+  <compiler angle="radian" autolimits="true" />
+
+  <visual>
+    <global offwidth="1920" offheight="1080" />
+  </visual>
+
+  <include file="../assets/lab_scene.xml" />
+  <include file="../assets/unitree_g1/g1_with_hands_up.xml" />
+  <include file="../assets/mustard_bottle.xml" />
+
+  <!-- For debugging -->
+  <worldbody>
+    <site name="marker" pos="0.0 0.0 -1.0" type="sphere" size="0.02" rgba="1 0 0 0.7"/>
+  </worldbody>
+</mujoco>
