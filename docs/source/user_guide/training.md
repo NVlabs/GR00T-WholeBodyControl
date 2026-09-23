@@ -321,6 +321,10 @@ python gear_sonic/data_process/filter_and_copy_bones_data.py \
     --workers 16
 ```
 
+If SOMA PKLs were generated before the BVH `End Site` hierarchy fix, rerun
+extraction without `--skip_existing` to rebuild the joint positions. The flag
+preserves existing PKLs, so they will not receive the corrected coordinates.
+
 ### Training
 
 Use multi-node training (64+ GPUs recommended):

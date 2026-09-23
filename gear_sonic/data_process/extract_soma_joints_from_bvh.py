@@ -107,7 +107,10 @@ def parse_bvh(filepath):
             parent_idx = joint_stack[-1] if joint_stack else -1
             joints.append({"name": name, "offset": None, "channels": [], "parent_idx": parent_idx})
             joint_stack.append(len(joints) - 1)
-        elif line.startswith("OFFSET") and joint_stack:
+        elif re.match(r"End\s+Site\b", line):
+            # End Sites have their own OFFSET and closing brace, but no joint channels.
+            joint_stack.append(None)
+        elif line.startswith("OFFSET") and joint_stack and joint_stack[-1] is not None:
             vals = [float(x) for x in line.split()[1:]]
             joints[joint_stack[-1]]["offset"] = np.array(vals)
         elif line.startswith("CHANNELS") and joint_stack:
