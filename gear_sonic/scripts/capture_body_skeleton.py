@@ -56,21 +56,16 @@ import numpy as np
 # Repo root on sys.path so `gear_sonic.*` imports work when run directly.
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
-NUM_JOINTS = 24
+from gear_sonic.utils.teleop.body_joints import (  # noqa: E402
+    INFERRED_ON_QUEST,
+    NUM_BODY_JOINTS,
+    AXIAL_JOINTS,
+    BodyJoint,
+    LEFT_LIMB_JOINTS,
+    RIGHT_LIMB_JOINTS,
+)
 
-# XR_BD_body_tracking joint names, index-aligned with BodyJointPico.
-JOINT_NAMES = [
-    "PELVIS", "LEFT_HIP", "RIGHT_HIP", "SPINE1",
-    "LEFT_KNEE", "RIGHT_KNEE", "SPINE2", "LEFT_ANKLE",
-    "RIGHT_ANKLE", "SPINE3", "LEFT_FOOT", "RIGHT_FOOT",
-    "NECK", "LEFT_COLLAR", "RIGHT_COLLAR", "HEAD",
-    "LEFT_SHOULDER", "RIGHT_SHOULDER", "LEFT_ELBOW", "RIGHT_ELBOW",
-    "LEFT_WRIST", "RIGHT_WRIST", "LEFT_HAND", "RIGHT_HAND",
-]
-
-# Joints Meta IOBT does not camera-track; inferred from head/hand motion.
-# See IsaacTeleop docs/source/device/body_tracking.rst:221-225.
-SUSPECT_ON_QUEST = {1, 2, 4, 5, 7, 8, 10, 11}
+NUM_JOINTS = NUM_BODY_JOINTS
 
 
 def _extract_joints(body_data):
@@ -581,7 +576,7 @@ def report(P, Q, V, label):
             corr = float(np.corrcoef(jd, pelvis_d)[0, 1])
         else:
             corr = float("nan")
-        print(f"{j:>3} {JOINT_NAMES[j]:<16} {vpct:>6.1f}% {pos_sd:>11.1f} "
+        print(f"{j:>3} {BodyJoint(j).name:<16} {vpct:>6.1f}% {pos_sd:>11.1f} "
               f"{rot_sd:>12.2f} {corr:>9.3f}")
         if vpct > 99.0 and rot_sd < 0.5:
             flags.append((j, "valid but orientation never changes"))
@@ -594,8 +589,8 @@ def report(P, Q, V, label):
     if flags:
         print("\nSUSPECT (reported valid but showing no independent signal):")
         for j, why in flags:
-            tag = "  <-- Meta IOBT does not track this" if j in SUSPECT_ON_QUEST else ""
-            print(f"  [{j:2d}] {JOINT_NAMES[j]:<16} {why}{tag}")
+            tag = "  <-- Meta IOBT does not track this" if j in INFERRED_ON_QUEST else ""
+            print(f"  [{j:2d}] {BodyJoint(j).name:<16} {why}{tag}")
     else:
         print("\nNo joints flagged as static-but-valid.")
 
@@ -619,7 +614,7 @@ def compare(path_a, path_b):
         rb = float(np.std(_quat_angle_deg(b["quat"][:, j, :], b["quat"][:, j, :].mean(axis=0))))
         ratio = (rb / ra) if ra > 1e-6 else float("nan")
         mark = "  <--" if (ra > 1.0 and rb < 0.2 * ra) else ""
-        print(f"{j:>3} {JOINT_NAMES[j]:<16} {va:>8.1f}% {vb:>8.1f}% "
+        print(f"{j:>3} {BodyJoint(j).name:<16} {va:>8.1f}% {vb:>8.1f}% "
               f"{ra:>9.2f} {rb:>9.2f} {ratio:>7.2f}{mark}")
     print("-" * 78)
     print("'<--' marks joints where B has far less orientation variation than A,")
@@ -672,17 +667,43 @@ def main():
 # single rotation explains each anatomical group.
 # ---------------------------------------------------------------------------
 
-AXIAL = [0, 3, 6, 9, 12, 15]
-LEFT_LIMB = [1, 4, 7, 10, 13, 16, 18, 20, 22]
-RIGHT_LIMB = [2, 5, 8, 11, 14, 17, 19, 21, 23]
+AXIAL = AXIAL_JOINTS
+LEFT_LIMB = LEFT_LIMB_JOINTS
+RIGHT_LIMB = RIGHT_LIMB_JOINTS
 
 
 def _mean_rot(q):
+    """Mean of unit quaternions in ``q`` ``(N, 4)`` xyzw, as a ``Rotation``.
+
+    A quaternion and its negation are the same rotation, so the samples must be
+    brought into one hemisphere before a componentwise mean means anything.
+
+    Aligning on the sign of w is the obvious way to do that and it breaks at
+    exactly the rotation this is most likely to meet in a rest-pose comparison.
+    w is cos(theta/2), so it passes through 0 at a 180 degree rotation: samples
+    a hair either side of 180 degrees land in opposite hemispheres and average
+    toward zero, and at exactly 180 the sign is 0, which would scale the whole
+    quaternion away. (The previous version added 1e-12 before taking the sign
+    purely to dodge that second case, which left the first one unhandled.)
+
+    Aligning against the first sample instead has no such special point: for any
+    tight cluster the dot product with the reference stays near +/-1, nowhere
+    near the flip.
+    """
     from scipy.spatial.transform import Rotation as R
+    q = np.asarray(q, dtype=np.float64)
     q = q / np.linalg.norm(q, axis=-1, keepdims=True)
-    q = q * np.sign(q[:, 3:4] + 1e-12)          # hemisphere-align before averaging
+    q = q * np.where(q @ q[0] < 0.0, -1.0, 1.0)[:, None]
     m = q.mean(axis=0)
-    return R.from_quat(m / np.linalg.norm(m))
+    n = np.linalg.norm(m)
+    if n < 1e-9:
+        # Samples spread over the whole sphere; no mean rotation exists. Only
+        # reachable on a non-static capture, which rest_pose() checks for first.
+        raise ValueError(
+            "mean orientation is undefined: samples are antipodal, so this "
+            "capture is not a held pose"
+        )
+    return R.from_quat(m / n)
 
 
 def _fit_group(offsets, idxs):
@@ -722,7 +743,7 @@ def rest_pose(path_a, path_b):
         rv = off.as_rotvec()
         ang = np.degrees(np.linalg.norm(rv))
         ax = rv / (np.linalg.norm(rv) + 1e-12)
-        print(f"{j:>3} {JOINT_NAMES[j]:<16} {ang:>6.1f}  "
+        print(f"{j:>3} {BodyJoint(j).name:<16} {ang:>6.1f}  "
               f"({ax[0]:+.2f},{ax[1]:+.2f},{ax[2]:+.2f})")
 
     print("-" * 56)

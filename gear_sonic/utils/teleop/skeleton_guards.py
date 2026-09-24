@@ -12,7 +12,7 @@ states rather than something inferred from the poses. See
 survives here is the comparison it was built on, kept because it fails
 differently from the extension and so catches things the extension cannot.
 
-``classify()`` -- per-frame, orientation convention.
+``match_orientation_convention()`` -- per-frame, orientation convention.
     CloudXR converts a Quest skeleton into the ByteDance 24-joint layout, so the
     stream is device-agnostic in every obvious respect: joint order, positions,
     validity flags, sample rate and quantisation are indistinguishable between a
@@ -20,7 +20,7 @@ differently from the extension and so catches things the extension cannot.
     convention -- exactly what the isaacteleop skeleton correction fixes
     (``isaacteleop.retargeting_engine.utilities.correct_body_orientations``).
 
-    So classify on the relationship between the two: express each bone's
+    So match on the relationship between the two: express each bone's
     direction (from positions, device-agnostic) in its parent joint's own frame
     (from the quaternions, device-specific). The result is a fixed per-device
     signature. Asked here as a cross-check -- does this frame's convention match
@@ -50,33 +50,48 @@ the first frame arrives.
 """
 
 import collections
-from typing import Optional, Tuple
+from dataclasses import dataclass
+from enum import Enum
+from typing import Dict, Optional
 
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
+from gear_sonic.utils.teleop.body_joints import BodyJoint
+
 # (parent, child) for the first child of each joint that has one, in the
-# ByteDance 24-joint layout. Joints with no child contribute no bone.
+# ByteDance 24-joint layout. Joints with no child contribute no bone. Row order
+# here is the row order of REFERENCE_SIGNATURES below -- the two tables are
+# positionally aligned, so reordering one silently invalidates the other.
+#
+# The final row is not an anatomical bone: it spans left hand to right hand,
+# where the symmetry of the rows above it would call for RIGHT_WRIST ->
+# RIGHT_HAND. It is kept as-is deliberately. The reference signatures were
+# measured against this exact table, so correcting the row without re-measuring
+# them from the captures would leave the classifier comparing a different
+# feature against unchanged references. It still discriminates (reference and
+# runtime compute it identically), it is just a posture feature rather than a
+# bone direction, and likely the most operator-dependent row of the set.
 BONES = (
-    (0, 1),
-    (1, 4),
-    (2, 5),
-    (3, 6),
-    (4, 7),
-    (5, 8),
-    (6, 9),
-    (7, 10),
-    (8, 11),
-    (9, 12),
-    (12, 15),
-    (13, 16),
-    (14, 17),
-    (16, 18),
-    (17, 19),
-    (18, 20),
-    (19, 21),
-    (20, 22),
-    (22, 23),
+    (BodyJoint.PELVIS, BodyJoint.LEFT_HIP),
+    (BodyJoint.LEFT_HIP, BodyJoint.LEFT_KNEE),
+    (BodyJoint.RIGHT_HIP, BodyJoint.RIGHT_KNEE),
+    (BodyJoint.SPINE1, BodyJoint.SPINE2),
+    (BodyJoint.LEFT_KNEE, BodyJoint.LEFT_ANKLE),
+    (BodyJoint.RIGHT_KNEE, BodyJoint.RIGHT_ANKLE),
+    (BodyJoint.SPINE2, BodyJoint.SPINE3),
+    (BodyJoint.LEFT_ANKLE, BodyJoint.LEFT_FOOT),
+    (BodyJoint.RIGHT_ANKLE, BodyJoint.RIGHT_FOOT),
+    (BodyJoint.SPINE3, BodyJoint.NECK),
+    (BodyJoint.NECK, BodyJoint.HEAD),
+    (BodyJoint.LEFT_COLLAR, BodyJoint.LEFT_SHOULDER),
+    (BodyJoint.RIGHT_COLLAR, BodyJoint.RIGHT_SHOULDER),
+    (BodyJoint.LEFT_SHOULDER, BodyJoint.LEFT_ELBOW),
+    (BodyJoint.RIGHT_SHOULDER, BodyJoint.RIGHT_ELBOW),
+    (BodyJoint.LEFT_ELBOW, BodyJoint.LEFT_WRIST),
+    (BodyJoint.RIGHT_ELBOW, BodyJoint.RIGHT_WRIST),
+    (BodyJoint.LEFT_WRIST, BodyJoint.LEFT_HAND),
+    (BodyJoint.LEFT_HAND, BodyJoint.RIGHT_HAND),  # not anatomical -- see note above
 )
 
 # Mean unit bone direction in the parent's frame, averaged over 34 poses per
@@ -170,36 +185,73 @@ def _mean_angle_deg(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.degrees(np.arccos(np.clip(cos, -1.0, 1.0))).mean())
 
 
-def classify(
+class MatchOutcome(Enum):
+    """Why :func:`match_orientation_convention` did or did not name a source."""
+
+    #: One reference matched, and beat the runner-up by at least the margin.
+    DECIDED = "decided"
+    #: Both references scored, but too close together to tell apart. Not the
+    #: same as a match: the frame resembles neither convention cleanly.
+    AMBIGUOUS = "ambiguous"
+    #: Not enough valid geometry in the frame to score at all (every bone
+    #: zero-length, so the signature is undefined).
+    UNUSABLE = "unusable"
+
+
+@dataclass(frozen=True)
+class ConventionMatch:
+    """Result of matching one frame against the reference signatures.
+
+    Returned instead of a bare tuple so callers cannot silently mistake
+    "ambiguous" for "matched nothing, carry on" -- the distinction drives
+    whether a frame is safe to forward.
+    """
+
+    outcome: MatchOutcome
+    #: ``"pico"`` or ``"quest"`` when :attr:`outcome` is ``DECIDED``, else None.
+    source: Optional[str]
+    #: Mean angle in degrees per candidate; lower is a better match. May hold
+    #: NaN when ``outcome`` is ``UNUSABLE``.
+    scores: Dict[str, float]
+    #: Degrees between the best and runner-up score. 0.0 when ``UNUSABLE``.
+    margin_deg: float
+
+
+def match_orientation_convention(
     positions: np.ndarray,
     orientations: np.ndarray,
     min_margin_deg: float = MIN_MARGIN_DEG,
-) -> Tuple[Optional[str], dict]:
-    """Identify the source headset from one frame of body tracking.
+) -> ConventionMatch:
+    """Match one frame's per-joint orientation convention to a known headset.
+
+    This does not decide which headset is connected -- the OpenXR Extension
+    Method does that. It answers the narrower question "which convention does
+    this frame's geometry look like", so a caller can check that answer against
+    the source the runtime reported.
 
     Args:
         positions: ``(24, 3)`` joint positions.
         orientations: ``(24, 4)`` global joint orientations, xyzw.
-        min_margin_deg: Refuse to decide when the two candidates are closer
+        min_margin_deg: Report ``AMBIGUOUS`` when the two candidates are closer
             than this.
 
     Returns:
-        ``(source, scores)`` where source is ``"pico"``, ``"quest"`` or
-        ``None`` when the frame matches neither clearly enough to act on.
-        ``scores`` maps each candidate to its mean angle in degrees, lower
-        being a better match.
+        A :class:`ConventionMatch`. Check :attr:`~ConventionMatch.outcome`
+        rather than testing ``source is None``, which conflates "too close to
+        call" with "no usable geometry".
     """
     sig = signature(positions, orientations)
     scores = {
         name: _mean_angle_deg(sig, ref) for name, ref in REFERENCE_SIGNATURES.items()
     }
     if any(np.isnan(v) for v in scores.values()):
-        return None, scores
+        return ConventionMatch(MatchOutcome.UNUSABLE, None, scores, 0.0)
 
     best, second = sorted(scores, key=lambda k: scores[k])[:2]
-    if scores[second] - scores[best] < min_margin_deg:
-        return None, scores
-    return best, scores
+    margin = scores[second] - scores[best]
+    if margin < min_margin_deg:
+        return ConventionMatch(MatchOutcome.AMBIGUOUS, None, scores, margin)
+    return ConventionMatch(MatchOutcome.DECIDED, best, scores, margin)
 
 
 # ---------------------------------------------------------------------------
@@ -216,7 +268,8 @@ def classify(
 # any 30-frame window on the least-active torso joints -- nobody holds a pose
 # with true machine-zero variance. That gap (0.0 vs. a worst case around
 # 0.05-0.5 mm/deg headroom below the smallest real reading) is what makes a
-# rolling-window "frozen" check reliable here, unlike classify() above, whose
+# rolling-window "frozen" check reliable here, unlike
+# match_orientation_convention() above, whose
 # signature is a per-frame orientation convention, not a temporal one.
 #
 # BD-only: this says nothing about a frozen Quest/Meta skeleton, which would
@@ -229,7 +282,14 @@ def classify(
 # non-zero (>=0.4 deg/frame) even then. Checking only these keeps the guard
 # cheap and avoids the arms, whose large natural motion is a poor fit for a
 # tight variance threshold.
-FROZEN_CHECK_JOINTS = (0, 1, 2, 3, 6, 9)  # PELVIS, LEFT_HIP, RIGHT_HIP, SPINE1, SPINE2, SPINE3
+FROZEN_CHECK_JOINTS = (
+    BodyJoint.PELVIS,
+    BodyJoint.LEFT_HIP,
+    BodyJoint.RIGHT_HIP,
+    BodyJoint.SPINE1,
+    BodyJoint.SPINE2,
+    BodyJoint.SPINE3,
+)
 
 FROZEN_WINDOW = 30  # frames; ~0.3-0.5s at typical DeviceIO poll rates
 FROZEN_ROT_EPS_DEG = 0.05
@@ -249,7 +309,7 @@ class TrackersDisconnectedDetector:
     degenerate skeleton: the torso/pelvis joints frozen to a constant pose.
 
     Stateful because the signature is temporal (zero motion over a window),
-    unlike ``classify()``'s per-frame orientation check. Feed it every frame
+    unlike the per-frame orientation check above. Feed it every frame
     while operating on a Pico skeleton; call ``reset()`` when switching away
     from Pico (or on any gap in body data) so a stale window from before the
     gap cannot combine with fresh data after it.
@@ -281,8 +341,21 @@ class TrackersDisconnectedDetector:
         pos = np.stack(self._pos_history)  # (window, J, 3)
         quat = np.stack(self._quat_history)  # (window, J, 4)
 
+        # Positional dispersion: per joint, the standard deviation over the
+        # window of its position, as a single distance in metres.
         pos_spread = np.linalg.norm(pos.std(axis=0), axis=-1)  # (J,)
 
+        # Orientation dispersion, the rotational counterpart: per joint, the
+        # standard deviation over the window of the angle between each sample
+        # and the window's mean orientation, in degrees. A joint holding one
+        # pose scores ~0; a joint being tracked jitters by a measurable amount
+        # even when the operator stands still.
+        #
+        # Averaging quaternions componentwise is only valid because the samples
+        # are near-identical when this matters -- a frozen skeleton repeats the
+        # same quaternion exactly. A spread-out cluster would need hemisphere
+        # alignment first, but that case yields a large spread and a "not
+        # frozen" answer either way, which is the fail-safe direction.
         mean_q = quat.mean(axis=0)
         mean_q = mean_q / np.linalg.norm(mean_q, axis=-1, keepdims=True)
         rot_spread = np.array(

@@ -7,11 +7,15 @@ IsaacTeleopReader  -- in-process IsaacTeleop / CloudXR DeviceIO session.
 import logging
 import threading
 import time
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 import numpy as np
 
-from gear_sonic.utils.teleop.skeleton_guards import TrackersDisconnectedDetector, classify
+from gear_sonic.utils.teleop.skeleton_guards import (
+    MatchOutcome,
+    TrackersDisconnectedDetector,
+    match_orientation_convention,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +29,20 @@ try:
 except ImportError:
     IsaacTeleopClient = None
 
+if TYPE_CHECKING:  # import cycle at runtime; only needed for annotations
+    from gear_sonic.utils.teleop.isaac_teleop_client import TrackerSnapshot
+
 # Minimum time between repeated "degenerate skeleton" log lines. Every degenerate
 # frame is still refused regardless of this; it only throttles the ERROR spam.
 _DEGENERATE_LOG_INTERVAL_NS = 2_000_000_000
+
+#: Consecutive frames the geometry guard may fail to verify before it starts
+#: refusing them. A healthy skeleton decides on every frame (the two classes
+#: sit ~60 deg apart against a 20 deg threshold), so sustained inability to
+#: tell is itself evidence something is wrong. Held long enough -- about half
+#: a second at 60 Hz -- that transient noise cannot trip it, because a false
+#: refusal stops teleop for a Pico operator who has nothing wrong.
+_UNVERIFIED_REFUSE_FRAMES = 30
 
 
 class PicoReader:
@@ -316,15 +331,15 @@ def _controller_inputs_to_dict_side(snapshot: Any) -> dict[str, Any] | None:
     }
 
 
-def _build_controller_dict(raw: dict[str, Any] | None) -> dict[str, Any] | None:
+def _build_controller_dict(raw: "TrackerSnapshot | None") -> dict[str, Any] | None:
     """Convert ``IsaacTeleopClient._get_tracker_data()`` into the controller dict
     schema that ``pico_manager_thread_server`` consumes (left/right trigger,
     squeeze, thumbstick, click, primary/secondary click)."""
     if raw is None:
         return None
 
-    left = _controller_inputs_to_dict_side(raw.get("left_controller"))
-    right = _controller_inputs_to_dict_side(raw.get("right_controller"))
+    left = _controller_inputs_to_dict_side(raw.left_controller)
+    right = _controller_inputs_to_dict_side(raw.right_controller)
     if left is None and right is None:
         return None
 
@@ -425,6 +440,10 @@ class IsaacTeleopReader:
         # see that guard's comment in _run() for why the two are independent.
         self._trackers_disconnected_detector = TrackersDisconnectedDetector()
         self._last_trackers_disconnected_log_ns = 0
+        #: Consecutive frames the geometry guard could not verify; see
+        #: _UNVERIFIED_REFUSE_FRAMES.
+        self._unverified_streak = 0
+        self._last_unverified_log_ns = 0
         if skeleton_profile != "auto":
             self._manual_skeleton_source = skeleton_profile or "pico"
             self._apply_resolved_source(self._manual_skeleton_source)
@@ -491,6 +510,9 @@ class IsaacTeleopReader:
             return
         self.set_skeleton_profile(None if source == "pico" else source)
         self.resolved_skeleton_source = source
+        # The streak counts frames against the *previous* source; a swap makes
+        # it meaningless, so start it again rather than carrying it across.
+        self._unverified_streak = 0
 
     def start(self) -> None:
         self._client.start_streaming()
@@ -568,7 +590,7 @@ class IsaacTeleopReader:
             # An explicit --skeleton-source never gets here (_manual_skeleton_source
             # is set) and is honored regardless of what the extension reports.
             if self._manual_skeleton_source is None:
-                full_body_source = raw.get("full_body_source")
+                full_body_source = raw.full_body_source
                 # Diagnostic: log every observed value, not just changes we act on,
                 # so a stuck resolution shows up as a repeating line here instead of
                 # only inferred from the degeneracy guard downstream.
@@ -596,7 +618,7 @@ class IsaacTeleopReader:
                         self._stop.set()
                         return
 
-            body_poses = _body_data_to_24x7(raw.get("full_body"))
+            body_poses = _body_data_to_24x7(raw.full_body)
 
             # Geometry degeneracy guard. This used to be the primary detection
             # mechanism; that driver has been removed, but its comparison is kept;
@@ -614,21 +636,62 @@ class IsaacTeleopReader:
             # safety check.
             #
             if body_poses is not None and self.resolved_skeleton_source in ("pico", "quest"):
-                degenerate_source, degenerate_scores = classify(body_poses[:, :3], body_poses[:, 3:])
-                if degenerate_source is not None and degenerate_source != self.resolved_skeleton_source:
-                    now_ns = time.monotonic_ns()
-                    if now_ns - self._last_degenerate_log_ns > _DEGENERATE_LOG_INTERVAL_NS:
-                        self._last_degenerate_log_ns = now_ns
-                        logger.error(
-                            "[IsaacTeleopReader] DEGENERATE SKELETON: resolved source is "
-                            "%r but this frame's orientations read as %r (scores %s). "
-                            "Refusing to forward this frame to the robot control policy.",
-                            self.resolved_skeleton_source,
-                            degenerate_source,
-                            degenerate_scores,
-                        )
-                    time.sleep(self._period)
-                    continue
+                # A fault in the matcher must not take the reader down with it.
+                # Everything from here to the end of the loop body runs outside
+                # the try that wraps _get_tracker_data(), so an exception would
+                # otherwise kill this thread silently and stop all teleop.
+                try:
+                    match = match_orientation_convention(
+                        body_poses[:, :3], body_poses[:, 3:]
+                    )
+                except Exception:
+                    logger.exception(
+                        "[IsaacTeleopReader] skeleton geometry check failed; "
+                        "forwarding this frame unverified"
+                    )
+                    match = None
+
+                if match is not None and match.outcome is MatchOutcome.DECIDED:
+                    if match.source != self.resolved_skeleton_source:
+                        now_ns = time.monotonic_ns()
+                        if now_ns - self._last_degenerate_log_ns > _DEGENERATE_LOG_INTERVAL_NS:
+                            self._last_degenerate_log_ns = now_ns
+                            logger.error(
+                                "[IsaacTeleopReader] DEGENERATE SKELETON: resolved source is "
+                                "%r but this frame's orientations read as %r (scores %s). "
+                                "Refusing to forward this frame to the robot control policy.",
+                                self.resolved_skeleton_source,
+                                match.source,
+                                match.scores,
+                            )
+                        time.sleep(self._period)
+                        continue
+                    # Verified against the resolved source: clear the streak.
+                    self._unverified_streak = 0
+                elif match is not None:
+                    # AMBIGUOUS or UNUSABLE. One such frame is not evidence of
+                    # anything -- but a skeleton that never resembles either
+                    # convention is not one to drive a robot from, and passing
+                    # these through silently was the gap here: only a confident
+                    # *mismatch* used to refuse, so a frame that matched nothing
+                    # was forwarded.
+                    self._unverified_streak += 1
+                    if self._unverified_streak >= _UNVERIFIED_REFUSE_FRAMES:
+                        now_ns = time.monotonic_ns()
+                        if now_ns - self._last_unverified_log_ns > _DEGENERATE_LOG_INTERVAL_NS:
+                            self._last_unverified_log_ns = now_ns
+                            logger.error(
+                                "[IsaacTeleopReader] DEGENERATE SKELETON: %d consecutive "
+                                "frames matched neither orientation convention (%s, scores "
+                                "%s, margin %.1f deg). Refusing to forward them to the robot "
+                                "control policy.",
+                                self._unverified_streak,
+                                match.outcome.value,
+                                match.scores,
+                                match.margin_deg,
+                            )
+                        time.sleep(self._period)
+                        continue
 
             # Pico "motion trackers disconnected" guard. Separate from the geometry
             # mismatch guard above: that one is a per-frame check of orientation
@@ -662,7 +725,7 @@ class IsaacTeleopReader:
                 ).astype(body_poses.dtype)
             if body_poses is None:
                 if not self._unrecognised_logged and not _attr_or_item(
-                    raw.get("full_body"), "joint_positions"
+                    raw.full_body, "joint_positions"
                 ):
                     self._unrecognised_logged = True
                 time.sleep(self._period)

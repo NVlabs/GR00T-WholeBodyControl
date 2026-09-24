@@ -17,8 +17,9 @@ from __future__ import annotations
 import os
 import time
 from contextlib import ExitStack
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 
@@ -100,6 +101,33 @@ def _webxr_body_vendor_available() -> bool:
             return False
         raise
     return True
+
+
+@dataclass(frozen=True)
+class TrackerSnapshot:
+    """One poll of the DeviceIO trackers.
+
+    A structure rather than a dict so the field names are declared in one place
+    and a typo is an AttributeError here instead of a silent ``None`` at the far
+    end of the reader.
+
+    Every field is the raw isaacteleop payload for that tracker, or ``None``
+    when it produced no data this frame. isaacteleop deliberately spells absence
+    as ``None`` rather than an empty handle, so an inactive device cannot answer
+    field reads with defaults indistinguishable from real zeroes; the consumers
+    all treat ``None`` as "not present".
+    """
+
+    left_controller: Any = None
+    right_controller: Any = None
+    head: Any = None
+    left_hand: Any = None
+    right_hand: Any = None
+    full_body: Any = None
+    #: Which vendor extension delivered :attr:`full_body` -- ``"pico"``,
+    #: ``"quest"``, or ``None`` when no body data arrived. This is the OpenXR
+    #: Extension Method result: a fact the runtime states, not an inference.
+    full_body_source: Optional[str] = None
 
 
 class IsaacTeleopClient:
@@ -271,7 +299,7 @@ class IsaacTeleopClient:
             self._clear_trackers_and_session_ref()
             print(f"IsaacTeleopClient: failed to start sessions ({e}).")
 
-    def _get_tracker_data(self) -> dict[str, Any] | None:
+    def _get_tracker_data(self) -> "TrackerSnapshot | None":
         """Poll current tracking data and return it as a dictionary.
 
         Returns:
@@ -314,15 +342,15 @@ class IsaacTeleopClient:
         else:
             full_body = self._body_tracker_bd.get_body_pose(session)
             full_body_source = "pico" if full_body is not None else None
-        return {
-            "left_controller": self._controller_tracker.get_left_controller(session),
-            "right_controller": self._controller_tracker.get_right_controller(session),
-            "head": self._head_tracker.get_head(session),
-            "left_hand": self._hand_tracker.get_left_hand(session),
-            "right_hand": self._hand_tracker.get_right_hand(session),
-            "full_body": full_body,
-            "full_body_source": full_body_source,
-        }
+        return TrackerSnapshot(
+            left_controller=self._controller_tracker.get_left_controller(session),
+            right_controller=self._controller_tracker.get_right_controller(session),
+            head=self._head_tracker.get_head(session),
+            left_hand=self._hand_tracker.get_left_hand(session),
+            right_hand=self._hand_tracker.get_right_hand(session),
+            full_body=full_body,
+            full_body_source=full_body_source,
+        )
 
     def get_pose_by_name(self, name: str) -> np.ndarray:
         """Return ``[x, y, z, qx, qy, qz, qw]`` for ``name`` ∈ {left_controller, right_controller, headset}."""
@@ -331,20 +359,19 @@ class IsaacTeleopClient:
             return _default_pose_vec()
 
         if name == "left_controller":
-            return _controller_pose_vec(raw.get("left_controller"))
+            return _controller_pose_vec(raw.left_controller)
         if name == "right_controller":
-            return _controller_pose_vec(raw.get("right_controller"))
+            return _controller_pose_vec(raw.right_controller)
         if name == "headset":
-            return _pose_vec_from_head_data(raw.get("head"))
+            return _pose_vec_from_head_data(raw.head)
         raise ValueError(
             f"Invalid name: {name}. Valid names: 'left_controller', 'right_controller', 'headset'."
         )
 
-    def _snapshot_side(self, raw: dict[str, Any] | None, side: str) -> Any:
+    def _snapshot_side(self, raw: "TrackerSnapshot | None", side: str) -> Any:
         if raw is None:
             return None
-        key = "left_controller" if side == "left" else "right_controller"
-        return raw.get(key)
+        return raw.left_controller if side == "left" else raw.right_controller
 
     def get_key_value_by_name(self, name: str) -> float:
         """Return trigger/grip value for ``name`` ∈ {left,right}_{trigger,grip}."""
@@ -422,7 +449,7 @@ class IsaacTeleopClient:
         raw = self._get_tracker_data()
         if raw is None:
             return None
-        return raw.get("full_body")
+        return raw.full_body
 
     def get_timestamp_ns(self) -> int:
         """Return the host monotonic timestamp in nanoseconds."""

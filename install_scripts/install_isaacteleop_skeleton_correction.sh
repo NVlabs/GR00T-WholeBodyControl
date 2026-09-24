@@ -58,7 +58,7 @@ echo "isaacteleop skeleton-correction bridge [$MODE]"
 note "source : $SRC"
 note "target : $PKG"
 
-if [ "$MODE" != "revert" ] && { [ ! -f "$SRC" ] || [ ! -f "$SRC_WRIST" ]; }; then
+if [ "$MODE" != "revert" ] && [ ! -f "$SRC" ]; then
     # Overwhelmingly the cause: the checkout is on a branch that predates #921.
     BRANCH="$(git -C "$ISAACTELEOP_DIR" branch --show-current 2>/dev/null || echo '<not a git repo>')"
     fail "$SRC does not exist.
