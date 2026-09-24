@@ -1651,7 +1651,11 @@ def run_pico(
     reader = _init_input_source(
         input_source,
         buffer_size,
-        skeleton_profile=skeleton_source if skeleton_source in ("quest", "auto") else None,
+        # --skeleton-source is Manager mode only (see its help text), and this is
+        # the legacy single-thread path, so it stays on the uncorrected ByteDance
+        # skeleton. Passing None here resolves the reader to "pico", which leaves
+        # the skeleton untouched and still runs both degeneracy guards.
+        skeleton_profile=None,
     )
     context = zmq.Context()
     socket = context.socket(zmq.PUB)
@@ -2305,9 +2309,9 @@ if __name__ == "__main__":
         choices=["auto", "pico", "quest"],
         help=(
             "Headset providing body tracking. 'auto' (default) identifies it from "
-            "the first frames of body tracking -- about five frames, with no delay "
-            "to startup -- and applies the matching correction; if it cannot tell, "
-            "it leaves the skeleton uncorrected and says so. 'pico' uses the native "
+            "which full-body vendor extension delivered the frame, which the runtime "
+            "states outright, so there is no detection delay; it then applies the "
+            "matching correction. 'pico' uses the native "
             "ByteDance skeleton with no correction. 'quest' applies the isaacteleop "
             "per-joint orientation correction in the reader. Pass an explicit value "
             "to pin the behaviour. Manager mode only."
