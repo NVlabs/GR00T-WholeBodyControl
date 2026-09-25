@@ -4172,7 +4172,10 @@ int main(int argc, char const* argv[]) {
     std::cout << "  --compliance-topic <topic>: ZMQ topic for compliance commands (default: compliance)" << std::endl;
     std::cout << "  --compliance-profile <P0|P1|P2>: initial arm profile (default: P0 = SONIC default gains)" << std::endl;
     std::cout << "  --compliance-slew <s>: ramp time between profiles (default: 0.3)" << std::endl;
-    std::cout << "  --compliance-estop-kd <value>: arm Kd during ESTOP, Kp is 0 (default: 8.0)" << std::endl;
+    std::cout << "  --compliance-estop-kp <value>: arm Kp during ESTOP (default: 0.0)" << std::endl;
+    std::cout << "  --compliance-estop-kd <value>: arm Kd during ESTOP (default: 8.0)" << std::endl;
+    std::cout << "  --compliance-estop-ramp <s>: ramp time into ESTOP (default: 0 = immediate)" << std::endl;
+    std::cout << "  --compliance-estop-release <s>: ramp time out of ESTOP (default: 1.0)" << std::endl;
     std::cout << "  --compliance-watchdog <s>: warn and hold gains if no command for this long (default: 1.0, 0 = off)" << std::endl;
     std::cout << "\nExamples:" << std::endl;
     std::cout << "  " << argv[0] << " enp5s0 policy/single_frame/model.onnx reference/bones_072925_test/ --planner-file policy/planner.onnx --obs-config policy/single_frame/observation_config.yaml --disable-crc-check" << std::endl;
@@ -4470,6 +4473,9 @@ int main(int argc, char const* argv[]) {
     } else if (std::string(argv[i]) == "--compliance-port" ||
                std::string(argv[i]) == "--compliance-slew" ||
                std::string(argv[i]) == "--compliance-estop-kd" ||
+               std::string(argv[i]) == "--compliance-estop-kp" ||
+               std::string(argv[i]) == "--compliance-estop-ramp" ||
+               std::string(argv[i]) == "--compliance-estop-release" ||
                std::string(argv[i]) == "--compliance-watchdog") {
       const std::string flag = argv[i];
       const std::string value = require_value(i, flag.c_str());
@@ -4480,6 +4486,12 @@ int main(int argc, char const* argv[]) {
           arm_compliance_config.slew_s = std::stod(value);
         } else if (flag == "--compliance-estop-kd") {
           arm_compliance_config.estop_kd = std::stof(value);
+        } else if (flag == "--compliance-estop-kp") {
+          arm_compliance_config.estop_kp = std::stof(value);
+        } else if (flag == "--compliance-estop-ramp") {
+          arm_compliance_config.estop_ramp_s = std::stod(value);
+        } else if (flag == "--compliance-estop-release") {
+          arm_compliance_config.estop_release_s = std::stod(value);
         } else {
           arm_compliance_config.watchdog_s = std::stod(value);
         }

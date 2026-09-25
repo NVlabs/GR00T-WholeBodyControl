@@ -215,6 +215,8 @@ show_usage() {
     echo "  --compliance-host HOST  Host of the compliance command publisher (default: localhost)"
     echo "  --compliance-port PORT  Port of the compliance command publisher (default: 5565)"
     echo "  --compliance-profile P  Initial arm profile P0|P1|P2 (default: P0)"
+    echo "  --compliance-slew S, --compliance-estop-kp V, --compliance-estop-kd V,"
+    echo "  --compliance-estop-ramp S, --compliance-estop-release S   (see ARM_COMPLIANCE.md)"
     echo ""
     echo "Interface modes:"
     echo "  sim              Use loopback interface for simulation (MuJoCo)"
@@ -324,7 +326,7 @@ while [[ $# -gt 0 ]]; do
             COMPLIANCE_ARGS="$COMPLIANCE_ARGS --arm-compliance"
             shift
             ;;
-        --compliance-host|--compliance-port|--compliance-profile)
+        --compliance-host|--compliance-port|--compliance-profile|--compliance-slew|--compliance-estop-kp|--compliance-estop-kd|--compliance-estop-ramp|--compliance-estop-release)
             if [[ -z "$2" ]]; then
                 echo -e "${RED}Error: $1 requires a value${NC}" >&2
                 exit 1

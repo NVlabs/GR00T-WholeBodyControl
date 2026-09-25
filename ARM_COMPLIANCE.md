@@ -18,7 +18,7 @@ Kd = 2ζJω). Shoulder/elbow and wrist are scaled separately.
 | **P0** rigid | 1.00 / 1.00 | 1.00 / 1.00 | SONIC default |
 | **P1** soft | 0.50 / 0.80 | 0.71 / 0.90 | handshake, fist bump |
 | **P2** compliant | 0.25 / 0.60 | 0.50 / 0.77 | hug |
-| **ESTOP** | Kp = 0 | Kd = 8 (absolute) | arms go limp and damped, legs keep balancing |
+| **ESTOP** | Kp = 0 (`--compliance-estop-kp`) | Kd = 8 (`--compliance-estop-kd`) | arms go limp, legs keep balancing |
 
 These are **starting values to tune in sim** (edit `BuiltinProfiles()` in
 `include/arm_compliance.hpp`, or send custom scales, see below). Kd is scaled
@@ -26,8 +26,10 @@ by roughly √(Kp scale) to keep each joint's damping ratio about the same.
 
 Behaviour:
 - Profile changes ramp linearly over 0.3 s (`--compliance-slew`, or `"slew_s"` per command).
-- ESTOP applies on the next control tick and is **latched**; only
-  `{"release_estop": true, "profile": ...}` leaves it, ramping over 1 s.
+- ESTOP applies on the next control tick by default, or ramps over
+  `--compliance-estop-ramp` seconds (e.g. `--compliance-estop-kd 0 --compliance-estop-ramp 0.5`
+  for a smooth go-limp). It is **latched**; only `{"release_estop": true, "profile": ...}`
+  leaves it, ramping over `--compliance-estop-release` (1 s).
 - If commands stop arriving, the last gains are **held** (never snapped back to
   rigid) and a warning is printed.
 - Legs and waist are never touched.
@@ -96,11 +98,14 @@ sock.send_string("compliance " + json.dumps({"profile": "P2"}))
 | `--compliance-topic` | compliance | ZMQ topic |
 | `--compliance-profile` | P0 | profile at start-up |
 | `--compliance-slew` | 0.3 | default ramp time (s) |
+| `--compliance-estop-kp` | 0.0 | arm Kp during ESTOP |
 | `--compliance-estop-kd` | 8.0 | arm Kd during ESTOP |
+| `--compliance-estop-ramp` | 0.0 | ramp time into ESTOP (0 = immediate) |
+| `--compliance-estop-release` | 1.0 | ramp time out of ESTOP |
 | `--compliance-watchdog` | 1.0 | warn + hold after this many s without commands (0 = off) |
 
-`deploy.sh` passes through `--arm-compliance`, `--compliance-host`,
-`--compliance-port` and `--compliance-profile`.
+`deploy.sh` passes through `--arm-compliance` and all `--compliance-*` flags above
+except `--compliance-topic` and `--compliance-watchdog`.
 
 ## Files
 

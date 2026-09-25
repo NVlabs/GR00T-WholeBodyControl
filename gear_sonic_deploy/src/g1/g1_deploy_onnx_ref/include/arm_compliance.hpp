@@ -12,8 +12,9 @@
  *   - Profiles: P0 rigid, P1 soft, P2 compliant (per-joint Kp/Kd scale factors),
  *     or arbitrary per-joint scales sent in a command.
  *   - Smooth transitions: gains are ramped linearly over `slew_s` (default 0.3 s).
- *   - ESTOP: arms go to Kp = 0, Kd = estop_kd (default 8) in the SAME tick, and
- *     the state is LATCHED.  Only a command with "release_estop": true leaves it,
+ *   - ESTOP: arms ramp to Kp = estop_kp, Kd = estop_kd over `estop_ramp_s`
+ *     (defaults 0 / 8 / 0 s = immediate; e.g. 0 / 0 / 0.5 s for a smooth "go limp"),
+ *     and the state is LATCHED.  Only a command with "release_estop": true leaves it,
  *     ramping to the requested profile over `estop_release_s` (default 1.0 s).
  *   - Watchdog: if commands stop arriving, the last gains are HELD (never snapped
  *     back to rigid) and a warning is printed once.
@@ -123,6 +124,7 @@ struct Config {
   std::string topic = "compliance";   ///< ZMQ topic prefix.
   std::string initial_profile = "P0"; ///< Profile at start-up.
   double slew_s = 0.3;                ///< Default ramp time between profiles.
+  double estop_ramp_s = 0.0;          ///< Ramp time when entering ESTOP (0 = immediate).
   double estop_release_s = 1.0;       ///< Ramp time when leaving ESTOP.
   float estop_kp = 0.0f;              ///< Arm Kp during ESTOP (absolute, Nm/rad).
   float estop_kd = 8.0f;              ///< Arm Kd during ESTOP (absolute, Nm*s/rad).
@@ -324,7 +326,7 @@ class Controller {
         start_kd_ = current_kd_;
         ramp_elapsed_ = 0.0;
         if (target.estop) {
-          ramp_duration_ = 0.0;  // immediate
+          ramp_duration_ = target.slew_s.value_or(cfg_.estop_ramp_s);
         } else if (prev_was_estop_) {
           ramp_duration_ = cfg_.estop_release_s;
         } else {
@@ -385,7 +387,7 @@ class Controller {
       os << std::fixed << std::setprecision(2);
       os << "[ArmCompliance] -> " << t.name;
       if (t.estop) {
-        os << " (arms Kp=" << cfg_.estop_kp << " Kd=" << cfg_.estop_kd << ", immediate, latched)";
+        os << " (arms Kp=" << cfg_.estop_kp << " Kd=" << cfg_.estop_kd << ", ramp " << ramp << " s, latched)";
       } else {
         os << " (Kp x" << t.kp_scale[0] << "/" << t.kp_scale[4]
            << ", Kd x" << t.kd_scale[0] << "/" << t.kd_scale[4]
