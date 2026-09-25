@@ -67,29 +67,37 @@ arms sag under gravity.
 
 ### ESTOP (controlled stop)
 
-Lowering the gains alone is not a real stop: the policy keeps commanding the arm
-targets (in teleop it keeps following the operator's raised arms), and arms that
-drop suddenly jerk the torso and unbalance the robot. So ESTOP takes over the arm
-targets:
+Lowering the gains alone is not a real stop. SONIC is a whole-body policy: in
+VR_3PT teleop it gets the operator's hands as a target (`vr_3point_local_target`
+/ `_orn_target`) and keeps trying to reach them — if the arms are held back it
+leans the torso and steps, and loses balance. So ESTOP changes **what the policy
+is aiming for**, not only the motor gains.
 
-1. **Retract** — from the first control tick the arms stop following the policy
-   (teleop / VLA / planner). Their targets move on a minimum-jerk path from where
-   the arms **are** to the policy's **default arm pose** (arms down, elbows 0.6
-   rad), with soft gains (`--compliance-retract-kp`, 0.6 × default, never stiffer
-   than before). Duration grows with the distance: peak speed
-   `--compliance-retract-speed` (45 °/s), between 0.8 s and
-   `--compliance-retract-max` (3 s).
-2. **Limp** — targets stay at the default pose; gains ramp to
-   `--compliance-estop-kp` / `--compliance-estop-kd` (absolute; default 1.5 / 0.9,
-   i.e. ~10 % stiffness, normal damping) over `--compliance-estop-ramp` (1 s).
-   **Latched.**
-3. **Release** — only `{"release_estop": true, "profile": ...}` (key `r`). The arm
-   targets blend from where the arms are back to the policy's targets, and the
-   gains ramp to the new profile, both over `--compliance-estop-release` (1 s).
+**Handoff (default, `--compliance-estop-mode auto`)** — used when the policy's
+reference is the planner (planner walking, VR_3PT teleop):
 
-Legs and waist stay under the policy the whole time, so the robot keeps
-balancing. `--compliance-estop-mode limp` gives the old behaviour (gains only, the
-policy keeps the arm targets).
+1. **Handoff** — the policy's hand targets blend smoothly (minimum-jerk,
+   `--compliance-handoff`, 1.5 s) from the operator's hands to the planner's idle
+   hands (arms down). The **policy itself** brings the arms down and keeps its
+   balance. Arm gains soften at the same time (`--compliance-retract-kp`, 0.6 ×
+   default, never stiffer than before).
+2. **Limp** — hand targets = idle pose; gains ramp to `--compliance-estop-kp` /
+   `--compliance-estop-kd` (absolute; default 1.5 / 0.9 ≈ 10 % stiffness, normal
+   damping) over `--compliance-estop-ramp` (1 s). **Latched.**
+3. **Release** (`r`, `{"release_estop": true, "profile": ...}`) — the reverse:
+   hand targets blend back to the operator and gains ramp to the profile over
+   `--compliance-estop-release` (1 s). Lower your arms before releasing, or the
+   robot's arms will rise to wherever yours are.
+
+**Retract (fallback)** — used when the reference is a motion clip (keyboard `T`)
+or full-body POSE streaming, where there is no idle pose to hand over to (and
+always with `--compliance-estop-mode retract`): our layer overrides the arm
+targets with a minimum-jerk path from the measured pose to the policy's default
+arm pose (`--compliance-retract-speed` 45 °/s, 0.8–`--compliance-retract-max`
+3 s), then limp and release as above (release blends the targets back).
+
+`--compliance-estop-mode limp` = gains only (no handoff, no override).
+Legs and waist always stay under the policy.
 
 ## Run it (sim)
 
@@ -187,7 +195,8 @@ sock.send_string("compliance " + json.dumps({"profile": "HUG"}))
 | `--compliance-soften` | 0.3 | ramp time when a joint gets softer (s) |
 | `--compliance-stiffen` | 1.0 | ramp time when a joint gets stiffer (s) |
 | `--compliance-slew` | – | sets both ramp times |
-| `--compliance-estop-mode` | retract | `retract` (controlled stop) or `limp` (gains only) |
+| `--compliance-estop-mode` | auto | `auto` (handoff when the reference is the planner, else retract), `retract`, or `limp` (gains only) |
+| `--compliance-handoff` | 1.5 | hand-target blend time in handoff ESTOP (s) |
 | `--compliance-retract-speed` | 45 | peak joint speed of the retract (°/s) |
 | `--compliance-retract-kp` | 0.6 | arm stiffness while retracting (× default Kp; Kd × √) |
 | `--compliance-retract-max` | 3.0 | longest retract (s) |

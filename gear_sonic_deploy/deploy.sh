@@ -217,7 +217,7 @@ show_usage() {
     echo "  --compliance-profile N  Initial arm profile, e.g. RIGID, HANDSHAKE, HUG (default: RIGID)"
     echo "  --compliance-profiles F Extra profiles from a JSON file"
     echo "  --compliance-soften S, --compliance-stiffen S, --compliance-slew S,"
-    echo "  --compliance-estop-mode retract|limp, --compliance-retract-speed DEG_S,"
+    echo "  --compliance-estop-mode auto|retract|limp, --compliance-handoff S, --compliance-retract-speed DEG_S,"
     echo "  --compliance-retract-kp S, --compliance-retract-max S,"
     echo "  --compliance-estop-kp V, --compliance-estop-kd V,"
     echo "  --compliance-estop-ramp S, --compliance-estop-release S   (see ARM_COMPLIANCE.md)"
@@ -330,7 +330,7 @@ while [[ $# -gt 0 ]]; do
             COMPLIANCE_ARGS="$COMPLIANCE_ARGS --arm-compliance"
             shift
             ;;
-        --compliance-host|--compliance-port|--compliance-profile|--compliance-profiles|--compliance-slew|--compliance-soften|--compliance-stiffen|--compliance-estop-kp|--compliance-estop-kd|--compliance-estop-ramp|--compliance-estop-release|--compliance-estop-mode|--compliance-retract-speed|--compliance-retract-kp|--compliance-retract-max)
+        --compliance-host|--compliance-port|--compliance-profile|--compliance-profiles|--compliance-slew|--compliance-soften|--compliance-stiffen|--compliance-estop-kp|--compliance-estop-kd|--compliance-estop-ramp|--compliance-estop-release|--compliance-estop-mode|--compliance-handoff|--compliance-retract-speed|--compliance-retract-kp|--compliance-retract-max)
             if [[ -z "$2" ]]; then
                 echo -e "${RED}Error: $1 requires a value${NC}" >&2
                 exit 1

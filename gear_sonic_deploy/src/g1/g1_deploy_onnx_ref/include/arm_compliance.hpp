@@ -271,8 +271,9 @@ class ProfileRegistry {
 
 /// What ESTOP does with the arms.
 enum class EstopMode {
-  kRetract,  ///< Controlled stop: retract to the safe pose (soft gains), then go limp.
-  kLimp,     ///< Uncontrolled stop: only ramp the arm gains down (arms keep the policy's targets).
+  kAuto,     ///< Hand-target handoff when the policy can bring the arms down itself, else retract.
+  kRetract,  ///< Always override the arm targets: retract to the safe pose, then go limp.
+  kLimp,     ///< Only ramp the arm gains down (arms keep the policy's targets).
 };
 
 /// Static configuration (set once from the command line).
@@ -289,7 +290,8 @@ struct Config {
   double watchdog_s = 1.0;            ///< Warn (and hold) if no command for this long.
 
   // --- ESTOP ---
-  EstopMode estop_mode = EstopMode::kRetract;
+  EstopMode estop_mode = EstopMode::kAuto;
+  double handoff_s = 1.5;             ///< Hand-target blend time (operator -> idle) in handoff ESTOP.
   /// Arm pose the retract goes to (hardware order 15..28). Set from the policy's
   /// default_angles by the deploy binary; zeros here are only a placeholder.
   ArmArray safe_pose{};
@@ -407,7 +409,16 @@ inline double MinJerk(double r) {
  * @brief Holds the target arm gains and ramps the applied gains toward them;
  *        during ESTOP it also owns the arm position targets (controlled stop).
  *
- * ESTOP phases (retract mode):
+ * ESTOP, handoff kind (default when the policy has live hand targets or runs the planner):
+ *   HANDOFF  the policy's hand targets (vr_3point observations) blend from the
+ *            operator's hands to the reference/planner hands (arms down) over
+ *            handoff_s — the POLICY brings the arms down and keeps balance; arm
+ *            gains soften to the retract stiffness.  No target override.
+ *   LIMP     hand targets = reference; gains ramp to estop_kp / estop_kd.
+ *   RELEASE  hand targets blend back to the operator; gains ramp to the profile.
+ *   Read the blend with HandTargetBlend() when building the observations.
+ *
+ * ESTOP, retract kind (fallback: reference motion clips, full-body POSE streaming):
  *   RETRACT  arm targets follow a minimum-jerk path from the MEASURED arm pose to
  *            cfg.safe_pose; gains go to the retract stiffness.  The policy's arm
  *            targets (teleop / VLA / planner) are ignored from the first tick.
@@ -417,7 +428,8 @@ inline double MinJerk(double r) {
  */
 class Controller {
   public:
-    enum class Phase { kNormal, kRetract, kLimp, kRelease };
+    enum class Phase { kNormal, kHandoff, kRetract, kLimp, kRelease };
+    enum class EstopKind { kNone, kHandoff, kRetract, kLimp };
 
     explicit Controller(const Config& cfg = Config{}) : cfg_(cfg) {
       if (!cfg_.profiles_file.empty()) {
@@ -488,10 +500,12 @@ class Controller {
      * @param kd       29-element Kd array filled with the nominal gains.
      * @param q_meas   Measured arm joint positions (hardware 15..28).
      * @param dt       Control period in seconds.
+     * @param policy_can_retract  true if the policy's hand targets can be handed over to a
+     *                 reference that has the arms down (live VR hand targets, or planner running).
      */
     template <size_t N>
     void Apply(std::array<float, N>& q_target, std::array<float, N>& kp, std::array<float, N>& kd,
-               const ArmArray& q_meas, double dt) {
+               const ArmArray& q_meas, double dt, bool policy_can_retract = false) {
       static_assert(N >= kFirstArmMotor + kNumArmMotors, "array too small");
       if (!cfg_.enabled) return;
 
@@ -528,16 +542,20 @@ class Controller {
       if (version != applied_version_) {
         applied_version_ = version;
         if (target.estop) {
-          if (cfg_.estop_mode == EstopMode::kRetract) {
+          if (cfg_.estop_mode == EstopMode::kAuto && policy_can_retract) {
+            EnterHandoff(nom_kp, nom_kd);
+          } else if (cfg_.estop_mode != EstopMode::kLimp) {
             EnterRetract(q_meas, nom_kp, nom_kd);
           } else {
+            estop_kind_ = EstopKind::kLimp;
             phase_ = Phase::kLimp;
             StartGainRamp(EstopKp(), EstopKd(), target.slew_s.value_or(cfg_.estop_ramp_s), true);
             std::cout << "[ArmCompliance] -> ESTOP (limp mode: arms Kp=" << cfg_.estop_kp
                       << " Kd=" << cfg_.estop_kd << ", ramp " << ramp_duration_ << " s, latched)" << std::endl;
           }
-        } else if (phase_ == Phase::kRetract || phase_ == Phase::kLimp) {
-          // Release: blend targets from where the arms are back to the policy.
+        } else if (phase_ == Phase::kHandoff || phase_ == Phase::kRetract || phase_ == Phase::kLimp) {
+          // Release: blend back to the policy / operator (from wherever the blend is now).
+          blend_start_ = hand_blend_.load(std::memory_order_relaxed);
           phase_ = Phase::kRelease;
           phase_elapsed_ = 0.0;
           phase_duration_ = std::max(cfg_.estop_release_s, 1e-3);
@@ -552,20 +570,34 @@ class Controller {
       }
 
       // ---- Phase progression ----
-      if (phase_ == Phase::kRetract || phase_ == Phase::kRelease) phase_elapsed_ += dt;
-      if (phase_ == Phase::kRetract && phase_elapsed_ >= phase_duration_) {
+      if (phase_ == Phase::kHandoff || phase_ == Phase::kRetract || phase_ == Phase::kRelease) phase_elapsed_ += dt;
+      if ((phase_ == Phase::kHandoff || phase_ == Phase::kRetract) && phase_elapsed_ >= phase_duration_) {
         phase_ = Phase::kLimp;
         StartGainRamp(EstopKp(), EstopKd(), cfg_.estop_ramp_s, true);
-        std::cout << "[ArmCompliance] ESTOP: arms at safe pose, ramping to Kp=" << cfg_.estop_kp
+        std::cout << "[ArmCompliance] ESTOP: arms down, ramping to Kp=" << cfg_.estop_kp
                   << " Kd=" << cfg_.estop_kd << " over " << cfg_.estop_ramp_s << " s (latched)" << std::endl;
       }
       if (phase_ == Phase::kRelease && phase_elapsed_ >= phase_duration_) {
         phase_ = Phase::kNormal;
+        estop_kind_ = EstopKind::kNone;
+      }
+
+      // ---- Hand-target blend for the observations (handoff kind only) ----
+      {
+        float w = 0.0f;
+        if (estop_kind_ == EstopKind::kHandoff) {
+          const double r = phase_elapsed_ / std::max(phase_duration_, 1e-6);
+          if (phase_ == Phase::kHandoff) w = static_cast<float>(blend_start_ + (1.0 - blend_start_) * MinJerk(r));
+          else if (phase_ == Phase::kLimp) w = 1.0f;
+          else if (phase_ == Phase::kRelease) w = static_cast<float>(blend_start_ * (1.0 - MinJerk(r)));
+        }
+        hand_blend_.store(w, std::memory_order_relaxed);
       }
 
       // ---- Gain target for this tick ----
       ArmArray goal_kp{}, goal_kd{};
       switch (phase_) {
+        case Phase::kHandoff:
         case Phase::kRetract: goal_kp = RetractKp(nom_kp); goal_kd = RetractKd(nom_kd); break;
         case Phase::kLimp:    goal_kp = EstopKp();         goal_kd = EstopKd();         break;
         default:              goal_kp = ProfileKp(target, nom_kp); goal_kd = ProfileKd(target, nom_kd); break;
@@ -575,8 +607,8 @@ class Controller {
       // ---- Arm position targets ----
       // (In limp mode the arms keep the policy's targets while in ESTOP; only the release blends.)
       const bool own_targets =
-          phase_ == Phase::kRetract || phase_ == Phase::kRelease ||
-          (phase_ == Phase::kLimp && cfg_.estop_mode == EstopMode::kRetract);
+          estop_kind_ == EstopKind::kRetract &&
+          (phase_ == Phase::kRetract || phase_ == Phase::kLimp || phase_ == Phase::kRelease);
       if (own_targets) {
         const double s = MinJerk(phase_elapsed_ / phase_duration_);
         for (int j = 0; j < kNumArmMotors; ++j) {
@@ -622,6 +654,9 @@ class Controller {
     ArmArray CurrentKp() const { return current_kp_; }
     ArmArray CurrentKd() const { return current_kd_; }
     Phase CurrentPhase() const { return phase_; }
+    EstopKind CurrentEstopKind() const { return estop_kind_; }
+    /// 0 = policy sees the operator's hand targets, 1 = the reference's (arms down).
+    float HandTargetBlend() const { return hand_blend_.load(std::memory_order_relaxed); }
     double PhaseDuration() const { return phase_duration_; }
 
   private:
@@ -643,7 +678,23 @@ class Controller {
     ArmArray EstopKd() const { ArmArray a{}; a.fill(cfg_.estop_kd); return a; }
 
     // ----- ESTOP -----
+    void EnterHandoff(const ArmArray& nom_kp, const ArmArray& nom_kd) {
+      // Continue from the current blend (e.g. ESTOP again during a release).
+      blend_start_ = hand_blend_.load(std::memory_order_relaxed);
+      estop_kind_ = EstopKind::kHandoff;
+      phase_ = Phase::kHandoff;
+      phase_elapsed_ = 0.0;
+      phase_duration_ = std::max(cfg_.handoff_s, 1e-3);
+      ArmArray rk = RetractKp(nom_kp);
+      for (int j = 0; j < kNumArmMotors; ++j) rk[j] = std::min(rk[j], current_kp_[j]);
+      StartGainRamp(rk, RetractKd(nom_kd), cfg_.soften_s, true);
+      std::cout << "[ArmCompliance] -> ESTOP: handing the policy's hand targets to the idle pose over "
+                << std::fixed << std::setprecision(2) << phase_duration_ << " s (soft arms), then Kp="
+                << cfg_.estop_kp << " Kd=" << cfg_.estop_kd << " (latched)" << std::endl;
+    }
+
     void EnterRetract(const ArmArray& q_meas, const ArmArray& nom_kp, const ArmArray& nom_kd) {
+      estop_kind_ = EstopKind::kRetract;
       phase_ = Phase::kRetract;
       phase_elapsed_ = 0.0;
       phase_start_q_ = q_meas;
@@ -702,7 +753,7 @@ class Controller {
 
     void AdvanceGainRamp(const ArmArray& goal_kp, const ArmArray& goal_kd, double dt) {
       // During ESTOP phases, clamp the goal used by EnterRetract (never stiffer than at ESTOP time).
-      const bool use_phase_goal = (phase_ == Phase::kRetract);
+      const bool use_phase_goal = (phase_ == Phase::kRetract || phase_ == Phase::kHandoff);
       const ArmArray& gk = use_phase_goal ? phase_goal_kp_ : goal_kp;
       const ArmArray& gd = use_phase_goal ? phase_goal_kd_ : goal_kd;
       if (!ramping_) {
@@ -752,6 +803,9 @@ class Controller {
     bool watchdog_warned_ = false;
     uint64_t applied_version_ = 0;
     Phase phase_ = Phase::kNormal;
+    EstopKind estop_kind_ = EstopKind::kNone;
+    std::atomic<float> hand_blend_{0.0f};
+    double blend_start_ = 0.0;
     double phase_elapsed_ = 0.0;
     double phase_duration_ = 1.0;
     ArmArray phase_start_q_{};
