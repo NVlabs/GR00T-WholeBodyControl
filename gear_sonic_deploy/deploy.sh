@@ -211,6 +211,10 @@ show_usage() {
     echo "  --input-type TYPE       Set the input type (default: zmq_manager)"
     echo "  --output-type TYPE      Set the output type (default: ros2)"
     echo "  --zmq-host HOST         Set the ZMQ host (default: localhost)"
+    echo "  --arm-compliance        Enable runtime arm Kp/Kd profiles (P0/P1/P2/ESTOP)"
+    echo "  --compliance-host HOST  Host of the compliance command publisher (default: localhost)"
+    echo "  --compliance-port PORT  Port of the compliance command publisher (default: 5565)"
+    echo "  --compliance-profile P  Initial arm profile P0|P1|P2 (default: P0)"
     echo ""
     echo "Interface modes:"
     echo "  sim              Use loopback interface for simulation (MuJoCo)"
@@ -251,6 +255,7 @@ MOTION_DATA="$MOTION_DATA_DEFAULT"
 INPUT_TYPE="$INPUT_TYPE_DEFAULT"
 OUTPUT_TYPE="$OUTPUT_TYPE_DEFAULT"
 ZMQ_HOST="$ZMQ_HOST_DEFAULT"
+COMPLIANCE_ARGS=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -313,6 +318,18 @@ while [[ $# -gt 0 ]]; do
                 exit 1
             fi
             ZMQ_HOST="$2"
+            shift 2
+            ;;
+        --arm-compliance)
+            COMPLIANCE_ARGS="$COMPLIANCE_ARGS --arm-compliance"
+            shift
+            ;;
+        --compliance-host|--compliance-port|--compliance-profile)
+            if [[ -z "$2" ]]; then
+                echo -e "${RED}Error: $1 requires a value${NC}" >&2
+                exit 1
+            fi
+            COMPLIANCE_ARGS="$COMPLIANCE_ARGS $1 $2"
             shift 2
             ;;
         sim|real)
@@ -385,6 +402,12 @@ if [[ "$ENV_TYPE" == "sim" ]]; then
     EXTRA_ARGS="--disable-crc-check"
     echo -e "${YELLOW}📋 Simulation mode: CRC check will be disabled${NC}"
     echo ""
+fi
+
+# Arm compliance flags (passed straight through to g1_deploy_onnx_ref)
+if [[ -n "$COMPLIANCE_ARGS" ]]; then
+    EXTRA_ARGS="${EXTRA_ARGS}${COMPLIANCE_ARGS}"
+    EXTRA_ARGS="${EXTRA_ARGS# }"
 fi
 
 # ============================================================================

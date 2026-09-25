@@ -136,6 +136,10 @@
 // Error monitor
 #include "../include/error_monitor.hpp"
 
+// Runtime arm impedance (Kp/Kd) profiles
+#include "../include/arm_compliance.hpp"
+#include "../include/arm_compliance_subscriber.hpp"
+
 #include "audio_thread/audio_thread.hpp"
 
 // DDS
@@ -338,6 +342,10 @@ class G1Deploy {
     
     // Output interfaces (supports multiple simultaneous outputs)
     std::vector<std::unique_ptr<OutputInterface>> output_interfaces_;
+
+    // Runtime arm impedance layer (null unless --arm-compliance is given)
+    std::unique_ptr<arm_compliance::Controller> arm_compliance_;
+    std::unique_ptr<arm_compliance::Subscriber> arm_compliance_sub_;
 
     // =========================================================================
     // Core ML components (encoder + policy) and interfaces
@@ -2159,7 +2167,8 @@ class G1Deploy {
       std::string zmq_out_topic = "g1_debug",
       bool enable_motion_recording = false,
       std::array<double, 3> initial_compliance = {0.05, 0.05, 0.0},
-      double initial_max_close_ratio = 1.0)
+      double initial_max_close_ratio = 1.0,
+      arm_compliance::Config arm_compliance_config = arm_compliance::Config{})
       : time_(0.0),
         publish_dt_(0.002),
         control_dt_(0.02),
@@ -2576,6 +2585,19 @@ class G1Deploy {
         std::cout << "Total output interfaces initialized: " << output_interfaces_.size() << std::endl;
       }
 
+      // Runtime arm impedance layer (must exist before the control thread starts)
+      if (arm_compliance_config.enabled) {
+        arm_compliance_ = std::make_unique<arm_compliance::Controller>(arm_compliance_config);
+        arm_compliance_sub_ = std::make_unique<arm_compliance::Subscriber>(*arm_compliance_);
+        arm_compliance_sub_->Start();
+        std::cout << "\n┌─────────────────────────────────────────────────────────────────────────────┐" << std::endl;
+        std::cout << "│  Arm compliance layer: ENABLED (arm motors 15-28)                           │" << std::endl;
+        std::cout << "└─────────────────────────────────────────────────────────────────────────────┘" << std::endl;
+        std::cout << "  initial profile: " << arm_compliance_config.initial_profile
+                  << ", commands from tcp://" << arm_compliance_config.host << ":" << arm_compliance_config.port
+                  << " topic '" << arm_compliance_config.topic << "'\n" << std::endl;
+      }
+
       // create threads
       input_thread_ptr_ = CreateRecurrentThreadEx("Input", UT_CPU_ID_NONE, input_dt_ * 1e6, &G1Deploy::Input, this);
       command_writer_ptr_ = CreateRecurrentThreadEx("command_writer", UT_CPU_ID_NONE, publish_dt_ * 1e6,
@@ -2697,6 +2719,9 @@ class G1Deploy {
           planner_thread_ptr_->Wait();
           planner_thread_ptr_.reset();
         }
+      }
+      if (arm_compliance_sub_) {
+        arm_compliance_sub_->Stop();
       }
       CreateDampingCommand();
       LowCommandWriter();
@@ -3127,6 +3152,10 @@ class G1Deploy {
         motor_command_tmp.kp.at(i) = kps[i];
         motor_command_tmp.kd.at(i) = kds[i];
         motor_command_tmp.dq_target.at(i) = 0.0;
+      }
+      // Rescale arm Kp/Kd according to the active compliance profile (no-op if disabled)
+      if (arm_compliance_) {
+        arm_compliance_->Apply(motor_command_tmp.kp, motor_command_tmp.kd, control_dt_);
       }
       motor_command_buffer_.SetData(motor_command_tmp);
       return true;
@@ -4137,6 +4166,14 @@ int main(int argc, char const* argv[]) {
     std::cout << "  --max-close-ratio <value>: set initial hand max close ratio (0.2-1.0; default: 1.0 = full closure)" << std::endl;
     std::cout << "                             0.2 = limited (80% open), 1.0 = full closure allowed" << std::endl;
     std::cout << "                             Keyboard controls: x/c = +/- 0.1 (always available)" << std::endl;
+    std::cout << "  --arm-compliance: enable runtime arm Kp/Kd profiles (arm motors 15-28; default: OFF)" << std::endl;
+    std::cout << "  --compliance-host <host>: host of the compliance command publisher (default: localhost)" << std::endl;
+    std::cout << "  --compliance-port <port>: port of the compliance command publisher (default: 5565)" << std::endl;
+    std::cout << "  --compliance-topic <topic>: ZMQ topic for compliance commands (default: compliance)" << std::endl;
+    std::cout << "  --compliance-profile <P0|P1|P2>: initial arm profile (default: P0 = SONIC default gains)" << std::endl;
+    std::cout << "  --compliance-slew <s>: ramp time between profiles (default: 0.3)" << std::endl;
+    std::cout << "  --compliance-estop-kd <value>: arm Kd during ESTOP, Kp is 0 (default: 8.0)" << std::endl;
+    std::cout << "  --compliance-watchdog <s>: warn and hold gains if no command for this long (default: 1.0, 0 = off)" << std::endl;
     std::cout << "\nExamples:" << std::endl;
     std::cout << "  " << argv[0] << " enp5s0 policy/single_frame/model.onnx reference/bones_072925_test/ --planner-file policy/planner.onnx --obs-config policy/single_frame/observation_config.yaml --disable-crc-check" << std::endl;
     std::cout << "  " << argv[0] << " enp5s0 policy/token/model.onnx reference/bones_072925_test/ --obs-config policy/token/observation_config.yaml --encoder-file policy/token/encoder.onnx" << std::endl;
@@ -4180,6 +4217,15 @@ int main(int argc, char const* argv[]) {
   std::string zmq_out_topic = "g1_debug";
   std::array<double, 3> initial_compliance = {0.5, 0.5, 0.0}; // initial compliance is 0.5 for both hands (keyboard controllable)
   double initial_max_close_ratio = 1.0; // default allows full closure, use --max-close-ratio to limit
+  arm_compliance::Config arm_compliance_config;  // disabled unless --arm-compliance
+  // Helper: fetch the value after a flag or exit with an error
+  auto require_value = [&](int& i, const char* flag) -> std::string {
+    if (i + 1 >= argc) {
+      std::cerr << "Error: " << flag << " requires a value argument" << std::endl;
+      exit(1);
+    }
+    return std::string(argv[++i]);
+  };
   for (int i = 4; i < argc; i++) {
     if (std::string(argv[i]) == "--disable-crc-check") {
       disableCrcCheck = true;
@@ -4409,6 +4455,38 @@ int main(int argc, char const* argv[]) {
         std::cerr << "Error: --max-close-ratio requires a value argument" << std::endl;
         exit(1);
       }
+    } else if (std::string(argv[i]) == "--arm-compliance") {
+      arm_compliance_config.enabled = true;
+    } else if (std::string(argv[i]) == "--compliance-host") {
+      arm_compliance_config.host = require_value(i, "--compliance-host");
+    } else if (std::string(argv[i]) == "--compliance-topic") {
+      arm_compliance_config.topic = require_value(i, "--compliance-topic");
+    } else if (std::string(argv[i]) == "--compliance-profile") {
+      arm_compliance_config.initial_profile = require_value(i, "--compliance-profile");
+      if (!arm_compliance::FindProfile(arm_compliance_config.initial_profile)) {
+        std::cerr << "Error: --compliance-profile must be one of P0, P1, P2" << std::endl;
+        exit(1);
+      }
+    } else if (std::string(argv[i]) == "--compliance-port" ||
+               std::string(argv[i]) == "--compliance-slew" ||
+               std::string(argv[i]) == "--compliance-estop-kd" ||
+               std::string(argv[i]) == "--compliance-watchdog") {
+      const std::string flag = argv[i];
+      const std::string value = require_value(i, flag.c_str());
+      try {
+        if (flag == "--compliance-port") {
+          arm_compliance_config.port = std::stoi(value);
+        } else if (flag == "--compliance-slew") {
+          arm_compliance_config.slew_s = std::stod(value);
+        } else if (flag == "--compliance-estop-kd") {
+          arm_compliance_config.estop_kd = std::stof(value);
+        } else {
+          arm_compliance_config.watchdog_s = std::stod(value);
+        }
+      } catch (...) {
+        std::cerr << "Error: invalid value for " << flag << ": " << value << std::endl;
+        exit(1);
+      }
     }
   }
 
@@ -4441,7 +4519,8 @@ int main(int argc, char const* argv[]) {
     zmq_out_topic,
     enableMotionRecording,
     initial_compliance,
-    initial_max_close_ratio
+    initial_max_close_ratio,
+    arm_compliance_config
   );
   std::cout << "[DEBUG] G1Deploy object created successfully!" << std::endl;
   
