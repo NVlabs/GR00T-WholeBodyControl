@@ -86,8 +86,22 @@ H2_ISAACLAB_TO_MUJOCO_MAPPING = {
 ```
 
 **Getting the mappings right is critical.** If they are wrong, the policy will
-receive scrambled observations and produce scrambled actions. Verify by loading a
-known pose in both simulators and checking that joint values match after reordering.
+receive scrambled observations and produce scrambled actions. The bug is silent —
+no runtime error, the robot simply moves wrong.
+
+> **Warning: Do not hand-derive the Isaac Lab joint order from the URDF XML.**
+> Isaac Lab's URDF importer uses BFS traversal with **alphabetical sibling
+> sorting**. This means children of the same parent are ordered by link name
+> (`head` before `left` before `right`), not by their position in the XML file.
+> MuJoCo uses DFS in XML order. The two orderings can differ substantially,
+> especially for arms and head joints that branch from the torso.
+>
+> Always obtain the Isaac Lab order empirically by printing `robot.joint_names`
+> at runtime. See [Joint Ordering in Conventions](../references/conventions.md#joint-ordering)
+> for details.
+
+Verify by loading a known motion (e.g. a walk clip) in both MuJoCo viewer and
+Isaac Lab, and visually confirming that the arms, head, and legs all match.
 
 ### Actuator parameters (KP/KD tuning)
 
