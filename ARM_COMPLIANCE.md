@@ -154,6 +154,40 @@ git show nvlabs/main:download_from_hf.py > /tmp/download_from_hf_nvlabs.py
 python /tmp/download_from_hf_nvlabs.py --sonic-v1-1
 ```
 
+## User study (`arm_compliance_study.py`)
+
+Runs one participant through all sets of a profile file (e.g. the 2×2×2
+`study_8sets.json`): per set the robot switches stiffness, the participant does
+each gesture and rates it right after. Use it **instead of** the keyboard tool
+(both publish on port 5565). Deploy must load the same file.
+
+```bash
+# deploy (T2): add  --compliance-profiles arm_compliance/study_8sets.json
+python gear_sonic/scripts/arm_compliance_study.py \
+    --profiles gear_sonic_deploy/arm_compliance/study_8sets.json \
+    --control-mode teleop --practice --blind
+# resume an interrupted session:   --resume P03
+```
+
+- **Intake:** consent check, then age, gender, height, weight (optional),
+  dominant hand, robot experience, prior contact with a humanoid. The name goes
+  only to `names_key.csv`; data files use the ID (P01, P02, ...).
+- **Order:** sets in a balanced Latin square (Williams design) by participant
+  number; gesture order rotates across sets. Fixed at the first run, reused on
+  resume.
+- **Per gesture:** Enter when ready, Enter when done (timestamps for syncing with
+  robot telemetry), then 4 ratings on 1–7: naturalness, comfort, perceived
+  safety, and perceived softness (manipulation check). Mark a trial invalid with
+  `x` (e.g. robot stumbled).
+- **Commands at any prompt:** `!e` ESTOP, `!r` release, `!b` break (robot →
+  RIGID), `!n` note, `!s` skip trial, `!q` save and quit.
+- **Output** (default `~/arm_compliance_study_data/`, outside the repo):
+  `P03/P03_ratings.csv` (one row per trial, with the shoulder/elbow/wrist
+  factor levels for analysis), `P03/P03_session.json` (demographics, order,
+  profile values, questions), `names_key.csv`.
+- `--blind` shows set letters (A–H) instead of profile names, in case the
+  participant can see the screen. `--reps N` repeats each gesture.
+
 ## Command format (for the VLA / agent)
 
 ZMQ PUB (the sender binds, default port **5565**), topic `compliance`,
@@ -216,4 +250,5 @@ except `--compliance-topic` and `--compliance-watchdog`.
 - `gear_sonic_deploy/src/g1/g1_deploy_onnx_ref/src/g1_deploy_onnx_ref.cpp` — CLI flags, wiring, `Apply()` in `CreatePolicyCommand()`
 - `gear_sonic_deploy/deploy.sh` — flag pass-through
 - `gear_sonic/scripts/arm_compliance_cli.py` — keyboard sender
+- `gear_sonic/scripts/arm_compliance_study.py` — user-study session runner
 - `gear_sonic_deploy/arm_compliance/study_8sets.json` — 2×2×2 study profiles
