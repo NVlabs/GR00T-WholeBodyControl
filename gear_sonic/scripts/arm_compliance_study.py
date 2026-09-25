@@ -29,7 +29,7 @@ Design choices (see ARM_COMPLIANCE.md, "User study"):
   each set appears equally often in each position and after each other set.
 - Gesture order inside a set: rotates across sets and participants.
 - Optional practice with RIGID first (not analysed).
-- Ratings 1-7 per gesture; one manipulation-check item (perceived softness).
+- Ratings 1-7 per gesture: perceived safety and comfort (edit QUESTIONS to add items).
 - Unix timestamps at trial start/end, to join with robot telemetry (tau_est, ...).
 """
 
@@ -47,13 +47,13 @@ import zmq
 
 GESTURES_DEFAULT = ["handshake", "fist_bump", "hug"]
 
-# Rating items asked after EVERY gesture (keep it short: fatigue matters).
-# (key, question, low anchor, high anchor)
+# Rating items asked after EVERY gesture (keep it short: 8 sets x 3 gestures).
+# (key, question, low anchor, high anchor) — add items here if needed, e.g.
+#   ("naturalness", "How natural did this {gesture} feel?", "not at all natural", "very natural"),
+#   ("softness", "How did the robot's arms feel?", "very stiff", "very soft"),  # manipulation check
 QUESTIONS = [
-    ("naturalness", "How natural did this {gesture} feel?", "not at all natural", "very natural"),
-    ("comfort", "How comfortable was it?", "very uncomfortable", "very comfortable"),
-    ("safety", "How safe did you feel?", "not safe at all", "completely safe"),
-    ("softness", "How did the robot's arms feel?", "very stiff", "very soft"),  # manipulation check
+    ("safety", "How safe did you feel during this {gesture}?", "not safe at all", "completely safe"),
+    ("comfort", "How comfortable was this {gesture}?", "very uncomfortable", "very comfortable"),
 ]
 SCALE_MIN, SCALE_MAX = 1, 7
 
@@ -274,7 +274,10 @@ class Prompter:
 
 def parse_int(lo, hi):
     def f(raw):
-        v = int(raw)
+        try:
+            v = int(raw)
+        except ValueError:
+            raise ValueError(f"enter a whole number {lo}-{hi}")
         if not lo <= v <= hi:
             raise ValueError(f"enter a number {lo}-{hi}")
         return v
@@ -283,7 +286,10 @@ def parse_int(lo, hi):
 
 def parse_float(lo, hi):
     def f(raw):
-        v = float(raw)
+        try:
+            v = float(raw)
+        except ValueError:
+            raise ValueError(f"enter a number {lo}-{hi}")
         if not lo <= v <= hi:
             raise ValueError(f"enter a value {lo}-{hi}")
         return v
@@ -396,7 +402,7 @@ def run_trial(p, link, session, profiles, kind, pos, profile, gesture, gpos, rep
                          parse_int(SCALE_MIN, SCALE_MAX))
     valid = p.ask("  Trial valid? (Enter = yes, x = invalid, e.g. robot stumbled / wrong gesture): ",
                   allow_empty=True)
-    row["valid"] = 0 if valid.lower() == "x" else 1
+    row["valid"] = 0 if valid.lower() in ("x", "n", "no", "invalid") else 1
     if row["valid"] == 0 and not p.pending_note:
         p.pending_note.append(input("  reason: ").strip())
     row["note"] = p.take_note()

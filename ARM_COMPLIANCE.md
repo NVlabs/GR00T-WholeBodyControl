@@ -176,9 +176,10 @@ python gear_sonic/scripts/arm_compliance_study.py \
   number; gesture order rotates across sets. Fixed at the first run, reused on
   resume.
 - **Per gesture:** Enter when ready, Enter when done (timestamps for syncing with
-  robot telemetry), then 4 ratings on 1–7: naturalness, comfort, perceived
-  safety, and perceived softness (manipulation check). Mark a trial invalid with
-  `x` (e.g. robot stumbled).
+  robot telemetry), then 2 ratings on 1–7: **perceived safety** and **comfort**
+  (edit `QUESTIONS` at the top of the script to add items, e.g. naturalness or
+  perceived softness as a manipulation check). Mark a trial invalid with `x`
+  (e.g. robot stumbled).
 - **Commands at any prompt:** `!e` ESTOP, `!r` release, `!b` break (robot →
   RIGID), `!n` note, `!s` skip trial, `!q` save and quit.
 - **Output** (default `~/arm_compliance_study_data/`, outside the repo):
