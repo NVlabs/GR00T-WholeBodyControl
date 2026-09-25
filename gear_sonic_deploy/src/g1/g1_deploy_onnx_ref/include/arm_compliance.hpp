@@ -33,10 +33,18 @@
  *     40% while Kd follows over the full ramp.  So the joint is never briefly
  *     stiff-but-underdamped.
  *
- * ESTOP
- *   Arms ramp to Kp = estop_kp, Kd = estop_kd (absolute) over `estop_ramp_s`, and
- *   the state is LATCHED.  Only {"release_estop": true, "profile": ...} leaves it,
- *   ramping over `estop_release_s`.
+ * ESTOP (controlled stop, default)
+ *   1. RETRACT: from the first tick the arms stop following the policy (teleop /
+ *      VLA / planner). Their targets move on a minimum-jerk path from the measured
+ *      pose to the safe pose (the policy's default arm pose), with soft gains
+ *      (retract_kp_scale, never stiffer than before).  Duration from the largest
+ *      joint distance and retract_speed, clamped to [retract_min_s, retract_max_s].
+ *   2. LIMP: targets held at the safe pose; gains ramp to estop_kp / estop_kd
+ *      (absolute) over estop_ramp_s.  The state is LATCHED.
+ *   3. RELEASE: only {"release_estop": true, "profile": ...}.  Targets blend from
+ *      the measured pose back to the policy's targets and gains ramp to the new
+ *      profile, both over estop_release_s.
+ *   estop_mode = limp: skip 1, just ramp the gains (the policy keeps the arm targets).
  *
  * WATCHDOG
  *   If commands stop arriving, the last gains are HELD (never snapped back to
@@ -261,6 +269,12 @@ class ProfileRegistry {
     std::map<std::string, Profile> profiles_;
 };
 
+/// What ESTOP does with the arms.
+enum class EstopMode {
+  kRetract,  ///< Controlled stop: retract to the safe pose (soft gains), then go limp.
+  kLimp,     ///< Uncontrolled stop: only ramp the arm gains down (arms keep the policy's targets).
+};
+
 /// Static configuration (set once from the command line).
 struct Config {
   bool enabled = false;               ///< Master switch; when false Apply() is a no-op.
@@ -272,11 +286,21 @@ struct Config {
   double soften_s = 0.3;              ///< Ramp time when a joint gets softer (Kp down).
   double stiffen_s = 1.0;             ///< Ramp time when a joint gets stiffer (Kp up).
   double lead_frac = 0.4;             ///< Fraction of the ramp for the "leading" gain (see header).
-  double estop_ramp_s = 0.0;          ///< Ramp time when entering ESTOP (0 = immediate).
-  double estop_release_s = 1.0;       ///< Ramp time when leaving ESTOP.
-  float estop_kp = 0.0f;              ///< Arm Kp during ESTOP (absolute, Nm/rad).
-  float estop_kd = 8.0f;              ///< Arm Kd during ESTOP (absolute, Nm*s/rad).
   double watchdog_s = 1.0;            ///< Warn (and hold) if no command for this long.
+
+  // --- ESTOP ---
+  EstopMode estop_mode = EstopMode::kRetract;
+  /// Arm pose the retract goes to (hardware order 15..28). Set from the policy's
+  /// default_angles by the deploy binary; zeros here are only a placeholder.
+  ArmArray safe_pose{};
+  double retract_speed = 0.8;         ///< Peak joint speed of the retract (rad/s, ~45 deg/s).
+  double retract_min_s = 0.8;         ///< Retract duration limits (s).
+  double retract_max_s = 3.0;
+  float retract_kp_scale = 0.6f;      ///< Stiffness while retracting (x nominal Kp); Kd x sqrt().
+  double estop_ramp_s = 1.0;          ///< Ramp to the ESTOP gains (after the retract, or directly in limp mode).
+  double estop_release_s = 1.0;       ///< Blend back to the policy after release.
+  float estop_kp = 1.5f;              ///< Arm Kp during ESTOP (absolute, Nm/rad; nominal ~14.3).
+  float estop_kd = 0.9f;              ///< Arm Kd during ESTOP (absolute, Nm*s/rad; nominal ~0.9).
 };
 
 /// One parsed command.
@@ -380,10 +404,21 @@ inline double MinJerk(double r) {
 
 /**
  * @class Controller
- * @brief Holds the target arm gains and ramps the applied gains toward them.
+ * @brief Holds the target arm gains and ramps the applied gains toward them;
+ *        during ESTOP it also owns the arm position targets (controlled stop).
+ *
+ * ESTOP phases (retract mode):
+ *   RETRACT  arm targets follow a minimum-jerk path from the MEASURED arm pose to
+ *            cfg.safe_pose; gains go to the retract stiffness.  The policy's arm
+ *            targets (teleop / VLA / planner) are ignored from the first tick.
+ *   LIMP     arm targets held at the safe pose; gains ramp to estop_kp / estop_kd.
+ *   RELEASE  after {"release_estop": true}: arm targets blend from the measured
+ *            pose back to the policy's targets; gains ramp to the new profile.
  */
 class Controller {
   public:
+    enum class Phase { kNormal, kRetract, kLimp, kRelease };
+
     explicit Controller(const Config& cfg = Config{}) : cfg_(cfg) {
       if (!cfg_.profiles_file.empty()) {
         std::string err;
@@ -446,14 +481,18 @@ class Controller {
     }
 
     /**
-     * @brief Overwrite Kp/Kd of the arm motors in-place (control thread, 50 Hz).
-     * @param kp  29-element Kp array already filled with the nominal gains.
-     * @param kd  29-element Kd array already filled with the nominal gains.
-     * @param dt  Control period in seconds.
+     * @brief Update arm targets and gains in-place (control thread, 50 Hz).
+     * @param q_target 29-element position targets from the policy (overwritten on
+     *                 the arms during ESTOP / release).
+     * @param kp       29-element Kp array filled with the nominal gains.
+     * @param kd       29-element Kd array filled with the nominal gains.
+     * @param q_meas   Measured arm joint positions (hardware 15..28).
+     * @param dt       Control period in seconds.
      */
     template <size_t N>
-    void Apply(std::array<float, N>& kp, std::array<float, N>& kd, double dt) {
-      static_assert(N >= kFirstArmMotor + kNumArmMotors, "gain array too small");
+    void Apply(std::array<float, N>& q_target, std::array<float, N>& kp, std::array<float, N>& kd,
+               const ArmArray& q_meas, double dt) {
+      static_assert(N >= kFirstArmMotor + kNumArmMotors, "array too small");
       if (!cfg_.enabled) return;
 
       Command target;
@@ -470,51 +509,86 @@ class Controller {
         }
       }
 
-      // Absolute target gains for this tick.
-      ArmArray target_kp{}, target_kd{};
+      // Nominal arm gains this tick (as filled in by the caller).
+      ArmArray nom_kp{}, nom_kd{};
       for (int j = 0; j < kNumArmMotors; ++j) {
-        const int m = kFirstArmMotor + j;
-        if (target.estop) {
-          target_kp[j] = cfg_.estop_kp;
-          target_kd[j] = cfg_.estop_kd;
-        } else {
-          target_kp[j] = kp[m] * target.kp_scale[j];
-          target_kd[j] = kd[m] * target.kd_scale[j];
-        }
+        nom_kp[j] = kp[kFirstArmMotor + j];
+        nom_kd[j] = kd[kFirstArmMotor + j];
       }
 
       if (!initialized_) {
-        // First policy tick: start from the nominal gains the policy was using,
-        // then ramp to whatever profile is requested (never jump).
-        for (int j = 0; j < kNumArmMotors; ++j) {
-          current_kp_[j] = kp[kFirstArmMotor + j];
-          current_kd_[j] = kd[kFirstArmMotor + j];
-        }
-        applied_version_ = 0;  // forces the "new target" branch below
-        prev_was_estop_ = false;
+        // First policy tick: start from the nominal gains and ramp to the requested profile.
+        current_kp_ = nom_kp;
+        current_kd_ = nom_kd;
+        applied_version_ = 0;
         initialized_ = true;
       }
 
+      // ---- React to a new command ----
       if (version != applied_version_) {
         applied_version_ = version;
-        StartTransition(target, target_kp, target_kd);
-      }
-      prev_was_estop_ = target.estop;
-
-      if (ramping_) {
-        ramp_elapsed_ += dt;
-        bool done = true;
-        for (int j = 0; j < kNumArmMotors; ++j) {
-          const double sp = dur_kp_[j] <= 0.0 ? 1.0 : MinJerk(ramp_elapsed_ / dur_kp_[j]);
-          const double sd = dur_kd_[j] <= 0.0 ? 1.0 : MinJerk(ramp_elapsed_ / dur_kd_[j]);
-          current_kp_[j] = static_cast<float>(start_kp_[j] + sp * (target_kp[j] - start_kp_[j]));
-          current_kd_[j] = static_cast<float>(start_kd_[j] + sd * (target_kd[j] - start_kd_[j]));
-          if (sp < 1.0 || sd < 1.0) done = false;
+        if (target.estop) {
+          if (cfg_.estop_mode == EstopMode::kRetract) {
+            EnterRetract(q_meas, nom_kp, nom_kd);
+          } else {
+            phase_ = Phase::kLimp;
+            StartGainRamp(EstopKp(), EstopKd(), target.slew_s.value_or(cfg_.estop_ramp_s), true);
+            std::cout << "[ArmCompliance] -> ESTOP (limp mode: arms Kp=" << cfg_.estop_kp
+                      << " Kd=" << cfg_.estop_kd << ", ramp " << ramp_duration_ << " s, latched)" << std::endl;
+          }
+        } else if (phase_ == Phase::kRetract || phase_ == Phase::kLimp) {
+          // Release: blend targets from where the arms are back to the policy.
+          phase_ = Phase::kRelease;
+          phase_elapsed_ = 0.0;
+          phase_duration_ = std::max(cfg_.estop_release_s, 1e-3);
+          phase_start_q_ = q_meas;
+          StartGainRamp(ProfileKp(target, nom_kp), ProfileKd(target, nom_kd), cfg_.estop_release_s, true);
+          std::cout << "[ArmCompliance] ESTOP released -> " << target.name << " (blend back to policy over "
+                    << std::fixed << std::setprecision(2) << phase_duration_ << " s)" << std::endl;
+        } else {
+          // Normal profile change (also while a release blend is still running).
+          StartProfileRamp(target, ProfileKp(target, nom_kp), ProfileKd(target, nom_kd));
         }
-        if (done) ramping_ = false;
-      } else {
-        current_kp_ = target_kp;
-        current_kd_ = target_kd;
+      }
+
+      // ---- Phase progression ----
+      if (phase_ == Phase::kRetract || phase_ == Phase::kRelease) phase_elapsed_ += dt;
+      if (phase_ == Phase::kRetract && phase_elapsed_ >= phase_duration_) {
+        phase_ = Phase::kLimp;
+        StartGainRamp(EstopKp(), EstopKd(), cfg_.estop_ramp_s, true);
+        std::cout << "[ArmCompliance] ESTOP: arms at safe pose, ramping to Kp=" << cfg_.estop_kp
+                  << " Kd=" << cfg_.estop_kd << " over " << cfg_.estop_ramp_s << " s (latched)" << std::endl;
+      }
+      if (phase_ == Phase::kRelease && phase_elapsed_ >= phase_duration_) {
+        phase_ = Phase::kNormal;
+      }
+
+      // ---- Gain target for this tick ----
+      ArmArray goal_kp{}, goal_kd{};
+      switch (phase_) {
+        case Phase::kRetract: goal_kp = RetractKp(nom_kp); goal_kd = RetractKd(nom_kd); break;
+        case Phase::kLimp:    goal_kp = EstopKp();         goal_kd = EstopKd();         break;
+        default:              goal_kp = ProfileKp(target, nom_kp); goal_kd = ProfileKd(target, nom_kd); break;
+      }
+      AdvanceGainRamp(goal_kp, goal_kd, dt);
+
+      // ---- Arm position targets ----
+      // (In limp mode the arms keep the policy's targets while in ESTOP; only the release blends.)
+      const bool own_targets =
+          phase_ == Phase::kRetract || phase_ == Phase::kRelease ||
+          (phase_ == Phase::kLimp && cfg_.estop_mode == EstopMode::kRetract);
+      if (own_targets) {
+        const double s = MinJerk(phase_elapsed_ / phase_duration_);
+        for (int j = 0; j < kNumArmMotors; ++j) {
+          float& q = q_target[kFirstArmMotor + j];
+          if (phase_ == Phase::kRetract) {
+            q = static_cast<float>(phase_start_q_[j] + s * (cfg_.safe_pose[j] - phase_start_q_[j]));
+          } else if (phase_ == Phase::kLimp) {
+            q = cfg_.safe_pose[j];
+          } else {  // release: from measured pose at release to the policy's (moving) target
+            q = static_cast<float>(phase_start_q_[j] + s * (q - phase_start_q_[j]));
+          }
+        }
       }
 
       for (int j = 0; j < kNumArmMotors; ++j) {
@@ -544,63 +618,121 @@ class Controller {
       return estop_latched_;
     }
 
-    /// Applied arm gains — control-thread use only (valid after the first Apply()).
+    /// Control-thread-only views (valid after the first Apply()).
     ArmArray CurrentKp() const { return current_kp_; }
     ArmArray CurrentKd() const { return current_kd_; }
+    Phase CurrentPhase() const { return phase_; }
+    double PhaseDuration() const { return phase_duration_; }
 
   private:
-    /// Set per-joint ramp durations for a new target (control thread).
-    void StartTransition(const Command& target, const ArmArray& target_kp, const ArmArray& target_kd) {
+    // ----- gain targets -----
+    static ArmArray ProfileKp(const Command& t, const ArmArray& nom) {
+      ArmArray a{}; for (int j = 0; j < kNumArmMotors; ++j) a[j] = nom[j] * t.kp_scale[j]; return a;
+    }
+    static ArmArray ProfileKd(const Command& t, const ArmArray& nom) {
+      ArmArray a{}; for (int j = 0; j < kNumArmMotors; ++j) a[j] = nom[j] * t.kd_scale[j]; return a;
+    }
+    ArmArray RetractKp(const ArmArray& nom) const {
+      ArmArray a{}; for (int j = 0; j < kNumArmMotors; ++j) a[j] = nom[j] * cfg_.retract_kp_scale; return a;
+    }
+    ArmArray RetractKd(const ArmArray& nom) const {
+      const float b = std::sqrt(std::max(cfg_.retract_kp_scale, 0.0f));  // keeps zeta
+      ArmArray a{}; for (int j = 0; j < kNumArmMotors; ++j) a[j] = nom[j] * b; return a;
+    }
+    ArmArray EstopKp() const { ArmArray a{}; a.fill(cfg_.estop_kp); return a; }
+    ArmArray EstopKd() const { ArmArray a{}; a.fill(cfg_.estop_kd); return a; }
+
+    // ----- ESTOP -----
+    void EnterRetract(const ArmArray& q_meas, const ArmArray& nom_kp, const ArmArray& nom_kd) {
+      phase_ = Phase::kRetract;
+      phase_elapsed_ = 0.0;
+      phase_start_q_ = q_meas;
+      double dmax = 0.0;
+      for (int j = 0; j < kNumArmMotors; ++j) dmax = std::max(dmax, static_cast<double>(std::fabs(cfg_.safe_pose[j] - q_meas[j])));
+      // Minimum-jerk peak speed = 1.875 * distance / duration.
+      const double speed = std::max(cfg_.retract_speed, 1e-3);
+      phase_duration_ = std::clamp(1.875 * dmax / speed, cfg_.retract_min_s, cfg_.retract_max_s);
+      // Soften quickly toward the retract stiffness (never stiffer than now).
+      ArmArray rk = RetractKp(nom_kp);
+      const ArmArray rd = RetractKd(nom_kd);
+      for (int j = 0; j < kNumArmMotors; ++j) rk[j] = std::min(rk[j], current_kp_[j]);
+      StartGainRamp(rk, rd, cfg_.soften_s, true);
+      std::cout << "[ArmCompliance] -> ESTOP: retracting arms to safe pose over " << std::fixed
+                << std::setprecision(2) << phase_duration_ << " s (max joint travel " << dmax
+                << " rad), then Kp=" << cfg_.estop_kp << " Kd=" << cfg_.estop_kd << " (latched)" << std::endl;
+    }
+
+    // ----- gain ramps -----
+    /// Profile change: per-joint durations (stiffen/soften) with the lead rule.
+    void StartProfileRamp(const Command& target, const ArmArray& goal_kp, const ArmArray& goal_kd) {
       start_kp_ = current_kp_;
       start_kd_ = current_kd_;
       ramp_elapsed_ = 0.0;
       const double lead = std::clamp(cfg_.lead_frac, 0.0, 1.0);
       double longest = 0.0;
       for (int j = 0; j < kNumArmMotors; ++j) {
-        const bool kp_up = target_kp[j] > start_kp_[j];
-        const bool kd_up = target_kd[j] > start_kd_[j];
-        double T;
-        if (target.estop) {
-          T = target.slew_s.value_or(cfg_.estop_ramp_s);
-        } else if (prev_was_estop_) {
-          T = cfg_.estop_release_s;
-        } else if (target.slew_s) {
-          T = *target.slew_s;
-        } else {
-          T = kp_up ? cfg_.stiffen_s : cfg_.soften_s;
-        }
-        if (target.estop || prev_was_estop_) {
-          // Entering / leaving ESTOP: both gains over the full ramp.
-          dur_kp_[j] = T;
-          dur_kd_[j] = T;
-        } else {
-          // Keep damping on the high side: Kd leads when rising, Kp leads when falling.
-          dur_kp_[j] = kp_up ? T : T * lead;
-          dur_kd_[j] = kd_up ? T * lead : T;
-        }
+        const bool kp_up = goal_kp[j] > start_kp_[j];
+        const bool kd_up = goal_kd[j] > start_kd_[j];
+        const double T = target.slew_s ? *target.slew_s : (kp_up ? cfg_.stiffen_s : cfg_.soften_s);
+        // Keep damping on the high side: Kd leads when rising, Kp leads when falling.
+        dur_kp_[j] = kp_up ? T : T * lead;
+        dur_kd_[j] = kd_up ? T * lead : T;
         longest = std::max(longest, T);
       }
+      ramp_duration_ = longest;
       ramping_ = true;
-      LogTransition(target, longest);
+      LogProfile(target, longest);
     }
 
-    void LogTransition(const Command& t, double ramp) const {
-      std::ostringstream os;
-      os << std::fixed << std::setprecision(2);
-      os << "[ArmCompliance] -> " << t.name;
-      if (t.estop) {
-        os << " (arms Kp=" << cfg_.estop_kp << " Kd=" << cfg_.estop_kd << ", ramp " << ramp << " s, latched)";
-      } else {
-        // Kp/Kd scale per side: shoulder, elbow, wrist (first joint of each group)
-        auto side = [&](int o) {
-          std::ostringstream s;
-          s << std::fixed << std::setprecision(2) << "S " << t.kp_scale[o] << "/" << t.kd_scale[o]
-            << " E " << t.kp_scale[o + 3] << "/" << t.kd_scale[o + 3]
-            << " W " << t.kp_scale[o + 4] << "/" << t.kd_scale[o + 4];
-          return s.str();
-        };
-        os << " (Kp/Kd scale  L[" << side(0) << "]  R[" << side(7) << "], ramp " << ramp << " s)";
+    /// Fixed-duration ramp of all joints (ESTOP phases).  `symmetric`: Kp and Kd over the full time.
+    void StartGainRamp(const ArmArray& goal_kp, const ArmArray& goal_kd, double T, bool symmetric) {
+      (void)goal_kp; (void)goal_kd;
+      start_kp_ = current_kp_;
+      start_kd_ = current_kd_;
+      ramp_elapsed_ = 0.0;
+      ramp_duration_ = std::max(T, 0.0);
+      for (int j = 0; j < kNumArmMotors; ++j) {
+        dur_kp_[j] = ramp_duration_;
+        dur_kd_[j] = symmetric ? ramp_duration_ : ramp_duration_ * cfg_.lead_frac;
       }
+      ramping_ = true;
+      phase_goal_kp_ = goal_kp;
+      phase_goal_kd_ = goal_kd;
+    }
+
+    void AdvanceGainRamp(const ArmArray& goal_kp, const ArmArray& goal_kd, double dt) {
+      // During ESTOP phases, clamp the goal used by EnterRetract (never stiffer than at ESTOP time).
+      const bool use_phase_goal = (phase_ == Phase::kRetract);
+      const ArmArray& gk = use_phase_goal ? phase_goal_kp_ : goal_kp;
+      const ArmArray& gd = use_phase_goal ? phase_goal_kd_ : goal_kd;
+      if (!ramping_) {
+        current_kp_ = gk;
+        current_kd_ = gd;
+        return;
+      }
+      ramp_elapsed_ += dt;
+      bool done = true;
+      for (int j = 0; j < kNumArmMotors; ++j) {
+        const double sp = dur_kp_[j] <= 0.0 ? 1.0 : MinJerk(ramp_elapsed_ / dur_kp_[j]);
+        const double sd = dur_kd_[j] <= 0.0 ? 1.0 : MinJerk(ramp_elapsed_ / dur_kd_[j]);
+        current_kp_[j] = static_cast<float>(start_kp_[j] + sp * (gk[j] - start_kp_[j]));
+        current_kd_[j] = static_cast<float>(start_kd_[j] + sd * (gd[j] - start_kd_[j]));
+        if (sp < 1.0 || sd < 1.0) done = false;
+      }
+      if (done) ramping_ = false;
+    }
+
+    void LogProfile(const Command& t, double ramp) const {
+      auto side = [&](int o) {
+        std::ostringstream s;
+        s << std::fixed << std::setprecision(2) << "S " << t.kp_scale[o] << "/" << t.kd_scale[o]
+          << " E " << t.kp_scale[o + 3] << "/" << t.kd_scale[o + 3]
+          << " W " << t.kp_scale[o + 4] << "/" << t.kd_scale[o + 4];
+        return s.str();
+      };
+      std::ostringstream os;
+      os << std::fixed << std::setprecision(2) << "[ArmCompliance] -> " << t.name
+         << " (Kp/Kd scale  L[" << side(0) << "]  R[" << side(7) << "], ramp " << ramp << " s)";
       std::cout << os.str() << std::endl;
     }
 
@@ -617,11 +749,16 @@ class Controller {
 
     // Control-thread state (only touched in Apply()).
     bool initialized_ = false;
-    bool ramping_ = false;
-    bool prev_was_estop_ = false;
     bool watchdog_warned_ = false;
     uint64_t applied_version_ = 0;
+    Phase phase_ = Phase::kNormal;
+    double phase_elapsed_ = 0.0;
+    double phase_duration_ = 1.0;
+    ArmArray phase_start_q_{};
+    ArmArray phase_goal_kp_{}, phase_goal_kd_{};
+    bool ramping_ = false;
     double ramp_elapsed_ = 0.0;
+    double ramp_duration_ = 0.0;
     std::array<double, kNumArmMotors> dur_kp_{}, dur_kd_{};
     ArmArray start_kp_{}, start_kd_{};
     ArmArray current_kp_{}, current_kd_{};

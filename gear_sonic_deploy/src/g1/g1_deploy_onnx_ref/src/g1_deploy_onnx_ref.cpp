@@ -2587,6 +2587,11 @@ class G1Deploy {
 
       // Runtime arm impedance layer (must exist before the control thread starts)
       if (arm_compliance_config.enabled) {
+        // ESTOP retract target: the policy's own default arm pose
+        for (int j = 0; j < arm_compliance::kNumArmMotors; ++j) {
+          arm_compliance_config.safe_pose[j] =
+              static_cast<float>(default_angles[arm_compliance::kFirstArmMotor + j]);
+        }
         arm_compliance_ = std::make_unique<arm_compliance::Controller>(arm_compliance_config);
         arm_compliance_sub_ = std::make_unique<arm_compliance::Subscriber>(*arm_compliance_);
         arm_compliance_sub_->Start();
@@ -3153,9 +3158,17 @@ class G1Deploy {
         motor_command_tmp.kd.at(i) = kds[i];
         motor_command_tmp.dq_target.at(i) = 0.0;
       }
-      // Rescale arm Kp/Kd according to the active compliance profile (no-op if disabled)
+      // Arm compliance: rescale arm Kp/Kd per profile; during ESTOP it also owns the
+      // arm position targets (controlled stop). No-op if disabled.
       if (arm_compliance_) {
-        arm_compliance_->Apply(motor_command_tmp.kp, motor_command_tmp.kd, control_dt_);
+        arm_compliance::ArmArray arm_q_meas{};
+        const std::shared_ptr<const LowState_> ls = low_state_buffer_.GetDataWithTime().data;
+        for (int j = 0; j < arm_compliance::kNumArmMotors; ++j) {
+          const int m = arm_compliance::kFirstArmMotor + j;
+          arm_q_meas[j] = ls ? ls->motor_state()[m].q() : motor_command_tmp.q_target.at(m);
+        }
+        arm_compliance_->Apply(motor_command_tmp.q_target, motor_command_tmp.kp, motor_command_tmp.kd,
+                               arm_q_meas, control_dt_);
       }
       motor_command_buffer_.SetData(motor_command_tmp);
       return true;
@@ -4175,10 +4188,14 @@ int main(int argc, char const* argv[]) {
     std::cout << "  --compliance-soften <s>: ramp time when a joint gets softer (default: 0.3)" << std::endl;
     std::cout << "  --compliance-stiffen <s>: ramp time when a joint gets stiffer (default: 1.0)" << std::endl;
     std::cout << "  --compliance-slew <s>: set both ramp times at once" << std::endl;
-    std::cout << "  --compliance-estop-kp <value>: arm Kp during ESTOP (default: 0.0)" << std::endl;
-    std::cout << "  --compliance-estop-kd <value>: arm Kd during ESTOP (default: 8.0)" << std::endl;
-    std::cout << "  --compliance-estop-ramp <s>: ramp time into ESTOP (default: 0 = immediate)" << std::endl;
-    std::cout << "  --compliance-estop-release <s>: ramp time out of ESTOP (default: 1.0)" << std::endl;
+    std::cout << "  --compliance-estop-mode <retract|limp>: ESTOP = retract arms to default pose then limp, or limp only (default: retract)" << std::endl;
+    std::cout << "  --compliance-retract-speed <deg/s>: peak joint speed of the retract (default: 45)" << std::endl;
+    std::cout << "  --compliance-retract-kp <scale>: arm stiffness while retracting, x default Kp (default: 0.6)" << std::endl;
+    std::cout << "  --compliance-retract-max <s>: longest allowed retract (default: 3.0)" << std::endl;
+    std::cout << "  --compliance-estop-kp <value>: arm Kp during ESTOP, absolute (default: 1.5; default arm Kp ~14.3)" << std::endl;
+    std::cout << "  --compliance-estop-kd <value>: arm Kd during ESTOP, absolute (default: 0.9; default arm Kd ~0.9)" << std::endl;
+    std::cout << "  --compliance-estop-ramp <s>: ramp to the ESTOP gains (default: 1.0)" << std::endl;
+    std::cout << "  --compliance-estop-release <s>: blend back to the policy after release (default: 1.0)" << std::endl;
     std::cout << "  --compliance-watchdog <s>: warn and hold gains if no command for this long (default: 1.0, 0 = off)" << std::endl;
     std::cout << "\nExamples:" << std::endl;
     std::cout << "  " << argv[0] << " enp5s0 policy/single_frame/model.onnx reference/bones_072925_test/ --planner-file policy/planner.onnx --obs-config policy/single_frame/observation_config.yaml --disable-crc-check" << std::endl;
@@ -4471,6 +4488,16 @@ int main(int argc, char const* argv[]) {
       arm_compliance_config.initial_profile = require_value(i, "--compliance-profile");
     } else if (std::string(argv[i]) == "--compliance-profiles") {
       arm_compliance_config.profiles_file = require_value(i, "--compliance-profiles");
+    } else if (std::string(argv[i]) == "--compliance-estop-mode") {
+      const std::string mode = require_value(i, "--compliance-estop-mode");
+      if (mode == "retract") {
+        arm_compliance_config.estop_mode = arm_compliance::EstopMode::kRetract;
+      } else if (mode == "limp") {
+        arm_compliance_config.estop_mode = arm_compliance::EstopMode::kLimp;
+      } else {
+        std::cerr << "Error: --compliance-estop-mode must be 'retract' or 'limp'" << std::endl;
+        exit(1);
+      }
     } else if (std::string(argv[i]) == "--compliance-port" ||
                std::string(argv[i]) == "--compliance-slew" ||
                std::string(argv[i]) == "--compliance-soften" ||
@@ -4479,6 +4506,9 @@ int main(int argc, char const* argv[]) {
                std::string(argv[i]) == "--compliance-estop-kp" ||
                std::string(argv[i]) == "--compliance-estop-ramp" ||
                std::string(argv[i]) == "--compliance-estop-release" ||
+               std::string(argv[i]) == "--compliance-retract-speed" ||
+               std::string(argv[i]) == "--compliance-retract-kp" ||
+               std::string(argv[i]) == "--compliance-retract-max" ||
                std::string(argv[i]) == "--compliance-watchdog") {
       const std::string flag = argv[i];
       const std::string value = require_value(i, flag.c_str());
@@ -4500,6 +4530,12 @@ int main(int argc, char const* argv[]) {
           arm_compliance_config.estop_ramp_s = std::stod(value);
         } else if (flag == "--compliance-estop-release") {
           arm_compliance_config.estop_release_s = std::stod(value);
+        } else if (flag == "--compliance-retract-speed") {
+          arm_compliance_config.retract_speed = std::stod(value) * 3.14159265358979323846 / 180.0;  // deg/s -> rad/s
+        } else if (flag == "--compliance-retract-kp") {
+          arm_compliance_config.retract_kp_scale = std::stof(value);
+        } else if (flag == "--compliance-retract-max") {
+          arm_compliance_config.retract_max_s = std::stod(value);
         } else {
           arm_compliance_config.watchdog_s = std::stod(value);
         }

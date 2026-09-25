@@ -26,7 +26,7 @@ Built-in profiles (Step 0 tests on the real robot, `sonic_v1_1`):
 | **FISTBUMP** | 1 / 1 | 1 / 1 | 1 / 1 | only rigid felt natural (pilot, n = 2) |
 | **FISTBUMP_SOFTWRIST** | 1 / 1 | 1 / 1 | right only: 0.5 / 0.7 | candidate for the study |
 | **SOFT** | 0.25 / 0.5 | 0.25 / 0.5 | 0.25 / 0.5 | uniform soft (ζ = 2) |
-| **ESTOP** | Kp = `--compliance-estop-kp`, Kd = `--compliance-estop-kd` (absolute) | | | latched |
+| **ESTOP** | controlled stop, see below | | | latched |
 
 ### Your own profiles (JSON file, no rebuild)
 
@@ -58,15 +58,38 @@ wrist).
 - Damping stays on the high side: when stiffening, **Kd finishes first** (in the
   first 40% of the ramp) and Kp follows; when softening, **Kp drops first** and
   Kd follows over the full ramp. The joint is never briefly stiff-but-underdamped.
-- ESTOP ramps in over `--compliance-estop-ramp` (0 = immediate) and is
-  **latched**; only `{"release_estop": true, "profile": ...}` leaves it, ramping
-  over `--compliance-estop-release` (1 s).
 - If commands stop arriving, the last gains are **held** (never snapped back to
   rigid) and a warning is printed.
 - Legs and waist are never touched.
 
 Known limitation: `tau_ff = 0` in this stack, so low shoulder/elbow Kp means the
 arms sag under gravity.
+
+### ESTOP (controlled stop)
+
+Lowering the gains alone is not a real stop: the policy keeps commanding the arm
+targets (in teleop it keeps following the operator's raised arms), and arms that
+drop suddenly jerk the torso and unbalance the robot. So ESTOP takes over the arm
+targets:
+
+1. **Retract** — from the first control tick the arms stop following the policy
+   (teleop / VLA / planner). Their targets move on a minimum-jerk path from where
+   the arms **are** to the policy's **default arm pose** (arms down, elbows 0.6
+   rad), with soft gains (`--compliance-retract-kp`, 0.6 × default, never stiffer
+   than before). Duration grows with the distance: peak speed
+   `--compliance-retract-speed` (45 °/s), between 0.8 s and
+   `--compliance-retract-max` (3 s).
+2. **Limp** — targets stay at the default pose; gains ramp to
+   `--compliance-estop-kp` / `--compliance-estop-kd` (absolute; default 1.5 / 0.9,
+   i.e. ~10 % stiffness, normal damping) over `--compliance-estop-ramp` (1 s).
+   **Latched.**
+3. **Release** — only `{"release_estop": true, "profile": ...}` (key `r`). The arm
+   targets blend from where the arms are back to the policy's targets, and the
+   gains ramp to the new profile, both over `--compliance-estop-release` (1 s).
+
+Legs and waist stay under the policy the whole time, so the robot keeps
+balancing. `--compliance-estop-mode limp` gives the old behaviour (gains only, the
+policy keeps the arm targets).
 
 ## Run it (sim)
 
@@ -164,10 +187,14 @@ sock.send_string("compliance " + json.dumps({"profile": "HUG"}))
 | `--compliance-soften` | 0.3 | ramp time when a joint gets softer (s) |
 | `--compliance-stiffen` | 1.0 | ramp time when a joint gets stiffer (s) |
 | `--compliance-slew` | – | sets both ramp times |
-| `--compliance-estop-kp` | 0.0 | arm Kp during ESTOP |
-| `--compliance-estop-kd` | 8.0 | arm Kd during ESTOP |
-| `--compliance-estop-ramp` | 0.0 | ramp time into ESTOP (0 = immediate) |
-| `--compliance-estop-release` | 1.0 | ramp time out of ESTOP |
+| `--compliance-estop-mode` | retract | `retract` (controlled stop) or `limp` (gains only) |
+| `--compliance-retract-speed` | 45 | peak joint speed of the retract (°/s) |
+| `--compliance-retract-kp` | 0.6 | arm stiffness while retracting (× default Kp; Kd × √) |
+| `--compliance-retract-max` | 3.0 | longest retract (s) |
+| `--compliance-estop-kp` | 1.5 | arm Kp once retracted (absolute; default arm Kp ≈ 14.3) |
+| `--compliance-estop-kd` | 0.9 | arm Kd once retracted (absolute; default arm Kd ≈ 0.9) |
+| `--compliance-estop-ramp` | 1.0 | ramp to the ESTOP gains (s) |
+| `--compliance-estop-release` | 1.0 | blend back to the policy after release (s) |
 | `--compliance-watchdog` | 1.0 | warn + hold after this many s without commands (0 = off) |
 
 `deploy.sh` passes through `--arm-compliance` and all `--compliance-*` flags above
@@ -175,7 +202,7 @@ except `--compliance-topic` and `--compliance-watchdog`.
 
 ## Files
 
-- `gear_sonic_deploy/src/g1/g1_deploy_onnx_ref/include/arm_compliance.hpp` — profiles, command parsing, ramp/ESTOP/watchdog logic
+- `gear_sonic_deploy/src/g1/g1_deploy_onnx_ref/include/arm_compliance.hpp` — profiles, command parsing, gain ramps, controlled-stop ESTOP, watchdog
 - `gear_sonic_deploy/src/g1/g1_deploy_onnx_ref/include/arm_compliance_subscriber.hpp` — ZMQ receiver thread
 - `gear_sonic_deploy/src/g1/g1_deploy_onnx_ref/src/g1_deploy_onnx_ref.cpp` — CLI flags, wiring, `Apply()` in `CreatePolicyCommand()`
 - `gear_sonic_deploy/deploy.sh` — flag pass-through
