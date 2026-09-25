@@ -24,6 +24,8 @@
 #       python -c "import depthai as dai; print(dai.Device.getAllAvailableDevices())"
 #  RealSense:
 #       rs-enumerate-devices --short
+#  ZED (use the serial number):
+#       python -c "import pyzed.sl as sl; print(sl.Camera.get_device_list())"
 #  USB:
 #       ls /dev/video*    # use the index number, e.g. "0" for /dev/video0
 # ─────────────────────────────────────────────────────────────────

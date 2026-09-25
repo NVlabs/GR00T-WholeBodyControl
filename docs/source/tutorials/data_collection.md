@@ -83,6 +83,114 @@ journalctl -u composed_camera_server.service -f
 Other camera drivers (RealSense, USB webcam) are included in the codebase but have not been tested recently for data collection. If you need RealSense, install `pyrealsense2` into the venv after setup. See the driver files in `gear_sonic/camera/drivers/` for details.
 ```
 
+### Using Stereolabs ZED cameras
+
+The `zed` camera type streams the left rectified RGB image from a ZED stereo
+camera (ZED 2i, ZED X, ZED Mini, ...). It requires the
+[ZED SDK](https://www.stereolabs.com/docs/installation) on the robot computer
+(NVIDIA Jetson or a machine with an NVIDIA GPU). The `pyzed` Python API is not
+pip-installable on its own — after installing the SDK, install it into the
+camera venv:
+
+```sh
+source .venv_camera/bin/activate
+python /usr/local/zed/get_python_api.py
+```
+
+Find the serial numbers of connected ZED cameras:
+
+```sh
+python -c "import pyzed.sl as sl; print(sl.Camera.get_device_list())"
+```
+
+Then start the camera server with the `zed` camera type:
+
+```sh
+python -m gear_sonic.camera.composed_camera \
+    --ego-view-camera zed \
+    --ego-view-device-id <ZED_SERIAL_NUMBER> \
+    --port 5555
+```
+
+Several ZED cameras can be used at once — give each mount its own serial number.
+When more than one ZED is attached the serial is **required**: without it every
+camera worker would race for the same first device.
+
+```sh
+python -m gear_sonic.camera.composed_camera \
+    --ego-view-camera zed --ego-view-device-id <SERIAL_A> \
+    --head-camera zed --head-device-id <SERIAL_B> \
+    --port 5555
+```
+
+Frames are center-cropped to 4:3 and resized to 640x480 to match the dataset
+format, and timestamped with the SDK capture timestamp. Only the left view is
+published: the pipeline models one image stream per camera, not a stereo pair.
+
+```{note}
+Depth is off by default. With `--zed-use-depth` the depth stream is published over ZMQ
+and is available to anything reading it live (a viewer, or an inference loop), but it is
+**not** written to datasets: the Sonic VLA dataset format defines RGB features only
+(`ego_view`, `left_wrist`, `right_wrist`), so `run_data_exporter.py` has nowhere to put
+it. Depth streams are PNG-encoded rather than JPEG, which keeps the millimetre values
+exact on the wire.
+```
+
+The monocular **ZED X One** uses the `zed_one` camera type (the SDK drives single-sensor
+cameras through a different API). It behaves identically otherwise — same 640x480 output, same
+SDK timestamps — and can be mixed with stereo cameras in one server:
+
+```sh
+python -m gear_sonic.camera.composed_camera \
+    --ego-view-camera zed_one --ego-view-device-id <XONE_SERIAL> \
+    --head-camera zed --head-device-id <STEREO_SERIAL> \
+    --port 5555
+```
+
+> Note: an X One does **not** appear in the stereo device list, so discover it with
+> `python -c "import pyzed.sl as sl; print(sl.CameraOne.get_device_list())"`.
+
+Capture settings:
+
+- `--zed-resolution` selects the capture mode (`AUTO`, the default, keeps each
+  model's native mode; also `HD2K`, `HD1080`, `HD1200`, `HD720`, `SVGA`, `VGA`).
+  GMSL models do not support every mode, so `AUTO` is the safe default; `SVGA`
+  is a good way to cut load when running several cameras on one Jetson.
+- `--zed-rectified` (default true) publishes the rectified image, with lens
+  distortion removed. Pass `--no-zed-rectified` for the raw sensor image, e.g.
+  if you undistort yourself or train on unrectified data.
+- `--zed-use-depth` additionally publishes metric depth as a `<mount>_depth` stream
+  (`uint16` millimetres, `0` meaning no measurement), computed with `--zed-depth-mode`
+  (`NEURAL` by default, `NEURAL_LIGHT` if you need the GPU time back). Stereo cameras
+  only — the monocular ZED X One has nothing to triangulate against and refuses. Depth is
+  defined in the rectified frame, so it cannot be combined with `--no-zed-rectified`.
+- `--fps` sets both the publish loop and the camera's grab rate. The camera rounds up to
+  the nearest rate its mode supports, so `--fps 50` on a ZED X at `SVGA` grabs at 60 and
+  every published frame is a fresh one.
+
+**Match the rates to the data-collection loop.** The exporter samples at
+`--data-collection-frequency` (50 Hz by default) and the dataset declares 50 fps.
+With the default `--fps 30` the camera cannot keep up and about
+40% of dataset rows repeat the previous frame — measured on two ZED X Mini. Run the
+server at or above the collection frequency instead:
+
+```sh
+python -m gear_sonic.camera.composed_camera \
+    --ego-view-camera zed --ego-view-device-id <SERIAL_A> \
+    --head-camera zed --head-device-id <SERIAL_B> \
+    --zed-resolution SVGA --fps 50 \
+    --port 5555
+```
+
+With those settings no published frame repeats the previous one: measured on a ZED X at
+`SVGA`, `--fps 30` gives 39.9% repeats while `--fps 50` gives 0.0% over 1000 publishes,
+because the camera rounds the request up to its supported 60.
+
+Verified on a Jetson Orin NX with two ZED X Mini cameras on one ZED Link capture
+card: both streams sustained ~29.8 published fps over a 5-minute run, per-message
+capture skew was 0 ms (cameras sharing a capture card are hardware synchronised),
+and under 1% of published frames were a repeat of the previous frame.
+
 ### Manual setup (alternative)
 
 If you prefer not to use the install script, or need to reconfigure:

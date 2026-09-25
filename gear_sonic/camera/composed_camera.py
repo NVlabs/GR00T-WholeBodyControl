@@ -11,7 +11,8 @@ Usage (on robot)::
         --ego-view-device-id 18443010E1ABC12300 \\
         --port 5555
 
-Supported camera types: ``oak``, ``oak_mono``, ``realsense``,
+Supported camera types: ``oak``, ``oak_mono``, ``realsense``, ``zed``,
+``zed_one`` (monocular ZED X One),
 ``usb``, or a path to an ``.mp4`` file for replay testing.
 
 Run ``python -m gear_sonic.camera.composed_camera --help`` for all options.
@@ -53,10 +54,10 @@ class ComposedCameraConfig:
     """Camera configuration for the composed camera server."""
 
     ego_view_camera: str | None = "oak"
-    """Camera type for ego view: oak, oak_mono, realsense, zed, usb, or None."""
+    """Camera type for ego view: oak, oak_mono, realsense, zed, zed_one, usb, or None."""
 
     ego_view_device_id: str | None = None
-    """Device ID for ego view camera (OAK MxID, RealSense serial, USB /dev/video index)."""
+    """Device ID for ego view camera (OAK MxID, RealSense serial, ZED serial, USB /dev/video index)."""
 
     head_camera: str | None = None
     """Camera type for head view."""
@@ -100,8 +101,29 @@ class ComposedCameraConfig:
     mjpeg_quality: int = 80
     """MJPEG quality 1-100 (only when use_mjpeg=True)."""
 
+    zed_resolution: str = "AUTO"
+    """ZED capture mode: AUTO (native per model), HD2K, HD1080, HD1200, HD720, SVGA, VGA."""
+
+    zed_rectified: bool = True
+    """Publish the rectified ZED image (lens distortion removed) or the raw sensor image."""
+
+    zed_use_depth: bool = False
+    """Also publish metric depth as a <mount>_depth stream (uint16 mm). Stereo ZED only."""
+
+    zed_depth_mode: str = "NEURAL"
+    """ZED depth mode when --zed-use-depth is set: NEURAL, NEURAL_PLUS, NEURAL_LIGHT."""
+
     def __post_init__(self):
         self.run_as_server = self.server
+        cameras = {
+            self.ego_view_camera,
+            self.head_camera,
+            self.left_wrist_camera,
+            self.right_wrist_camera,
+        }
+        # fail here rather than inside the per-camera retry loop, which would retry a config error
+        if "zed" in cameras and self.zed_use_depth and not self.zed_rectified:
+            raise ValueError("--zed-use-depth cannot be combined with --no-zed-rectified")
 
 
 class ComposedCameraSensor(Sensor, SensorServer):
@@ -377,6 +399,21 @@ class ComposedCameraSensor(Sensor, SensorServer):
 
             print(f"Initializing RealSense sensor for camera type: {camera_type}")
             return RealSenseSensor(mount_position=mount_position)
+
+        elif camera_type in ("zed", "zed_one"):
+            from gear_sonic.camera.drivers.zed import ZEDConfig, ZEDOneSensor, ZEDSensor
+
+            print(f"Initializing ZED sensor for camera type: {camera_type}")
+            zed_config = ZEDConfig(
+                resolution=self.config.zed_resolution,
+                fps=self.config.fps,
+                rectified=self.config.zed_rectified,
+                # mono cameras cannot do depth; a mixed rig must not fail on the global flag
+                use_depth=self.config.zed_use_depth and camera_type == "zed",
+                depth_mode=self.config.zed_depth_mode,
+            )
+            sensor_cls = ZEDOneSensor if camera_type == "zed_one" else ZEDSensor
+            return sensor_cls(mount_position=mount_position, device_id=device_id, config=zed_config)
 
         elif camera_type.endswith(".mp4"):
             from gear_sonic.camera.drivers.dummy import ReplayDummySensor
