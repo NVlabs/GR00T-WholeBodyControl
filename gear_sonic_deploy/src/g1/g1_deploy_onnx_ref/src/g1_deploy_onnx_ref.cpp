@@ -4170,8 +4170,11 @@ int main(int argc, char const* argv[]) {
     std::cout << "  --compliance-host <host>: host of the compliance command publisher (default: localhost)" << std::endl;
     std::cout << "  --compliance-port <port>: port of the compliance command publisher (default: 5565)" << std::endl;
     std::cout << "  --compliance-topic <topic>: ZMQ topic for compliance commands (default: compliance)" << std::endl;
-    std::cout << "  --compliance-profile <P0|P1|P2>: initial arm profile (default: P0 = SONIC default gains)" << std::endl;
-    std::cout << "  --compliance-slew <s>: ramp time between profiles (default: 0.3)" << std::endl;
+    std::cout << "  --compliance-profiles <file.json>: extra arm profiles (see ARM_COMPLIANCE.md)" << std::endl;
+    std::cout << "  --compliance-profile <NAME>: initial arm profile (default: RIGID = SONIC default gains)" << std::endl;
+    std::cout << "  --compliance-soften <s>: ramp time when a joint gets softer (default: 0.3)" << std::endl;
+    std::cout << "  --compliance-stiffen <s>: ramp time when a joint gets stiffer (default: 1.0)" << std::endl;
+    std::cout << "  --compliance-slew <s>: set both ramp times at once" << std::endl;
     std::cout << "  --compliance-estop-kp <value>: arm Kp during ESTOP (default: 0.0)" << std::endl;
     std::cout << "  --compliance-estop-kd <value>: arm Kd during ESTOP (default: 8.0)" << std::endl;
     std::cout << "  --compliance-estop-ramp <s>: ramp time into ESTOP (default: 0 = immediate)" << std::endl;
@@ -4466,12 +4469,12 @@ int main(int argc, char const* argv[]) {
       arm_compliance_config.topic = require_value(i, "--compliance-topic");
     } else if (std::string(argv[i]) == "--compliance-profile") {
       arm_compliance_config.initial_profile = require_value(i, "--compliance-profile");
-      if (!arm_compliance::FindProfile(arm_compliance_config.initial_profile)) {
-        std::cerr << "Error: --compliance-profile must be one of P0, P1, P2" << std::endl;
-        exit(1);
-      }
+    } else if (std::string(argv[i]) == "--compliance-profiles") {
+      arm_compliance_config.profiles_file = require_value(i, "--compliance-profiles");
     } else if (std::string(argv[i]) == "--compliance-port" ||
                std::string(argv[i]) == "--compliance-slew" ||
+               std::string(argv[i]) == "--compliance-soften" ||
+               std::string(argv[i]) == "--compliance-stiffen" ||
                std::string(argv[i]) == "--compliance-estop-kd" ||
                std::string(argv[i]) == "--compliance-estop-kp" ||
                std::string(argv[i]) == "--compliance-estop-ramp" ||
@@ -4483,7 +4486,12 @@ int main(int argc, char const* argv[]) {
         if (flag == "--compliance-port") {
           arm_compliance_config.port = std::stoi(value);
         } else if (flag == "--compliance-slew") {
-          arm_compliance_config.slew_s = std::stod(value);
+          arm_compliance_config.soften_s = std::stod(value);
+          arm_compliance_config.stiffen_s = arm_compliance_config.soften_s;
+        } else if (flag == "--compliance-soften") {
+          arm_compliance_config.soften_s = std::stod(value);
+        } else if (flag == "--compliance-stiffen") {
+          arm_compliance_config.stiffen_s = std::stod(value);
         } else if (flag == "--compliance-estop-kd") {
           arm_compliance_config.estop_kd = std::stof(value);
         } else if (flag == "--compliance-estop-kp") {

@@ -5,7 +5,7 @@
  * Connects to tcp://<host>:<port> (the publisher binds), subscribes to <topic>,
  * and expects single-frame messages of the form "<topic> <json>", e.g.
  *
- *     compliance {"profile": "P1"}
+ *     compliance {"profile": "HANDSHAKE"}
  *
  * which is what pyzmq's  socket.send_string(f"{topic} {json.dumps(cmd)}")  produces.
  * A two-frame message [topic, json] is accepted as well.
@@ -74,7 +74,7 @@ class Subscriber {
 
           Command cmd;
           std::string err;
-          if (!ParseCommand(payload, cmd, err)) {
+          if (!controller_.Parse(payload, cmd, err)) {
             std::cerr << "[ArmCompliance] Ignoring command: " << err << " | " << payload << std::endl;
             continue;
           }

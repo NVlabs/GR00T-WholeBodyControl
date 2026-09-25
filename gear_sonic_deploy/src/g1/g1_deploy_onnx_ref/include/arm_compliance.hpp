@@ -4,33 +4,48 @@
  *
  * The SONIC policy outputs joint position targets at 50 Hz, and the motor
  * drivers close the loop with  tau = Kp (q* - q) + Kd (dq* - dq).  The default
- * Kp/Kd come from `policy_parameters.hpp` (kps / kds) and are constant.
+ * Kp/Kd come from `policy_parameters.hpp` (kps / kds: Kp = J w^2, Kd = 2 zeta J w,
+ * zeta = 2) and are constant.
  *
- * This layer rescales Kp/Kd on the 14 arm motors (hardware indices 15-28:
- * shoulders, elbows, wrists) while the robot runs, without touching legs/waist.
+ * This layer rescales Kp/Kd on the 14 arm motors (hardware indices 15-28) while
+ * the robot runs, without touching legs/waist.
  *
- *   - Profiles: P0 rigid, P1 soft, P2 compliant (per-joint Kp/Kd scale factors),
- *     or arbitrary per-joint scales sent in a command.
- *   - Smooth transitions: gains are ramped linearly over `slew_s` (default 0.3 s).
- *   - ESTOP: arms ramp to Kp = estop_kp, Kd = estop_kd over `estop_ramp_s`
- *     (defaults 0 / 8 / 0 s = immediate; e.g. 0 / 0 / 0.5 s for a smooth "go limp"),
- *     and the state is LATCHED.  Only a command with "release_estop": true leaves it,
- *     ramping to the requested profile over `estop_release_s` (default 1.0 s).
- *   - Watchdog: if commands stop arriving, the last gains are HELD (never snapped
- *     back to rigid) and a warning is printed once.
+ * PROFILES
+ *   A profile gives, for each side (left/right) and joint group (shoulder = 3
+ *   joints, elbow, wrist = 3 joints), a stiffness scale alpha (Kp x alpha) and a
+ *   damping scale beta (Kd x beta).  beta can be given directly ("kd") or through
+ *   the damping ratio ("zeta"):  beta = sqrt(alpha) * zeta / 2   (nominal zeta = 2).
+ *   If neither is given, zeta = 2 (same damping ratio as SONIC's defaults).
  *
- * Commands arrive as JSON over ZMQ (see ArmComplianceSubscriber below):
+ *   Spec format (JSON; the same format is used for the built-ins and --compliance-profiles):
+ *     "HANDSHAKE": { "default": {"kp": 1.0},
+ *                    "elbow":   {"kp": 0.6, "kd": 0.83} }
+ *   Keys, later ones override earlier ones for the joints they cover:
+ *     "default", "shoulder" | "elbow" | "wrist",
+ *     "left" | "right", "left_shoulder" | ... | "right_wrist"
  *
- *   "compliance {\"profile\": \"P1\"}"
- *   "compliance {\"profile\": \"P2\", \"slew_s\": 0.5}"
- *   "compliance {\"kp_scale\": 0.4, \"kd_scale\": 0.6}"          (all 14 arm joints)
- *   "compliance {\"kp_scale\": [14 values], \"kd_scale\": [14 values]}"
- *   "compliance {\"estop\": true}"
- *   "compliance {\"release_estop\": true, \"profile\": \"P0\"}"
+ * TRANSITIONS (per joint)
+ *   - Minimum-jerk shape  s(r) = 10r^3 - 15r^4 + 6r^5  (no kink at start or end).
+ *   - Stiffening (Kp goes up) takes `stiffen_s` (default 1.0 s), softening
+ *     `soften_s` (default 0.3 s).  A command's "slew_s" overrides both.
+ *   - Damping stays on the high side: when Kd goes UP it finishes in the first
+ *     `lead_frac` (40%) of the ramp; when Kp goes DOWN it finishes in the first
+ *     40% while Kd follows over the full ramp.  So the joint is never briefly
+ *     stiff-but-underdamped.
  *
- * The publisher should resend its current command periodically (e.g. 10 Hz) so
- * the watchdog can tell a live link from a dead one.  Re-sending an identical
- * command does not restart the ramp.
+ * ESTOP
+ *   Arms ramp to Kp = estop_kp, Kd = estop_kd (absolute) over `estop_ramp_s`, and
+ *   the state is LATCHED.  Only {"release_estop": true, "profile": ...} leaves it,
+ *   ramping over `estop_release_s`.
+ *
+ * WATCHDOG
+ *   If commands stop arriving, the last gains are HELD (never snapped back to
+ *   rigid) and a warning is printed once.
+ *
+ * Commands arrive as JSON over ZMQ (see arm_compliance_subscriber.hpp):
+ *   {"profile": "HANDSHAKE"}            {"profile": "HUG", "slew_s": 0.5}
+ *   {"kp_scale": 0.4, "kd_scale": 0.6}  {"kp_scale": [14], "kd_scale": [14]}
+ *   {"estop": true}                     {"release_estop": true, "profile": "RIGID"}
  *
  * Thread safety: SetCommand() may be called from any thread (ZMQ thread);
  * Apply() is called from the 50 Hz control thread.
@@ -42,8 +57,10 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <map>
 #include <mutex>
 #include <optional>
 #include <sstream>
@@ -72,16 +89,20 @@ inline const std::array<const char*, kNumArmMotors>& ArmJointNames() {
   return names;
 }
 
-/// Build a 14-element array: `proximal` for shoulder+elbow, `wrist` for the 3 wrist joints.
-inline ArmArray SplitArm(float proximal, float wrist) {
-  ArmArray a{};
-  for (int side = 0; side < 2; ++side) {
-    const int o = side * 7;
-    for (int j = 0; j < 4; ++j) a[o + j] = proximal;  // shoulder pitch/roll/yaw, elbow
-    for (int j = 4; j < 7; ++j) a[o + j] = wrist;     // wrist roll/pitch/yaw
-  }
-  return a;
+/// Joint group of arm index j (0..13): "shoulder", "elbow" or "wrist".
+inline const char* GroupOf(int j) {
+  const int k = j % 7;
+  return k < 3 ? "shoulder" : (k == 3 ? "elbow" : "wrist");
 }
+/// Side of arm index j (0..13): "left" or "right".
+inline const char* SideOf(int j) { return j < 7 ? "left" : "right"; }
+
+/// Nominal damping ratio of SONIC's default gains (policy_parameters.hpp).
+constexpr double kNominalZeta = 2.0;
+
+/// Validation limits for scale factors.
+constexpr float kMaxKpScale = 1.5f;
+constexpr float kMaxKdScale = 3.0f;
 
 /// A named set of per-joint scale factors applied to the nominal kps/kds.
 struct Profile {
@@ -90,31 +111,155 @@ struct Profile {
   ArmArray kd_scale;
 };
 
-/**
- * Built-in profiles.  STARTING VALUES — tune them in simulation.
- *
- * Kd scale ~ sqrt(Kp scale) keeps the damping ratio of each joint roughly constant
- * (zeta = Kd / (2 sqrt(Kp J))).  Wrists keep more stiffness than shoulders/elbows
- * because uniform scaling made them sluggish in the first sim test.
- *
- * Note: tau_ff is 0 in this stack, so gravity is held only by Kp * (q* - q).
- * Low Kp on the shoulders/elbows means visible sag unless the policy compensates.
- */
-inline const std::vector<Profile>& BuiltinProfiles() {
-  static const std::vector<Profile> profiles = {
-      {"P0", SplitArm(1.00f, 1.00f), SplitArm(1.00f, 1.00f)},  // rigid (SONIC default gains)
-      {"P1", SplitArm(0.50f, 0.80f), SplitArm(0.71f, 0.90f)},  // soft
-      {"P2", SplitArm(0.25f, 0.60f), SplitArm(0.50f, 0.77f)},  // compliant
-  };
-  return profiles;
+/// Resolve one {"kp", "kd" | "zeta"} entry into (alpha, beta).
+inline bool ResolveGainEntry(const nlohmann::json& e, float& alpha, float& beta, std::string& err) {
+  if (!e.is_object()) { err = "gain entry must be an object"; return false; }
+  alpha = 1.0f;
+  if (e.contains("kp")) {
+    if (!e["kp"].is_number()) { err = "'kp' must be a number"; return false; }
+    alpha = e["kp"].get<float>();
+  }
+  if (!std::isfinite(alpha) || alpha < 0.0f || alpha > kMaxKpScale) {
+    err = "'kp' scale must be within [0, 1.5]";
+    return false;
+  }
+  if (e.contains("kd") && e.contains("zeta")) { err = "give either 'kd' or 'zeta', not both"; return false; }
+  if (e.contains("kd")) {
+    if (!e["kd"].is_number()) { err = "'kd' must be a number"; return false; }
+    beta = e["kd"].get<float>();
+  } else {
+    double zeta = kNominalZeta;
+    if (e.contains("zeta")) {
+      if (!e["zeta"].is_number()) { err = "'zeta' must be a number"; return false; }
+      zeta = e["zeta"].get<double>();
+    }
+    beta = static_cast<float>(std::sqrt(static_cast<double>(alpha)) * zeta / kNominalZeta);
+  }
+  if (!std::isfinite(beta) || beta < 0.0f || beta > kMaxKdScale) {
+    err = "'kd' scale must be within [0, 3]";
+    return false;
+  }
+  return true;
 }
 
-inline const Profile* FindProfile(const std::string& name) {
-  for (const auto& p : BuiltinProfiles()) {
-    if (p.name == name) return &p;
+/// Build a Profile from a spec object (see file header for the format).
+inline bool BuildProfile(const std::string& name, const nlohmann::json& spec, Profile& out, std::string& err) {
+  if (!spec.is_object()) { err = "profile '" + name + "' must be an object"; return false; }
+  static const std::vector<std::string> kKnownKeys = {
+      "default", "shoulder", "elbow", "wrist", "left", "right",
+      "left_shoulder", "left_elbow", "left_wrist", "right_shoulder", "right_elbow", "right_wrist",
+      "description"};
+  for (auto it = spec.begin(); it != spec.end(); ++it) {
+    if (std::find(kKnownKeys.begin(), kKnownKeys.end(), it.key()) == kKnownKeys.end()) {
+      err = "profile '" + name + "': unknown key '" + it.key() + "'";
+      return false;
+    }
   }
-  return nullptr;
+  out.name = name;
+  out.kp_scale.fill(1.0f);
+  out.kd_scale.fill(1.0f);
+  for (int j = 0; j < kNumArmMotors; ++j) {
+    const std::string group = GroupOf(j), side = SideOf(j);
+    // Most generic first; later keys override.
+    for (const std::string& key : {std::string("default"), group, side, side + "_" + group}) {
+      if (!spec.contains(key)) continue;
+      float a, b;
+      std::string e;
+      if (!ResolveGainEntry(spec[key], a, b, e)) {
+        err = "profile '" + name + "', '" + key + "': " + e;
+        return false;
+      }
+      out.kp_scale[j] = a;
+      out.kd_scale[j] = b;
+    }
+  }
+  return true;
 }
+
+/**
+ * Built-in profiles (Step 0 tests on the real robot with sonic_v1_1).
+ *   HANDSHAKE  soft elbows (0.6 / 0.83) — rated better than rigid.
+ *   HUG        all arm joints 0.6 / 0.83 — "maybe", to be confirmed.
+ *   FISTBUMP   rigid — only rigid felt natural (pilot, n = 2).
+ *   FISTBUMP_SOFTWRIST  right wrist 0.5 / 0.7 — candidate for the study.
+ *   SOFT       all arm joints 0.25 / 0.5 (zeta = 2).
+ */
+inline const char* BuiltinProfilesJson() {
+  return R"JSON({
+    "RIGID":              {"default": {"kp": 1.0, "kd": 1.0}},
+    "HANDSHAKE":          {"default": {"kp": 1.0, "kd": 1.0}, "elbow": {"kp": 0.6, "kd": 0.83}},
+    "HUG":                {"default": {"kp": 0.6, "kd": 0.83}},
+    "FISTBUMP":           {"default": {"kp": 1.0, "kd": 1.0}},
+    "FISTBUMP_SOFTWRIST": {"default": {"kp": 1.0, "kd": 1.0}, "right_wrist": {"kp": 0.5, "kd": 0.7}},
+    "SOFT":               {"default": {"kp": 0.25, "kd": 0.5}}
+  })JSON";
+}
+
+/// Profile names that are accepted as aliases (old names).
+inline std::string CanonicalProfileName(const std::string& name) {
+  if (name == "P0") return "RIGID";
+  return name;
+}
+
+/**
+ * @class ProfileRegistry
+ * @brief Built-in profiles plus optional ones from a JSON file (file entries override).
+ *        Immutable after construction, so it can be read from any thread.
+ */
+class ProfileRegistry {
+  public:
+    ProfileRegistry() {
+      std::string err;
+      if (!AddFromJson(nlohmann::json::parse(BuiltinProfilesJson()), "built-in", err)) {
+        std::cerr << "[ArmCompliance] BUG in built-in profiles: " << err << std::endl;
+      }
+    }
+
+    /// Load additional profiles.  File format: {"profiles": {NAME: spec, ...}} or {NAME: spec, ...}.
+    bool LoadFile(const std::string& path, std::string& err) {
+      std::ifstream f(path);
+      if (!f) { err = "cannot open " + path; return false; }
+      nlohmann::json j;
+      try {
+        f >> j;
+      } catch (const std::exception& e) {
+        err = path + ": invalid JSON: " + e.what();
+        return false;
+      }
+      if (j.contains("profiles")) j = j["profiles"];
+      return AddFromJson(j, path, err);
+    }
+
+    const Profile* Find(const std::string& name) const {
+      auto it = profiles_.find(CanonicalProfileName(name));
+      return it == profiles_.end() ? nullptr : &it->second;
+    }
+
+    std::vector<std::string> Names() const {
+      std::vector<std::string> n;
+      for (const auto& kv : profiles_) n.push_back(kv.first);
+      return n;
+    }
+
+  private:
+    bool AddFromJson(const nlohmann::json& j, const std::string& source, std::string& err) {
+      if (!j.is_object()) { err = source + ": profiles must be a JSON object"; return false; }
+      std::map<std::string, Profile> staged;
+      for (auto it = j.begin(); it != j.end(); ++it) {
+        if (it.key() == "ESTOP" || it.key() == "custom") {
+          err = source + ": '" + it.key() + "' is a reserved name";
+          return false;
+        }
+        Profile p;
+        if (!BuildProfile(it.key(), it.value(), p, err)) { err = source + ": " + err; return false; }
+        staged[it.key()] = p;
+      }
+      for (auto& kv : staged) profiles_[kv.first] = kv.second;
+      return true;
+    }
+
+    std::map<std::string, Profile> profiles_;
+};
 
 /// Static configuration (set once from the command line).
 struct Config {
@@ -122,8 +267,11 @@ struct Config {
   std::string host = "localhost";     ///< Host of the command publisher.
   int port = 5565;                    ///< Port of the command publisher.
   std::string topic = "compliance";   ///< ZMQ topic prefix.
-  std::string initial_profile = "P0"; ///< Profile at start-up.
-  double slew_s = 0.3;                ///< Default ramp time between profiles.
+  std::string profiles_file;          ///< Optional JSON file with extra profiles.
+  std::string initial_profile = "RIGID"; ///< Profile at start-up.
+  double soften_s = 0.3;              ///< Ramp time when a joint gets softer (Kp down).
+  double stiffen_s = 1.0;             ///< Ramp time when a joint gets stiffer (Kp up).
+  double lead_frac = 0.4;             ///< Fraction of the ramp for the "leading" gain (see header).
   double estop_ramp_s = 0.0;          ///< Ramp time when entering ESTOP (0 = immediate).
   double estop_release_s = 1.0;       ///< Ramp time when leaving ESTOP.
   float estop_kp = 0.0f;              ///< Arm Kp during ESTOP (absolute, Nm/rad).
@@ -146,7 +294,7 @@ struct Command {
 };
 
 /// Read either a scalar (applied to all 14 joints) or a 14-element array.
-inline bool ReadScale(const nlohmann::json& j, ArmArray& out, std::string& err) {
+inline bool ReadScale(const nlohmann::json& j, ArmArray& out, float max_value, std::string& err) {
   if (j.is_number()) {
     out.fill(j.get<float>());
   } else if (j.is_array() && j.size() == kNumArmMotors) {
@@ -159,8 +307,10 @@ inline bool ReadScale(const nlohmann::json& j, ArmArray& out, std::string& err) 
     return false;
   }
   for (float v : out) {
-    if (!std::isfinite(v) || v < 0.0f || v > 1.5f) {
-      err = "scale values must be finite and within [0, 1.5]";
+    if (!std::isfinite(v) || v < 0.0f || v > max_value) {
+      std::ostringstream os;
+      os << "scale values must be finite and within [0, " << max_value << "]";
+      err = os.str();
       return false;
     }
   }
@@ -171,7 +321,7 @@ inline bool ReadScale(const nlohmann::json& j, ArmArray& out, std::string& err) 
  * Parse a JSON command.  Returns false (and fills `err`) on malformed input;
  * malformed commands are ignored by the controller.
  */
-inline bool ParseCommand(const std::string& text, Command& cmd, std::string& err) {
+inline bool ParseCommand(const std::string& text, const ProfileRegistry& registry, Command& cmd, std::string& err) {
   nlohmann::json j;
   try {
     j = nlohmann::json::parse(text);
@@ -199,7 +349,7 @@ inline bool ParseCommand(const std::string& text, Command& cmd, std::string& err
   }
 
   if (!profile.empty()) {
-    const Profile* p = FindProfile(profile);
+    const Profile* p = registry.Find(profile);
     if (!p) { err = "unknown profile '" + profile + "'"; return false; }
     cmd.name = p->name;
     cmd.kp_scale = p->kp_scale;
@@ -212,14 +362,20 @@ inline bool ParseCommand(const std::string& text, Command& cmd, std::string& err
       err = "custom command needs both kp_scale and kd_scale";
       return false;
     }
-    if (!ReadScale(j["kp_scale"], cmd.kp_scale, err)) return false;
-    if (!ReadScale(j["kd_scale"], cmd.kd_scale, err)) return false;
+    if (!ReadScale(j["kp_scale"], cmd.kp_scale, kMaxKpScale, err)) return false;
+    if (!ReadScale(j["kd_scale"], cmd.kd_scale, kMaxKdScale, err)) return false;
     cmd.name = "custom";
     return true;
   }
 
   err = "command needs 'profile', 'estop', or 'kp_scale'+'kd_scale'";
   return false;
+}
+
+/// Minimum-jerk time scaling: s(0)=0, s(1)=1, zero 1st and 2nd derivative at both ends.
+inline double MinJerk(double r) {
+  r = std::clamp(r, 0.0, 1.0);
+  return r * r * r * (10.0 + r * (-15.0 + 6.0 * r));
 }
 
 /**
@@ -229,8 +385,21 @@ inline bool ParseCommand(const std::string& text, Command& cmd, std::string& err
 class Controller {
   public:
     explicit Controller(const Config& cfg = Config{}) : cfg_(cfg) {
-      const Profile* p = FindProfile(cfg_.initial_profile);
-      if (!p) p = FindProfile("P0");
+      if (!cfg_.profiles_file.empty()) {
+        std::string err;
+        if (registry_.LoadFile(cfg_.profiles_file, err)) {
+          std::cout << "[ArmCompliance] Loaded profiles from " << cfg_.profiles_file << std::endl;
+        } else {
+          std::cerr << "[ArmCompliance] ERROR loading profiles: " << err
+                    << " — using built-in profiles only." << std::endl;
+        }
+      }
+      const Profile* p = registry_.Find(cfg_.initial_profile);
+      if (!p) {
+        std::cerr << "[ArmCompliance] Unknown initial profile '" << cfg_.initial_profile
+                  << "', using RIGID." << std::endl;
+        p = registry_.Find("RIGID");
+      }
       target_.name = p->name;
       target_.kp_scale = p->kp_scale;
       target_.kd_scale = p->kd_scale;
@@ -238,7 +407,13 @@ class Controller {
     }
 
     const Config& config() const { return cfg_; }
+    const ProfileRegistry& profiles() const { return registry_; }
     bool enabled() const { return cfg_.enabled; }
+
+    /// Parse a JSON command against this controller's profiles.
+    bool Parse(const std::string& text, Command& cmd, std::string& err) const {
+      return ParseCommand(text, registry_, cmd, err);
+    }
 
     /**
      * @brief Submit a new command (thread-safe).
@@ -319,32 +494,24 @@ class Controller {
         prev_was_estop_ = false;
         initialized_ = true;
       }
+
       if (version != applied_version_) {
-        // New target: start a ramp from wherever we are now.
         applied_version_ = version;
-        start_kp_ = current_kp_;
-        start_kd_ = current_kd_;
-        ramp_elapsed_ = 0.0;
-        if (target.estop) {
-          ramp_duration_ = target.slew_s.value_or(cfg_.estop_ramp_s);
-        } else if (prev_was_estop_) {
-          ramp_duration_ = cfg_.estop_release_s;
-        } else {
-          ramp_duration_ = target.slew_s.value_or(cfg_.slew_s);
-        }
-        ramping_ = true;
-        LogTransition(target, ramp_duration_);
+        StartTransition(target, target_kp, target_kd);
       }
       prev_was_estop_ = target.estop;
 
       if (ramping_) {
         ramp_elapsed_ += dt;
-        const double r = (ramp_duration_ <= 0.0) ? 1.0 : std::clamp(ramp_elapsed_ / ramp_duration_, 0.0, 1.0);
+        bool done = true;
         for (int j = 0; j < kNumArmMotors; ++j) {
-          current_kp_[j] = static_cast<float>(start_kp_[j] + r * (target_kp[j] - start_kp_[j]));
-          current_kd_[j] = static_cast<float>(start_kd_[j] + r * (target_kd[j] - start_kd_[j]));
+          const double sp = dur_kp_[j] <= 0.0 ? 1.0 : MinJerk(ramp_elapsed_ / dur_kp_[j]);
+          const double sd = dur_kd_[j] <= 0.0 ? 1.0 : MinJerk(ramp_elapsed_ / dur_kd_[j]);
+          current_kp_[j] = static_cast<float>(start_kp_[j] + sp * (target_kp[j] - start_kp_[j]));
+          current_kd_[j] = static_cast<float>(start_kd_[j] + sd * (target_kd[j] - start_kd_[j]));
+          if (sp < 1.0 || sd < 1.0) done = false;
         }
-        if (r >= 1.0) ramping_ = false;
+        if (done) ramping_ = false;
       } else {
         current_kp_ = target_kp;
         current_kd_ = target_kd;
@@ -366,7 +533,7 @@ class Controller {
       }
     }
 
-    /// Name of the current target ("P0", "P1", "P2", "custom", "ESTOP").
+    /// Name of the current target ("RIGID", "HUG", ..., "custom", "ESTOP").
     std::string CurrentTargetName() const {
       std::lock_guard<std::mutex> lock(mutex_);
       return target_.name;
@@ -377,11 +544,46 @@ class Controller {
       return estop_latched_;
     }
 
-    /// Currently applied arm gains (valid after the first Apply()).
+    /// Applied arm gains — control-thread use only (valid after the first Apply()).
     ArmArray CurrentKp() const { return current_kp_; }
     ArmArray CurrentKd() const { return current_kd_; }
 
   private:
+    /// Set per-joint ramp durations for a new target (control thread).
+    void StartTransition(const Command& target, const ArmArray& target_kp, const ArmArray& target_kd) {
+      start_kp_ = current_kp_;
+      start_kd_ = current_kd_;
+      ramp_elapsed_ = 0.0;
+      const double lead = std::clamp(cfg_.lead_frac, 0.0, 1.0);
+      double longest = 0.0;
+      for (int j = 0; j < kNumArmMotors; ++j) {
+        const bool kp_up = target_kp[j] > start_kp_[j];
+        const bool kd_up = target_kd[j] > start_kd_[j];
+        double T;
+        if (target.estop) {
+          T = target.slew_s.value_or(cfg_.estop_ramp_s);
+        } else if (prev_was_estop_) {
+          T = cfg_.estop_release_s;
+        } else if (target.slew_s) {
+          T = *target.slew_s;
+        } else {
+          T = kp_up ? cfg_.stiffen_s : cfg_.soften_s;
+        }
+        if (target.estop || prev_was_estop_) {
+          // Entering / leaving ESTOP: both gains over the full ramp.
+          dur_kp_[j] = T;
+          dur_kd_[j] = T;
+        } else {
+          // Keep damping on the high side: Kd leads when rising, Kp leads when falling.
+          dur_kp_[j] = kp_up ? T : T * lead;
+          dur_kd_[j] = kd_up ? T * lead : T;
+        }
+        longest = std::max(longest, T);
+      }
+      ramping_ = true;
+      LogTransition(target, longest);
+    }
+
     void LogTransition(const Command& t, double ramp) const {
       std::ostringstream os;
       os << std::fixed << std::setprecision(2);
@@ -389,14 +591,21 @@ class Controller {
       if (t.estop) {
         os << " (arms Kp=" << cfg_.estop_kp << " Kd=" << cfg_.estop_kd << ", ramp " << ramp << " s, latched)";
       } else {
-        os << " (Kp x" << t.kp_scale[0] << "/" << t.kp_scale[4]
-           << ", Kd x" << t.kd_scale[0] << "/" << t.kd_scale[4]
-           << " shoulder-elbow/wrist, ramp " << ramp << " s)";
+        // Kp/Kd scale per side: shoulder, elbow, wrist (first joint of each group)
+        auto side = [&](int o) {
+          std::ostringstream s;
+          s << std::fixed << std::setprecision(2) << "S " << t.kp_scale[o] << "/" << t.kd_scale[o]
+            << " E " << t.kp_scale[o + 3] << "/" << t.kd_scale[o + 3]
+            << " W " << t.kp_scale[o + 4] << "/" << t.kd_scale[o + 4];
+          return s.str();
+        };
+        os << " (Kp/Kd scale  L[" << side(0) << "]  R[" << side(7) << "], ramp " << ramp << " s)";
       }
       std::cout << os.str() << std::endl;
     }
 
     Config cfg_;
+    ProfileRegistry registry_;
 
     mutable std::mutex mutex_;
     Command target_;
@@ -413,7 +622,7 @@ class Controller {
     bool watchdog_warned_ = false;
     uint64_t applied_version_ = 0;
     double ramp_elapsed_ = 0.0;
-    double ramp_duration_ = 0.0;
+    std::array<double, kNumArmMotors> dur_kp_{}, dur_kd_{};
     ArmArray start_kp_{}, start_kd_{};
     ArmArray current_kp_{}, current_kd_{};
 };

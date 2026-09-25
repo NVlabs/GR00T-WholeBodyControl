@@ -1,0 +1,131 @@
+{
+  "_comment": [
+    "2x2x2 study sets: each joint group (shoulder, elbow, wrist) soft or rigid, same on both arms.",
+    "Name: S/E/W + r (rigid) or s (soft). Sr_Er_Wr = all rigid, Ss_Es_Ws = all soft.",
+    "Soft level = Step 0 value: Kp x0.6, Kd x0.83 (damping ratio ~2.1). Rigid = SONIC default gains.",
+    "Use: ./deploy.sh --arm-compliance --compliance-profiles arm_compliance/study_8sets.json ...",
+    "Each gain entry: {kp: alpha} plus either {kd: beta} or {zeta: damping ratio}; beta = sqrt(alpha)*zeta/2."
+  ],
+  "profiles": {
+    "Sr_Er_Wr": {
+      "description": "shoulder rigid, elbow rigid, wrist rigid (both arms)",
+      "shoulder": {
+        "kp": 1.0,
+        "kd": 1.0
+      },
+      "elbow": {
+        "kp": 1.0,
+        "kd": 1.0
+      },
+      "wrist": {
+        "kp": 1.0,
+        "kd": 1.0
+      }
+    },
+    "Sr_Er_Ws": {
+      "description": "shoulder rigid, elbow rigid, wrist soft (both arms)",
+      "shoulder": {
+        "kp": 1.0,
+        "kd": 1.0
+      },
+      "elbow": {
+        "kp": 1.0,
+        "kd": 1.0
+      },
+      "wrist": {
+        "kp": 0.6,
+        "kd": 0.83
+      }
+    },
+    "Sr_Es_Wr": {
+      "description": "shoulder rigid, elbow soft, wrist rigid (both arms)",
+      "shoulder": {
+        "kp": 1.0,
+        "kd": 1.0
+      },
+      "elbow": {
+        "kp": 0.6,
+        "kd": 0.83
+      },
+      "wrist": {
+        "kp": 1.0,
+        "kd": 1.0
+      }
+    },
+    "Sr_Es_Ws": {
+      "description": "shoulder rigid, elbow soft, wrist soft (both arms)",
+      "shoulder": {
+        "kp": 1.0,
+        "kd": 1.0
+      },
+      "elbow": {
+        "kp": 0.6,
+        "kd": 0.83
+      },
+      "wrist": {
+        "kp": 0.6,
+        "kd": 0.83
+      }
+    },
+    "Ss_Er_Wr": {
+      "description": "shoulder soft, elbow rigid, wrist rigid (both arms)",
+      "shoulder": {
+        "kp": 0.6,
+        "kd": 0.83
+      },
+      "elbow": {
+        "kp": 1.0,
+        "kd": 1.0
+      },
+      "wrist": {
+        "kp": 1.0,
+        "kd": 1.0
+      }
+    },
+    "Ss_Er_Ws": {
+      "description": "shoulder soft, elbow rigid, wrist soft (both arms)",
+      "shoulder": {
+        "kp": 0.6,
+        "kd": 0.83
+      },
+      "elbow": {
+        "kp": 1.0,
+        "kd": 1.0
+      },
+      "wrist": {
+        "kp": 0.6,
+        "kd": 0.83
+      }
+    },
+    "Ss_Es_Wr": {
+      "description": "shoulder soft, elbow soft, wrist rigid (both arms)",
+      "shoulder": {
+        "kp": 0.6,
+        "kd": 0.83
+      },
+      "elbow": {
+        "kp": 0.6,
+        "kd": 0.83
+      },
+      "wrist": {
+        "kp": 1.0,
+        "kd": 1.0
+      }
+    },
+    "Ss_Es_Ws": {
+      "description": "shoulder soft, elbow soft, wrist soft (both arms)",
+      "shoulder": {
+        "kp": 0.6,
+        "kd": 0.83
+      },
+      "elbow": {
+        "kp": 0.6,
+        "kd": 0.83
+      },
+      "wrist": {
+        "kp": 0.6,
+        "kd": 0.83
+      }
+    }
+  }
+}

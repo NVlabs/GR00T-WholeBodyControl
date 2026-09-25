@@ -10,32 +10,63 @@ exactly as before.
 
 ## Profiles
 
-Scale factors on SONIC's default gains (`policy_parameters.hpp`: Kp = Jω²,
-Kd = 2ζJω). Shoulder/elbow and wrist are scaled separately.
+A profile scales SONIC's default gains (`policy_parameters.hpp`: Kp = Jω²,
+Kd = 2ζJω, ζ = 2) **per side and per joint group**: shoulder (3 joints),
+elbow, wrist (3 joints). α = Kp scale, β = Kd scale. β can also be given as a
+damping ratio ζ: **β = √α · ζ / 2** (ζ = 2 keeps SONIC's damping ratio; that is
+the default when only α is given).
 
-| Profile | Kp scale (shoulder-elbow / wrist) | Kd scale (shoulder-elbow / wrist) | Use |
-|---|---|---|---|
-| **P0** rigid | 1.00 / 1.00 | 1.00 / 1.00 | SONIC default |
-| **P1** soft | 0.50 / 0.80 | 0.71 / 0.90 | handshake, fist bump |
-| **P2** compliant | 0.25 / 0.60 | 0.50 / 0.77 | hug |
-| **ESTOP** | Kp = 0 (`--compliance-estop-kp`) | Kd = 8 (`--compliance-estop-kd`) | arms go limp, legs keep balancing |
+Built-in profiles (Step 0 tests on the real robot, `sonic_v1_1`):
 
-These are **starting values to tune in sim** (edit `BuiltinProfiles()` in
-`include/arm_compliance.hpp`, or send custom scales, see below). Kd is scaled
-by roughly √(Kp scale) to keep each joint's damping ratio about the same.
+| Profile | Shoulder α/β | Elbow α/β | Wrist α/β | Step 0 note |
+|---|---|---|---|---|
+| **RIGID** | 1 / 1 | 1 / 1 | 1 / 1 | SONIC default (alias `P0`) |
+| **HANDSHAKE** | 1 / 1 | **0.6 / 0.83** | 1 / 1 | soft elbows felt better |
+| **HUG** | 0.6 / 0.83 | 0.6 / 0.83 | 0.6 / 0.83 | "maybe", to confirm |
+| **FISTBUMP** | 1 / 1 | 1 / 1 | 1 / 1 | only rigid felt natural (pilot, n = 2) |
+| **FISTBUMP_SOFTWRIST** | 1 / 1 | 1 / 1 | right only: 0.5 / 0.7 | candidate for the study |
+| **SOFT** | 0.25 / 0.5 | 0.25 / 0.5 | 0.25 / 0.5 | uniform soft (ζ = 2) |
+| **ESTOP** | Kp = `--compliance-estop-kp`, Kd = `--compliance-estop-kd` (absolute) | | | latched |
 
-Behaviour:
-- Profile changes ramp linearly over 0.3 s (`--compliance-slew`, or `"slew_s"` per command).
-- ESTOP applies on the next control tick by default, or ramps over
-  `--compliance-estop-ramp` seconds (e.g. `--compliance-estop-kd 0 --compliance-estop-ramp 0.5`
-  for a smooth go-limp). It is **latched**; only `{"release_estop": true, "profile": ...}`
-  leaves it, ramping over `--compliance-estop-release` (1 s).
+### Your own profiles (JSON file, no rebuild)
+
+```json
+{"profiles": {
+  "MY_HANDSHAKE": {"default": {"kp": 1.0},
+                   "elbow":   {"kp": 0.5, "zeta": 2.0},
+                   "right_wrist": {"kp": 0.7, "kd": 0.8}}
+}}
+```
+
+Keys (later ones override earlier ones): `default`, `shoulder` / `elbow` /
+`wrist`, `left` / `right`, `left_shoulder` … `right_wrist`. Each entry: `kp`
+plus either `kd` or `zeta`. File profiles are added to the built-ins (same name
+= override). Load with `--compliance-profiles FILE` in deploy **and**
+`--profiles FILE` in the keyboard tool.
+
+`arm_compliance/study_8sets.json` (in `gear_sonic_deploy/`) has the 2×2×2 study
+sets: shoulder / elbow / wrist each soft (0.6 / 0.83) or rigid, both arms,
+named `S?_E?_W?` with `r` = rigid, `s` = soft (e.g. `Sr_Es_Ws` = soft elbow and
+wrist).
+
+### Transitions
+
+- **Minimum-jerk** ramp shape (10r³ − 15r⁴ + 6r⁵): no kink at start or end.
+- A joint that gets **stiffer** ramps over `--compliance-stiffen` (1.0 s), one
+  that gets **softer** over `--compliance-soften` (0.3 s, fast for safety).
+  `--compliance-slew S` sets both; `"slew_s"` in a command overrides both.
+- Damping stays on the high side: when stiffening, **Kd finishes first** (in the
+  first 40% of the ramp) and Kp follows; when softening, **Kp drops first** and
+  Kd follows over the full ramp. The joint is never briefly stiff-but-underdamped.
+- ESTOP ramps in over `--compliance-estop-ramp` (0 = immediate) and is
+  **latched**; only `{"release_estop": true, "profile": ...}` leaves it, ramping
+  over `--compliance-estop-release` (1 s).
 - If commands stop arriving, the last gains are **held** (never snapped back to
   rigid) and a warning is printed.
 - Legs and waist are never touched.
 
 Known limitation: `tau_ff = 0` in this stack, so low shoulder/elbow Kp means the
-arms sag under gravity. A gravity-compensation feed-forward is the next step.
+arms sag under gravity.
 
 ## Run it (sim)
 
@@ -52,6 +83,8 @@ python gear_sonic/scripts/run_sim_loop.py
 cd gear_sonic_deploy
 source scripts/setup_env.sh
 ./deploy.sh --input-type zmq_manager --arm-compliance sim     # or `./deploy.sh --arm-compliance sim` for keyboard
+# study sets:  add  --compliance-profiles arm_compliance/study_8sets.json
+# sonic_v1_1:  add  --cp policy/sonic_v1_1/model --obs-config policy/sonic_v1_1/observation_config.yaml
 
 # Terminal 3 — PICO streamer (teleop), as usual
 source .venv_teleop/bin/activate
@@ -59,8 +92,8 @@ python gear_sonic/scripts/pico_manager_thread_server.py --manager
 
 # Terminal 4 — switch profiles from the keyboard
 source .venv_teleop/bin/activate
-python gear_sonic/scripts/arm_compliance_cli.py
-#   0/1/2 = P0/P1/P2, e or SPACE = ESTOP, r = release ESTOP -> P0, q = quit
+python gear_sonic/scripts/arm_compliance_cli.py      # add --profiles gear_sonic_deploy/arm_compliance/study_8sets.json for the study sets
+#   prints a key menu: 0 RIGID, 1 HANDSHAKE, 2 HUG, ...; e or SPACE = ESTOP, r = release ESTOP -> RIGID, q = quit
 ```
 
 > **PC with ROS 2 installed?** `setup_env.sh` sources ROS, whose CycloneDDS
@@ -78,6 +111,18 @@ source .venv_teleop/bin/activate
 python -m gear_sonic.g1_upper_body_telemetry.inspect_upper_body_state --network-interface lo --print-hz 2
 ```
 
+### Using `sonic_v1_1` (the model used in the Step 0 robot tests)
+
+This fork's deploy code supports all `sonic_v1_1` observation terms; only the
+model files are missing. Fetch them with NVIDIA's current downloader (from the
+repo root, teleop venv active):
+
+```bash
+git fetch nvlabs main   # remote: https://github.com/NVlabs/GR00T-WholeBodyControl.git
+git show nvlabs/main:download_from_hf.py > /tmp/download_from_hf_nvlabs.py
+python /tmp/download_from_hf_nvlabs.py --sonic-v1-1
+```
+
 ## Command format (for the VLA / agent)
 
 ZMQ PUB (the sender binds, default port **5565**), topic `compliance`,
@@ -85,16 +130,17 @@ single-frame string `"compliance <json>"`. Re-send the current command at
 ~10 Hz as a heartbeat.
 
 ```json
-{"profile": "P1"}
-{"profile": "P2", "slew_s": 0.5}
+{"profile": "HANDSHAKE"}
+{"profile": "HUG", "slew_s": 0.5}
 {"kp_scale": 0.4, "kd_scale": 0.6}
 {"kp_scale": [14 values], "kd_scale": [14 values]}
 {"estop": true}
-{"release_estop": true, "profile": "P0"}
+{"release_estop": true, "profile": "RIGID"}
 ```
 
 14-value arrays are ordered L shoulder pitch/roll/yaw, L elbow, L wrist
-roll/pitch/yaw, then the same for the right arm. Scales must be in [0, 1.5].
+roll/pitch/yaw, then the same for the right arm. Kp scales must be in [0, 1.5],
+Kd scales in [0, 3].
 
 Python example:
 
@@ -102,7 +148,7 @@ Python example:
 import json, zmq
 sock = zmq.Context().socket(zmq.PUB)
 sock.bind("tcp://*:5565")
-sock.send_string("compliance " + json.dumps({"profile": "P2"}))
+sock.send_string("compliance " + json.dumps({"profile": "HUG"}))
 ```
 
 ## Flags (`g1_deploy_onnx_ref`)
@@ -113,8 +159,11 @@ sock.send_string("compliance " + json.dumps({"profile": "P2"}))
 | `--compliance-host` | localhost | host of the command publisher |
 | `--compliance-port` | 5565 | its port |
 | `--compliance-topic` | compliance | ZMQ topic |
-| `--compliance-profile` | P0 | profile at start-up |
-| `--compliance-slew` | 0.3 | default ramp time (s) |
+| `--compliance-profiles` | – | JSON file with extra profiles |
+| `--compliance-profile` | RIGID | profile at start-up |
+| `--compliance-soften` | 0.3 | ramp time when a joint gets softer (s) |
+| `--compliance-stiffen` | 1.0 | ramp time when a joint gets stiffer (s) |
+| `--compliance-slew` | – | sets both ramp times |
 | `--compliance-estop-kp` | 0.0 | arm Kp during ESTOP |
 | `--compliance-estop-kd` | 8.0 | arm Kd during ESTOP |
 | `--compliance-estop-ramp` | 0.0 | ramp time into ESTOP (0 = immediate) |
@@ -131,3 +180,4 @@ except `--compliance-topic` and `--compliance-watchdog`.
 - `gear_sonic_deploy/src/g1/g1_deploy_onnx_ref/src/g1_deploy_onnx_ref.cpp` — CLI flags, wiring, `Apply()` in `CreatePolicyCommand()`
 - `gear_sonic_deploy/deploy.sh` — flag pass-through
 - `gear_sonic/scripts/arm_compliance_cli.py` — keyboard sender
+- `gear_sonic_deploy/arm_compliance/study_8sets.json` — 2×2×2 study profiles

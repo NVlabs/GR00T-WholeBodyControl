@@ -214,8 +214,10 @@ show_usage() {
     echo "  --arm-compliance        Enable runtime arm Kp/Kd profiles (P0/P1/P2/ESTOP)"
     echo "  --compliance-host HOST  Host of the compliance command publisher (default: localhost)"
     echo "  --compliance-port PORT  Port of the compliance command publisher (default: 5565)"
-    echo "  --compliance-profile P  Initial arm profile P0|P1|P2 (default: P0)"
-    echo "  --compliance-slew S, --compliance-estop-kp V, --compliance-estop-kd V,"
+    echo "  --compliance-profile N  Initial arm profile, e.g. RIGID, HANDSHAKE, HUG (default: RIGID)"
+    echo "  --compliance-profiles F Extra profiles from a JSON file"
+    echo "  --compliance-soften S, --compliance-stiffen S, --compliance-slew S,"
+    echo "  --compliance-estop-kp V, --compliance-estop-kd V,"
     echo "  --compliance-estop-ramp S, --compliance-estop-release S   (see ARM_COMPLIANCE.md)"
     echo ""
     echo "Interface modes:"
@@ -326,7 +328,7 @@ while [[ $# -gt 0 ]]; do
             COMPLIANCE_ARGS="$COMPLIANCE_ARGS --arm-compliance"
             shift
             ;;
-        --compliance-host|--compliance-port|--compliance-profile|--compliance-slew|--compliance-estop-kp|--compliance-estop-kd|--compliance-estop-ramp|--compliance-estop-release)
+        --compliance-host|--compliance-port|--compliance-profile|--compliance-profiles|--compliance-slew|--compliance-soften|--compliance-stiffen|--compliance-estop-kp|--compliance-estop-kd|--compliance-estop-ramp|--compliance-estop-release)
             if [[ -z "$2" ]]; then
                 echo -e "${RED}Error: $1 requires a value${NC}" >&2
                 exit 1
