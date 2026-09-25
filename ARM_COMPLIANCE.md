@@ -39,25 +39,42 @@ arms sag under gravity. A gravity-compensation feed-forward is the next step.
 
 ## Run it (sim)
 
+All commands from the repo root. Python terminals use the repo's teleop venv
+(`bash install_scripts/install_pico.sh` creates it); the deploy terminal uses
+`scripts/setup_env.sh`.
+
 ```bash
 # Terminal 1 — simulator
+source .venv_teleop/bin/activate
 python gear_sonic/scripts/run_sim_loop.py
 
 # Terminal 2 — deploy with the layer enabled
 cd gear_sonic_deploy
-./deploy.sh --input-type zmq_manager --arm-compliance sim     # or plain `./deploy.sh --arm-compliance sim` for keyboard
+source scripts/setup_env.sh
+./deploy.sh --input-type zmq_manager --arm-compliance sim     # or `./deploy.sh --arm-compliance sim` for keyboard
 
 # Terminal 3 — PICO streamer (teleop), as usual
+source .venv_teleop/bin/activate
 python gear_sonic/scripts/pico_manager_thread_server.py --manager
 
 # Terminal 4 — switch profiles from the keyboard
+source .venv_teleop/bin/activate
 python gear_sonic/scripts/arm_compliance_cli.py
 #   0/1/2 = P0/P1/P2, e or SPACE = ESTOP, r = release ESTOP -> P0, q = quit
 ```
 
+> **PC with ROS 2 installed?** `setup_env.sh` sources ROS, whose CycloneDDS
+> clashes with the Unitree SDK's. Symptoms: `create domain error` in the
+> simulator, `free(): invalid pointer` in deploy. Fix: run the Python terminals
+> in a shell without ROS (`unset LD_LIBRARY_PATH PYTHONPATH` before activating
+> the venv), and in the deploy terminal put the Unitree DDS libs first:
+> `export LD_LIBRARY_PATH=$PWD/thirdparty/unitree_sdk2/thirdparty/lib/x86_64:$LD_LIBRARY_PATH`
+> (after `source scripts/setup_env.sh`).
+
 Check the gains actually sent to the motors (reads `rt/lowcmd` over DDS):
 
 ```bash
+source .venv_teleop/bin/activate
 python -m gear_sonic.g1_upper_body_telemetry.inspect_upper_body_state --network-interface lo --print-hz 2
 ```
 
