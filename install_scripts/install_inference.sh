@@ -6,6 +6,9 @@
 # Installs gear_sonic[inference] which pulls in the Isaac-GR00T library,
 # PyZMQ, msgpack, Pinocchio, and other inference dependencies.
 #
+# Isaac-GR00T currently requires Python >=3.12,<3.13, so this venv is 3.12.
+# Other install_* scripts stay on 3.10 because they do not install GR00T.
+#
 # Usage:  bash install_scripts/install_inference.sh   (run from repo root)
 
 set -euo pipefail
@@ -13,11 +16,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# ── 0. System dependencies ────────────────────────────────────────────────────
+# ── 0. System dependencies ────────────────────────────────────────────
 ARCH="$(uname -m)"
 echo "[OK] Architecture: $ARCH"
 
-# ── 1. Ensure uv is installed and available ──────────────────────────────────
+# ── 1. Ensure uv is installed and available ─────────────────────────────
 if ! command -v uv &>/dev/null; then
     echo "[INFO] uv not found – installing via official installer …"
     curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -40,19 +43,19 @@ if ! command -v uv &>/dev/null; then
 fi
 echo "[OK] uv $(uv --version)"
 
-# ── 2. Install a uv-managed Python 3.10 (includes dev headers / Python.h) ────
-echo "[INFO] Installing uv-managed Python 3.10 (includes development headers) …"
-uv python install 3.10
-MANAGED_PY="$(uv python find --no-project 3.10)"
+# ── 2. Install a uv-managed Python 3.12 (Isaac-GR00T requires >=3.12,<3.13) ──
+echo "[INFO] Installing uv-managed Python 3.12 (Isaac-GR00T requires >=3.12,<3.13) …"
+uv python install 3.12
+MANAGED_PY="$(uv python find --no-project 3.12)"
 echo "[OK] Using Python: $MANAGED_PY"
 
-# ── 3. Clean previous venv (if any) ──────────────────────────────────────────
+# ── 3. Clean previous venv (if any) ─────────────────────────────────────
 cd "$REPO_ROOT"
 echo "[INFO] Removing old .venv_inference (if present) …"
 rm -rf .venv_inference
 
-# ── 4. Create venv & install inference extra ─────────────────────────────────
-echo "[INFO] Creating .venv_inference with uv-managed Python 3.10 …"
+# ── 4. Create venv & install inference extra ────────────────────────────
+echo "[INFO] Creating .venv_inference with uv-managed Python 3.12 …"
 uv venv .venv_inference --python "$MANAGED_PY" --prompt gear_sonic_inference
 # shellcheck disable=SC1091
 source .venv_inference/bin/activate
