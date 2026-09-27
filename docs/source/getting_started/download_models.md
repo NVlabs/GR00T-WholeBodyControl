@@ -269,6 +269,7 @@ If you prefer the Hugging Face CLI:
 
 ```bash
 pip install huggingface_hub[cli]
+export PATH="$HOME/.local/bin:$PATH"
 
 # Policy only
 hf download nvidia/GEAR-SONIC \
