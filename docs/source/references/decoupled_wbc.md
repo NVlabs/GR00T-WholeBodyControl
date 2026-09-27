@@ -66,11 +66,19 @@ Once inside the container, the control policies can be launched directly.
 python decoupled_wbc/control/main/teleop/run_g1_control_loop.py
 ```
 
-- Real robot: Ensure the host machine network is configured per the [G1 SDK Development Guide](https://support.unitree.com/home/en/G1_developer) and set a static IP at `192.168.123.222`, subnet mask `255.255.255.0`:
+- Real robot: The G1 communicates exclusively over a **dedicated wired ethernet cable** between the host and the robot (DDS motor control at 500 Hz + camera stream — WiFi cannot substitute). Connect the cable, then assign the required static IP (`192.168.123.222`, subnet mask `255.255.255.0`) to that interface:
 
-```bash
-python decoupled_wbc/control/main/teleop/run_g1_control_loop.py --interface real
-```
+  ```bash
+  python gear_sonic_deploy/scripts/setup_network.py
+  # or, if you know the interface name:
+  python gear_sonic_deploy/scripts/setup_network.py -i <INTERFACE>
+  ```
+
+  The script identifies wired ethernet interfaces, configures the static IP via NetworkManager, and pings the robot to verify connectivity. The host's WiFi can remain connected to the lab network on a separate interface for SSH/internet access. See the [G1 SDK Development Guide](https://support.unitree.com/home/en/G1_developer) for additional reference. Once the interface is configured:
+
+  ```bash
+  python decoupled_wbc/control/main/teleop/run_g1_control_loop.py --interface real
+  ```
 
 Keyboard shortcuts (terminal window):
 - `]`: Activate policy

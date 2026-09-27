@@ -34,6 +34,7 @@ You **must wear tight-fitting pants or leggings** to guarantee line-of-sight for
 
 1. **Completed the [Quick Start](../getting_started/quickstart.md)** — you can run the sim2sim loop (includes [installing the deployment](../getting_started/installation_deploy.md) and [downloading model checkpoints](../getting_started/download_models.md)).
 2. **Completed the [VR Teleop Setup](../getting_started/vr_teleop_setup.md)** — `.venv_teleop` is ready. For the default path, PICO hardware is installed, calibrated, and connected. For Isaac Teleop / CloudXR, the `isaacteleop[cloudxr]` package is also installed (handled by `install_pico.sh`) and the headset connects to the in-process CloudXR runtime — see [Isaac Teleop Setup](isaac_teleop_publisher_setup.md).
+3. **Real robot only — network interface configured** — ethernet cable connected between host and G1, static IP assigned via `python gear_sonic_deploy/scripts/setup_network.py`. See [Network Setup](../references/decoupled_wbc.md#running-the-control-stack) for details. Skip for sim.
 
 ---
 

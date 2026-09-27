@@ -70,7 +70,17 @@ inference dependencies.
 The camera server should be running as a systemd service on the robot.
 See [Data Collection](data_collection.md) for camera server setup.
 
-### 4. C++ Deploy
+### 4. Network Interface (Real Robot)
+
+Connect an ethernet cable between the host and the G1 robot, then assign the static IP:
+
+```bash
+python gear_sonic_deploy/scripts/setup_network.py
+```
+
+The workstation must reach the robot at `192.168.123.164` before running inference.
+
+### 5. C++ Deploy
 
 The `gear_sonic_deploy` binary must be built. See the main README.
 
