@@ -371,6 +371,18 @@ class ZMQManager : public InputInterface {
       } else {
         // Streamed motion mode: delegate to pose interface
         if (pose_interface_) {
+          // Network start commands are owned by ZMQManager, not by the
+          // pose-only endpoint.  Forward the transition here so streamed
+          // protocol-v4 control can leave INIT without a keyboard event.
+          if (start_control_ && !operator_state.start) {
+            operator_state.start = true;
+            {
+              std::lock_guard<std::mutex> lock(current_motion_mutex);
+              operator_state.play = false;
+              reinitialize_heading = true;
+            }
+            std::cout << "[ZMQManager] Started control in streamed motion mode" << std::endl;
+          }
           pose_interface_->handle_input(motion_reader, current_motion, current_frame,
                                        operator_state, reinitialize_heading,
                                        heading_state_buffer,

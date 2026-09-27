@@ -9,7 +9,7 @@ import json
 import os
 from pathlib import Path
 import shutil
-from typing import Any, Optional
+from typing import Any
 
 import datasets
 from datasets import load_dataset
@@ -156,6 +156,8 @@ class Gr00tDataExporter(LeRobotDataset):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._pre_encoded_videos = False
+        self._pre_encoded_video_paths: dict[str, Path] = {}
         self.video_writers = self.create_video_writer()
 
     @property
@@ -187,6 +189,7 @@ class Gr00tDataExporter(LeRobotDataset):
         tolerance_s: float = 1e-4,
         vcodec: str = "h264",
         overwrite_existing: bool = False,
+        pre_encoded_videos: bool = False,
     ) -> "Gr00tDataExporter":
         if script_config is None:
             script_config = {}
@@ -232,6 +235,10 @@ class Gr00tDataExporter(LeRobotDataset):
         obj.vcodec = vcodec
         obj.task = task
         obj.image_writer = None
+        if type(pre_encoded_videos) is not bool:
+            raise TypeError("pre_encoded_videos must be a bool")
+        obj._pre_encoded_videos = pre_encoded_videos
+        obj._pre_encoded_video_paths = {}
 
         obj.episode_buffer = obj.create_episode_buffer()
 
@@ -245,6 +252,8 @@ class Gr00tDataExporter(LeRobotDataset):
         return obj
 
     def create_video_writer(self) -> dict[str, VideoWriter]:
+        if getattr(self, "_pre_encoded_videos", False):
+            return {}
         video_writers = {}
         for key in self.meta.video_keys:
             video_writers[key] = VideoWriter(
@@ -266,13 +275,27 @@ class Gr00tDataExporter(LeRobotDataset):
             if isinstance(frame[name], torch.Tensor):
                 frame[name] = frame[name].numpy()
 
-        validate_frame(frame, self.features)
+        validation_features = self.features
+        if self._pre_encoded_videos:
+            supplied_video_keys = set(frame) & set(self.meta.video_keys)
+            if supplied_video_keys:
+                raise ValueError("pre-encoded video mode does not accept decoded video frames")
+            validation_features = {
+                key: feature for key, feature in self.features.items() if feature["dtype"] != "video"
+            }
+        validate_frame(frame, validation_features)
 
         if self.episode_buffer is None:
             self.episode_buffer = self.create_episode_buffer()
 
         frame_index = self.episode_buffer["size"]
-        timestamp = frame.pop("timestamp") if "timestamp" in frame else frame_index / self.fps
+        if "timestamp" in frame:
+            # LeRobot validates DEFAULT_FEATURES.timestamp as an ndarray with
+            # shape (1,), but its Arrow schema stores that single value as a
+            # scalar and timestamp synchronization expects an (N,) vector.
+            timestamp = np.float32(frame.pop("timestamp")[0])
+        else:
+            timestamp = np.float32(frame_index / self.fps)
         self.episode_buffer["frame_index"].append(frame_index)
         self.episode_buffer["timestamp"].append(timestamp)
 
@@ -303,6 +326,23 @@ class Gr00tDataExporter(LeRobotDataset):
 
         self.episode_buffer["size"] += 1
 
+    def register_pre_encoded_video(self, key: str, path: str | Path) -> None:
+        """Register an already-copied canonical video for the current episode."""
+        if not self._pre_encoded_videos:
+            raise RuntimeError("pre-encoded video registration requires pre_encoded_videos=True")
+        if key not in self.meta.video_keys:
+            raise ValueError(f"unknown pre-encoded video key: {key}")
+        candidate = Path(path).absolute()
+        relative = self.meta.get_video_file_path(self.episode_buffer["episode_index"], key)
+        expected = (self.root / relative).absolute()
+        if candidate != expected:
+            raise ValueError("pre-encoded video must use the canonical current-episode output path")
+        if candidate.is_symlink() or not candidate.is_file():
+            raise ValueError("pre-encoded video must be an existing regular file")
+        if key in self._pre_encoded_video_paths:
+            raise ValueError(f"pre-encoded video key was already registered: {key}")
+        self._pre_encoded_video_paths[key] = candidate
+
     def stop_video_writers(self):
         if not hasattr(self, "video_writers"):
             raise RuntimeError(
@@ -316,16 +356,22 @@ class Gr00tDataExporter(LeRobotDataset):
         self.stop_video_writers()
         self.episode_buffer = self.create_episode_buffer()
         self.video_writers = self.create_video_writer()
+        self._pre_encoded_video_paths = {}
 
     def save_episode(self, episode_data: dict | None = None) -> None:
         if not episode_data:
             episode_buffer = self.episode_buffer
 
+        if getattr(self, "_pre_encoded_videos", False) and set(self._pre_encoded_video_paths) != set(
+            self.meta.video_keys
+        ):
+            raise ValueError("every video key must register one pre-encoded video before saving")
+
         validate_episode_buffer(episode_buffer, self.meta.total_episodes, self.features)
 
         episode_length = episode_buffer.pop("size")
         tasks = episode_buffer.pop("task")
-        episode_tasks = list(set(tasks))
+        episode_tasks = list(dict.fromkeys(tasks))
         episode_index = episode_buffer["episode_index"]
 
         episode_buffer["index"] = np.arange(
@@ -343,7 +389,13 @@ class Gr00tDataExporter(LeRobotDataset):
         for key, ft in self.features.items():
             if key in ["index", "episode_index", "task_index"] or ft["dtype"] in ["image", "video"]:
                 continue
-            episode_buffer[key] = np.stack(episode_buffer[key])
+            stacked = np.stack(episode_buffer[key])
+            # datasets.Features represents one-element vectors as scalar Arrow
+            # Values. Keep validation-facing frames at shape (1,), then remove
+            # only that trailing singleton before serialization/statistics.
+            if tuple(ft.get("shape", ())) == (1,) and stacked.ndim == 2:
+                stacked = stacked[:, 0]
+            episode_buffer[key] = stacked
 
         self._wait_image_writer()
         self._save_episode_table(episode_buffer, episode_index)
@@ -355,7 +407,10 @@ class Gr00tDataExporter(LeRobotDataset):
         ep_stats = compute_episode_stats(non_vid_ep_buffer, non_video_features)
 
         if len(self.meta.video_keys) > 0:
-            video_paths = self.encode_episode_videos(episode_index)
+            if getattr(self, "_pre_encoded_videos", False):
+                video_paths = dict(self._pre_encoded_video_paths)
+            else:
+                video_paths = self.encode_episode_videos(episode_index)
             for key in self.meta.video_keys:
                 episode_buffer[key] = video_paths[key]
 
@@ -384,6 +439,7 @@ class Gr00tDataExporter(LeRobotDataset):
         if not episode_data:
             self.episode_buffer = self.create_episode_buffer()
             self.video_writers = self.create_video_writer()
+            self._pre_encoded_video_paths = {}
 
         for key in self.meta.video_keys:
             video_path = os.path.join(self.root, self.meta.get_video_file_path(episode_index, key))

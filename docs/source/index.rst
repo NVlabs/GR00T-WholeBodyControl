@@ -99,6 +99,7 @@ Documentation
    tutorials/vr_wholebody_teleop
    tutorials/live_camera_teleop
    tutorials/data_collection
+   tutorials/data_conversion
    tutorials/vla_workflow
    tutorials/vla_inference
 

@@ -1,0 +1,38 @@
+version: 1
+scope: smoke
+semantic_repo_commit: 6220f4e210e14c7f804f727da94c8886850d513b
+encoder:
+  repo_id: nvidia/GEAR-SONIC
+  revision: 9c0ff22b4ffec27c5392e8e284eb2f2df7a5b4e2
+  filename: low_latency/model_encoder.onnx
+  size: 45933505
+  sha256: 60be43157f57d812f38bdbb740a5de5d5d070e8840d9edc16f02a91a6d06255b
+observation_config:
+  repo_id: nvidia/GEAR-SONIC
+  revision: 9c0ff22b4ffec27c5392e8e284eb2f2df7a5b4e2
+  filename: low_latency/observation_config.yaml
+  size: 3258
+  sha256: 582b9a273a3d69fbf49ae59b39295a3be2b4a295e195ef4cf674b5e2571c90ab
+sources:
+  dex3:
+    approved: true
+    repo_id: unitreerobotics/G1_Dex3_Pouring_Dataset
+    revision: c9552eb3b1cb610cd6227555e9e98b1bde826a77
+    dataset_path: .
+    episode_count: 311
+    episodes: [0, 78, 155, 233, 310]
+    primary_camera: observation.images.cam_left_high
+    camera_map:
+      observation.images.cam_left_high: observation.images.ego_view
+      observation.images.cam_left_wrist: observation.images.left_wrist
+      observation.images.cam_right_wrist: observation.images.right_wrist
+  inspire:
+    approved: true
+    repo_id: unitreerobotics/G1_WBT_Inspire_Pickup_Pillow_MainCamOnly
+    revision: 24e3e4d88a5020bdb4b3046ec09b09dc56f8d1f1
+    dataset_path: G1_WB_Dex5_Pickup_Pillow
+    episode_count: 609
+    episodes: [0, 152, 304, 456, 608]
+    primary_camera: observation.images.cam_0
+    camera_map:
+      observation.images.cam_0: diagnostic.primary_camera

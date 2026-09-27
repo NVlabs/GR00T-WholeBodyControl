@@ -62,6 +62,13 @@ class UnitreeSdk2Bridge:
         self.have_imu_ = False
         self.have_frame_sensor_ = False
 
+        # Subscriber threads may invoke their handlers as soon as Init returns.
+        # Create the callback synchronization state before any subscriber can
+        # observe this partially constructed bridge.
+        self.low_cmd_lock = threading.Lock()
+        self.left_hand_cmd_lock = threading.Lock()
+        self.right_hand_cmd_lock = threading.Lock()
+
         # Unitree sdk2 message
         self.low_state = LowState_default()
         self.low_state_puber = ChannelPublisher("rt/lowstate", LowState_)
@@ -95,10 +102,6 @@ class UnitreeSdk2Bridge:
         self.right_hand_cmd = HandCmd_default()
         self.right_hand_cmd_suber = ChannelSubscriber("rt/dex3/right/cmd", HandCmd_)
         self.right_hand_cmd_suber.Init(self.RightHandCmdHandler, 1)
-
-        self.low_cmd_lock = threading.Lock()
-        self.left_hand_cmd_lock = threading.Lock()
-        self.right_hand_cmd_lock = threading.Lock()
 
         self.wireless_controller = unitree_go_msg_dds__WirelessController_()
         self.wireless_controller_puber = ChannelPublisher(

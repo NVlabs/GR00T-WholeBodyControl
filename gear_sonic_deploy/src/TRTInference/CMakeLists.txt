@@ -27,9 +27,12 @@ elseif(CUDA_INCLUDE_DIR)
 endif()
 
 target_include_directories(TRTInference
-    PRIVATE ${PROJECT_SOURCE_DIR}/src
+    # InferenceEngine.h is part of this target's public API. Consumers include
+    # it as <TRTInference/InferenceEngine.h>, so the project src root must
+    # propagate with the linked target. Utility.h also exposes CUDA headers.
+    PUBLIC ${PROJECT_SOURCE_DIR}/src ${CUDA_INCLUDES}
     PRIVATE ${TensorRT_INCLUDE_DIRS}
-    PRIVATE ${CUDA_INCLUDES})
+)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     target_compile_options(TRTInference PRIVATE -Wno-deprecated-declarations -std=c++20)
