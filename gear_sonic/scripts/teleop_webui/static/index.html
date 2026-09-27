@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>G1 Webcam Teleop</title>
+<style>
+  :root { --bg:#111418; --card:#1b2026; --fg:#e8eaed; --dim:#9aa0a6;
+          --ok:#34a853; --warn:#fbbc04; --err:#ea4335; --accent:#4d90fe; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:15px/1.45 system-ui, sans-serif; }
+  .wrap { max-width:1100px; margin:0 auto; padding:16px; }
+  h1 { font-size:20px; margin:4px 0 14px; }
+  .grid { display:grid; grid-template-columns: 1.2fr 1fr; gap:14px; }
+  @media (max-width:820px){ .grid { grid-template-columns:1fr; } }
+  .card { background:var(--card); border-radius:10px; padding:14px; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  button { border:0; border-radius:8px; padding:12px 20px; font-size:16px;
+           font-weight:600; cursor:pointer; color:#fff; }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  .btn-start { background:var(--ok); font-size:20px; padding:16px 34px; }
+  .btn-stop  { background:#5f6368; }
+  .btn-estop { background:var(--err); font-size:20px; padding:16px 26px; }
+  .btn-small { background:#3c4043; font-size:13px; padding:8px 12px; }
+  select { background:#2a2f36; color:var(--fg); border:1px solid #3c4043;
+           border-radius:6px; padding:8px; font-size:15px; }
+  .led { display:inline-block; width:11px; height:11px; border-radius:50%;
+         margin-right:7px; background:#5f6368; vertical-align:baseline; }
+  .led.ready,.led.running { background:var(--ok); }
+  .led.starting,.led.preflight,.led.stopping { background:var(--warn); }
+  .led.error,.led.exited { background:var(--err); }
+  .comp { display:flex; justify-content:space-between; padding:7px 4px;
+          border-bottom:1px solid #2a2f36; }
+  .comp:last-child { border-bottom:0; }
+  .dim { color:var(--dim); font-size:13px; }
+  #detail { min-height:20px; margin-top:8px; }
+  #preview { width:100%; border-radius:8px; background:#000; min-height:240px; }
+  pre { background:#0d1013; border-radius:8px; padding:10px; font-size:12px;
+        max-height:260px; overflow:auto; white-space:pre-wrap; margin:8px 0 0; }
+  .checks li { margin:3px 0; font-size:13px; }
+  .ok::before { content:"✔ "; color:var(--ok); }
+  .fail::before { content:"✘ "; color:var(--err); }
+  .banner { border-radius:8px; padding:10px 14px; margin-bottom:12px;
+            font-weight:600; display:none; }
+  .banner.error { display:block; background:#4a1210; color:#ffb4a9; }
+  .banner.running { display:block; background:#0f3d20; color:#a8dab5; }
+  .tabs { display:flex; gap:6px; margin-top:10px; }
+  .tabs button { background:#2a2f36; font-size:12px; padding:6px 10px; }
+  .tabs button.active { background:var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>G1 Webcam Teleoperation</h1>
+  <div id="banner" class="banner"></div>
+
+  <div class="card" style="margin-bottom:14px">
+    <div class="row">
+      <button id="start" class="btn-start">&#9654; START</button>
+      <button id="stop" class="btn-stop">&#9632; Stop</button>
+      <button id="estop" class="btn-estop">E-STOP</button>
+      <select id="mode">
+        <option value="sim" selected>Simulation</option>
+        <option value="real">Real robot</option>
+      </select>
+      <select id="camsource" title="Video source for pose estimation">
+        <option value="webcam" selected>Local webcam</option>
+        <option value="phone">Phone camera (remote)</option>
+      </select>
+      <label class="dim" style="cursor:pointer" title="Only arms/torso are imitated; legs and pelvis stay neutral. 90 s session timer.">
+        <input type="checkbox" id="upperbody" checked> Upper body mode
+      </label>
+      <button id="cleanup" class="btn-small" title="Kill leftover processes / free ports">Cleanup</button>
+    </div>
+    <div id="detail" class="dim"></div>
+    <div id="phonehint" style="display:none; margin-top:8px; padding:8px 12px; background:#1c3a52; border-radius:8px; font-size:14px"></div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <b>Camera preview</b>
+      <div class="dim">Stand with your FULL body visible (head to feet).</div>
+      <img id="preview" src="/preview.mjpg" alt="waiting for GEM…">
+    </div>
+
+    <div>
+      <div class="card" style="margin-bottom:14px">
+        <b>Components</b>
+        <div id="components"></div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn-small" onclick="sendKey('cpp',']')">Start policy ( ] )</button>
+          <button class="btn-small" onclick="sendKey('cpp','enter')">Toggle stream (Enter)</button>
+          <button class="btn-small" onclick="sendKey('bridge','s')">Arm (s)</button>
+          <button class="btn-small" onclick="sendKey('bridge','p')">Pause (p)</button>
+          <button class="btn-small" onclick="sendKey('bridge','n')">Next pilot (n)</button>
+        </div>
+      </div>
+      <div class="card">
+        <b>Pre-flight</b>
+        <button class="btn-small" style="float:right" onclick="preflight()">Re-check</button>
+        <ul id="checks" class="checks"></ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <b>Logs</b>
+    <div class="tabs" id="tabs"></div>
+    <pre id="log"></pre>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let status = {}, logTab = "bridge";
+const COMP_LABELS = { mediamtx:"MediaMTX (ingest)", sim:"Simulator", cpp:"C++ controller", gem:"GEM (pose)", bridge:"Bridge" };
+
+function api(path, opts) { return fetch(path, Object.assign({method:"POST"}, opts)); }
+
+$("start").onclick = () => {
+  const mode = $("mode").value;
+  if (mode === "real" && !confirm("REAL ROBOT mode. Sim validated? Gantry + e-stop operator ready?")) return;
+  api(`/api/start?mode=${mode}&upper_body=${$("upperbody").checked}&video_source=${$("camsource").value}`);
+};
+$("stop").onclick   = () => api("/api/stop");
+$("estop").onclick  = () => api("/api/estop");
+$("cleanup").onclick = () => api("/api/cleanup").then(preflight);
+function sendKey(component, key) {
+  api("/api/key", {headers:{"Content-Type":"application/json"},
+                   body: JSON.stringify({component, key})});
+}
+
+function preflight() {
+  fetch(`/api/preflight?mode=${$("mode").value}&video_source=${$("camsource").value}`)
+    .then(r=>r.json()).then(d => renderChecks(d.checks));
+}
+$("camsource").onchange = preflight;
+function renderChecks(checks) {
+  $("checks").innerHTML = (checks||[]).map(c =>
+    `<li class="${c.ok?'ok':'fail'}"><b>${c.name}</b> <span class="dim">${c.detail}</span></li>`).join("");
+}
+
+function render() {
+  const s = status;
+  const running = s.global_state === "running";
+  const busy = ["preflight","starting","stopping"].includes(s.global_state);
+  $("start").disabled = running || busy;
+  $("stop").disabled  = s.global_state === "idle";
+  $("detail").textContent = (s.global_state||"idle").toUpperCase() + (s.detail ? " — " + s.detail : "");
+
+  const b = $("banner");
+  b.className = "banner" + (s.global_state==="error" ? " error" : running ? " running" : "");
+  b.textContent = s.global_state==="error" ? "ERROR: " + s.detail
+                : running ? "RUNNING — robot is imitating. E-STOP is always available." : "";
+
+  const hint = $("phonehint");
+  if (s.publish_url && ["starting","running"].includes(s.global_state)) {
+    hint.style.display = "block";
+    let urls = `same Wi-Fi: <b>${s.publish_url}</b>`;
+    if (s.publish_url_ts) urls += ` &nbsp;\u00B7&nbsp; via Tailscale: <b>${s.publish_url_ts}</b>`;
+    hint.innerHTML = `\u{1F4F1} On the phone, open the publish page \u2014 ${urls} \u2014 accept the certificate warning and tap <b>Publish</b>.`;
+  } else {
+    hint.style.display = "none";
+  }
+
+  const comps = s.components || {};
+  $("components").innerHTML = Object.keys(COMP_LABELS).filter(k=>comps[k]).map(k => {
+    const c = comps[k], m = c.metrics || {};
+    let extra = "";
+    if (k==="gem" && m.gem_warmup) extra = `warmup ${m.gem_warmup}/120`;
+    if (k==="gem" && m.gem_fps) extra = `${m.gem_fps} fps`;
+    if (k==="bridge" && m.bridge_out_fps)
+      extra = `${m.bridge_mode} · out ${m.bridge_out_fps} Hz · gem_frames ${m.bridge_gem_frames}`;
+    return `<div class="comp"><span><span class="led ${c.state}"></span>${COMP_LABELS[k]}</span>
+            <span class="dim">${extra || c.state}</span></div>`;
+  }).join("");
+
+  $("tabs").innerHTML = Object.keys(comps).map(k =>
+    `<button class="${k===logTab?'active':''}" onclick="logTab='${k}'">${k}</button>`).join("");
+  const lines = (comps[logTab] && comps[logTab].lines) || [];
+  const log = $("log");
+  const stick = log.scrollTop + log.clientHeight >= log.scrollHeight - 8;
+  log.textContent = lines.join("\n");
+  if (stick) log.scrollTop = log.scrollHeight;
+
+  if (s.preflight && s.preflight.length) renderChecks(s.preflight);
+}
+
+function connect() {
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onmessage = e => { status = JSON.parse(e.data); render(); };
+  ws.onclose = () => setTimeout(connect, 1500);
+}
+connect();
+preflight();
+$("preview").onerror = () => setTimeout(() => { $("preview").src = "/preview.mjpg?" + Date.now(); }, 3000);
+</script>
+</body>
+</html>

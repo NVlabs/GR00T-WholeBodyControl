@@ -1,0 +1,31 @@
+# MediaMTX config for the phone-camera teleop ingest (path "cam").
+# The web UI orchestrator launches:  cd <cert dir> && mediamtx <this file>
+# (webrtcServerKey/Cert are resolved relative to the working directory).
+#
+# Publish options (all land on the same path, read locally as
+# rtsp://127.0.0.1:8554/cam by gem_webcam_zmq_publisher --video_url):
+#   - Phone browser (recommended): https://<PC-IP>:8889/cam/publish
+#     (WebRTC/WHIP; HTTPS with the self-signed cert -> accept the warning)
+#   - SRT app (e.g. Larix Broadcaster): srt://<PC-IP>:8890?streamid=publish:cam
+#   - RTSP push (e.g. ffmpeg): rtsp://<PC-IP>:8554/cam
+
+logLevel: info
+
+rtsp: yes
+rtspAddress: :8554
+
+srt: yes
+srtAddress: :8890
+
+webrtc: yes
+webrtcAddress: :8889
+webrtcEncryption: yes  # getUserMedia on phone browsers requires HTTPS
+webrtcServerKey: server.key
+webrtcServerCert: server.crt
+
+rtmp: no
+hls: no
+api: no
+
+paths:
+  cam: {}
