@@ -15,7 +15,7 @@ profile file:
 Run (from the repo root):
     python gear_sonic/scripts/arm_compliance_study.py \\
         --profiles gear_sonic_deploy/arm_compliance/study_8sets.json \\
-        --control-mode teleop --practice --blind
+        --control-mode teleop --blind
 
 At ANY prompt you can type a command (the ! keeps them apart from answers):
     !e  ESTOP (latched)            !r  release ESTOP -> current set's profile
@@ -28,8 +28,10 @@ Design choices (see ARM_COMPLIANCE.md, "User study"):
 - Set order: balanced Latin square (Williams design) by participant number, so
   each set appears equally often in each position and after each other set.
 - Gesture order inside a set: rotates across sets and participants.
-- Optional practice with RIGID first (not analysed).
-- Ratings 1-7 per gesture: perceived safety and comfort (edit QUESTIONS to add items).
+- Practice round ALWAYS first, ALWAYS with the RIGID profile (the baseline). It is
+  rated like any trial and saved with trial_kind=practice, so it can serve as the
+  rigid reference; the main analysis uses trial_kind=main.
+- Ratings 1-7 per gesture: perceived safety, comfort, naturalness (edit QUESTIONS).
 - Unix timestamps at trial start/end, to join with robot telemetry (tau_est, ...).
 """
 
@@ -49,12 +51,13 @@ GESTURES_DEFAULT = ["handshake", "fist_bump", "hug"]
 
 # Rating items asked after EVERY gesture (keep it short: 8 sets x 3 gestures).
 # (key, question, low anchor, high anchor) — add items here if needed, e.g.
-#   ("naturalness", "How natural did this {gesture} feel?", "not at all natural", "very natural"),
 #   ("softness", "How did the robot's arms feel?", "very stiff", "very soft"),  # manipulation check
 QUESTIONS = [
     ("safety", "How safe did you feel during this {gesture}?", "not safe at all", "completely safe"),
     ("comfort", "How comfortable was this {gesture}?", "very uncomfortable", "very comfortable"),
+    ("naturalness", "How natural did this {gesture} feel?", "not natural at all", "completely natural"),
 ]
+BASELINE_PROFILE = "RIGID"  # built into deploy; practice always uses it
 SCALE_MIN, SCALE_MAX = 1, 7
 
 CSV_FIELDS = [
@@ -180,8 +183,27 @@ class Session:
             json.dump(self.meta, f, indent=2)
         os.replace(tmp, self.meta_path)
 
+    def _upgrade_header(self):
+        """If the CSV was started by an older version (fewer questions), rewrite it
+        with the current columns; old rows get empty cells for the new items."""
+        with open(self.csv_path, newline="") as f:
+            reader = csv.DictReader(f)
+            if reader.fieldnames == CSV_FIELDS:
+                return
+            rows = list(reader)
+        tmp = self.csv_path + ".tmp"
+        with open(tmp, "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=CSV_FIELDS, extrasaction="ignore")
+            w.writeheader()
+            for r in rows:
+                w.writerow({k: r.get(k, "") for k in CSV_FIELDS})
+        os.replace(tmp, self.csv_path)
+        print(f"  (upgraded {os.path.basename(self.csv_path)} to the current question set)")
+
     def append_row(self, row):
         new = not os.path.exists(self.csv_path)
+        if not new:
+            self._upgrade_header()
         with open(self.csv_path, "a", newline="") as f:
             w = csv.DictWriter(f, fieldnames=CSV_FIELDS)
             if new:
@@ -349,6 +371,9 @@ def plan(session, args, profiles):
     """Set order and gesture orders, fixed at the first run and reused on resume."""
     m = session.meta
     if "set_order" in m:
+        m["questions"] = [{"key": q[0], "text": q[1], "low": q[2], "high": q[3]} for q in QUESTIONS]
+        m["baseline_profile"] = BASELINE_PROFILE
+        session.save_meta()
         return
     names = list(profiles)
     k = participant_number(args.participant)
@@ -368,6 +393,7 @@ def plan(session, args, profiles):
         "set_order": order,
         "gesture_orders": gesture_orders,
         "reps": args.reps,
+        "baseline_profile": BASELINE_PROFILE,
         "questions": [{"key": q[0], "text": q[1], "low": q[2], "high": q[3]} for q in QUESTIONS],
         "scale": [SCALE_MIN, SCALE_MAX],
     })
@@ -378,7 +404,8 @@ def run_trial(p, link, session, profiles, kind, pos, profile, gesture, gpos, rep
     m = session.meta
     spec = profiles.get(profile, {})
     label = m["set_codes"].get(profile, "practice") if kind == "main" else "practice"
-    shown = label if args.blind else f"{label} ({profile})"
+    shown = f"practice ({profile}, baseline)" if kind == "practice" else (
+        label if args.blind else f"{label} ({profile})")
     print(f"\n--- Set {shown} | gesture {gpos}/{len(args.gestures)}: {gesture.upper()}"
           + (f" | rep {rep}" if args.reps > 1 else ""))
     p.ask(f"  Press Enter when the participant is ready for the {gesture} (!s = skip): ",
@@ -421,7 +448,10 @@ def main():
                     help="how the robot's motion is produced in this session")
     ap.add_argument("--gestures", nargs="+", default=GESTURES_DEFAULT)
     ap.add_argument("--reps", type=int, default=1, help="repetitions per gesture per set")
-    ap.add_argument("--practice", action="store_true", help="practice round with RIGID first (not analysed)")
+    ap.add_argument("--practice", action="store_true",
+                    help="(kept for old commands; the RIGID practice round now always runs)")
+    ap.add_argument("--no-practice", action="store_true",
+                    help="skip the RIGID practice round (debugging only, not for real participants)")
     ap.add_argument("--settle", type=float, default=2.0, help="seconds to wait after a profile switch")
     ap.add_argument("--blind", action="store_true", help="show only set letters (A-H), not profile names")
     ap.add_argument("--port", type=int, default=5565)
@@ -457,16 +487,24 @@ def main():
               + " ".join(m["set_codes"][s] for s in m["set_order"])
               + ("" if args.blind else "   (" + ", ".join(m["set_order"]) + ")"))
 
-        if args.practice and not any(k[0] == "practice" for k in done):
-            p.current_profile = "RIGID"
-            link.set_profile("RIGID")
-            print("\n=== Practice (RIGID, not analysed) ===")
+        practice_todo = [g for g in args.gestures
+                         if ("practice", "practice", g, "1") not in done]
+        if args.no_practice:
+            print("\n!! --no-practice: skipping the RIGID baseline round.")
+        elif practice_todo:
+            p.current_profile = BASELINE_PROFILE
+            if not link.set_profile(BASELINE_PROFILE):
+                print("  ESTOP is active — release it (!r) first.")
+                p.ask("  Press Enter when released: ", allow_empty=True)
+                link.set_profile(BASELINE_PROFILE)
+            print(f"\n=== Practice / baseline ({BASELINE_PROFILE}) ===")
             countdown(args.settle, "settling")
-            for gpos, g in enumerate(args.gestures, 1):
+            for g in practice_todo:
+                gpos = args.gestures.index(g) + 1
                 try:
-                    run_trial(p, link, session, profiles, "practice", 0, "RIGID", g, gpos, 1, args)
+                    run_trial(p, link, session, profiles, "practice", 0, BASELINE_PROFILE, g, gpos, 1, args)
                 except Skip:
-                    print("  skipped.")
+                    print("  skipped (it will be offered again on --resume).")
 
         for pos, profile in enumerate(m["set_order"], 1):
             code = m["set_codes"][profile]

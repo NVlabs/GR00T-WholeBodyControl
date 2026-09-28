@@ -165,20 +165,25 @@ each gesture and rates it right after. Use it **instead of** the keyboard tool
 # deploy (T2): add  --compliance-profiles arm_compliance/study_8sets.json
 python gear_sonic/scripts/arm_compliance_study.py \
     --profiles gear_sonic_deploy/arm_compliance/study_8sets.json \
-    --control-mode teleop --practice --blind
+    --control-mode teleop --blind
 # resume an interrupted session:   --resume P03
 ```
 
 - **Intake:** consent check, then age, gender, height, weight (optional),
   dominant hand, robot experience, prior contact with a humanoid. The name goes
   only to `names_key.csv`; data files use the ID (P01, P02, ...).
+- **Practice / baseline:** always first, always the built-in **RIGID** profile,
+  rated like every trial and saved as `trial_kind=practice` (the rigid reference).
+  `--no-practice` exists only for debugging.
 - **Order:** sets in a balanced Latin square (Williams design) by participant
   number; gesture order rotates across sets. Fixed at the first run, reused on
   resume.
 - **Per gesture:** Enter when ready, Enter when done (timestamps for syncing with
-  robot telemetry), then 2 ratings on 1–7: **perceived safety** and **comfort**
-  (edit `QUESTIONS` at the top of the script to add items, e.g. naturalness or
-  perceived softness as a manipulation check). Mark a trial invalid with `x`
+  robot telemetry), then 3 ratings on 1–7: **perceived safety**, **comfort** and
+  **naturalness** (edit `QUESTIONS` at the top of the script to add items, e.g.
+  perceived softness as a manipulation check). A CSV started with the old 2-question
+  version is upgraded automatically on `--resume` (old rows keep an empty
+  naturalness cell). Mark a trial invalid with `x`
   (e.g. robot stumbled).
 - **Commands at any prompt:** `!e` ESTOP, `!r` release, `!b` break (robot →
   RIGID), `!n` note, `!s` skip trial, `!q` save and quit.
