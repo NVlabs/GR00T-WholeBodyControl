@@ -1,0 +1,172 @@
+# @package _global_
+# SONIC config for the happydroid B1 -- 3 encoders (motion tracking / teleop / SMPL).
+# Based on sonic_h2.yaml, retargeted to B1 (24 bodies, 23 DOF, torso-rooted).
+#
+# B1's morphology differs from G1's by more than a DOF count: the torso is yaw-only,
+# shoulders are 2-DOF (no yaw), wrists are 1-DOF roll, and the ankle is pitch-only and
+# linkage-driven. Every G1 body name the shared term configs reference is therefore
+# remapped below. There is NO G1 checkpoint to warm-start from -- 23 actions and a
+# different proprioception width mean the released encoder/decoder layers cannot load.
+# Train from scratch.
+defaults:
+  - /algo: ppo_im_phc
+  - /manager_env: base_env
+  - /callbacks/read_eval
+  - /callbacks/im_resample
+  - /aux_losses: universal_token/g1_recon_and_all_latent
+  - override /trainer: trl_ppo_aux
+  - override /actor_critic: universal_token/all_mlp_v1
+  - override /manager_env/observations/tokenizer: unitoken_all_noz
+  - override /manager_env/observations/policy: local_dir_hist
+  - override /manager_env/observations/critic: privileged_mf_hist
+  - override /manager_env/events: tracking/level0_4
+  - override /manager_env/terminations: tracking/base_adaptive_strict_ori_foot_xyz
+  - override /manager_env/rewards: tracking/base_5point_local_feet_acc
+
+use_manager_env: true
+
+exp_base: ${hydra:runtime.choices.exp}
+exp_var: test
+experiment_name: ${exp_base}_${exp_var}
+experiment_dir: ${base_dir}/${project_name}/${experiment_name}-${timestamp}
+
+num_envs: 4096
+project_name: TRL_B1_Track
+
+actor_prop_history_length: 10
+actor_actions_history_length: 10
+
+critic_prop_history_length: 10
+critic_actions_history_length: 10
+
+manager_env:
+  rewards:
+    feet_acc:
+      weight: -2.5e-6
+    # Shared term references G1's wrist_yaw + head_link; B1's last arm link is the hand.
+    anti_shake_ang_vel:
+      params:
+        body_names: ["hdb1_left_hand_fixed", "hdb1_right_hand_fixed", "hdb1_head"]
+    # Contact penalty applies to every body EXCEPT feet, hands and elbows.
+    undesired_contacts:
+      params:
+        sensor_cfg:
+          body_names:
+            - "^(?!hdb1_left_foot$)(?!hdb1_right_foot$)(?!hdb1_left_hand_fixed$)(?!hdb1_right_hand_fixed$)(?!hdb1_left_forearm_rot$)(?!hdb1_right_forearm_rot$).+$"
+  terminations:
+    ee_body_pos_adaptive:
+      params:
+        body_names:
+          - "hdb1_left_foot"
+          - "hdb1_right_foot"
+          - "hdb1_left_hand_fixed"
+          - "hdb1_right_hand_fixed"
+    foot_pos_xyz:
+      params:
+        body_names:
+          - "hdb1_left_foot"
+          - "hdb1_right_foot"
+  config:
+    robot:
+      type: b1
+    terrain_type: trimesh
+  commands:
+    motion:
+      # NOTE: B1 is torso-rooted -- the free joint is on hdb1_torso_contoured, so a
+      # motion PKL's root_trans_offset/root_rot describe the TORSO. anchor_body stays
+      # the pelvis so the tracking frame matches G1's semantics; verify the motion lib
+      # agrees before a long run (see the open question in the port notes).
+      # MUST be the root body (IsaacLab index 0) and MUST be body_names[0]:
+      # motion_lib_base.py asserts `anchor_body_idx_full == 0 and body_indexes[0] == 0`.
+      # B1 is torso-rooted, so the torso is the anchor -- unlike G1, where it is the
+      # pelvis. This is consistent with the motion PKLs, whose root_trans_offset/root_rot
+      # describe the free-joint body, i.e. the torso.
+      anchor_body: "hdb1_torso_contoured"
+      vr_3point_body: ["hdb1_left_hand_fixed", "hdb1_right_hand_fixed", "hdb1_torso_contoured"]
+      # Offsets are GEOMETRIC ESTIMATES, not calibrated values: the hand offsets are the
+      # hand link's CoM (z = -0.086 in the hand frame) and the torso offset puts the
+      # third point near head height above the torso origin. Calibrate against the real
+      # VR rig before trusting teleoperation.
+      vr_3point_body_offset: [[0.0, 0.0, -0.086], [0.0, 0.0, -0.086], [0.0, 0.0, 0.45]]
+      reward_point_body: ["hdb1_torso_contoured", "hdb1_left_hand_fixed", "hdb1_right_hand_fixed"]
+      reward_point_body_offset: [[0.0, 0.0, 0.5], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
+      # 14 tracked bodies, G1's set remapped onto B1's tree. The TORSO leads the list
+      # (not the pelvis) because it is B1's root: see the anchor_body note above. G1's
+      # root slot is the pelvis and its 8th entry is the torso; for B1 those two swap.
+      body_names: [
+        "hdb1_torso_contoured",
+        "hdb1_left_hip_rot",
+        "hdb1_left_lower_leg",
+        "hdb1_left_foot",
+        "hdb1_right_hip_rot",
+        "hdb1_right_lower_leg",
+        "hdb1_right_foot",
+        "hdb1_pelvis_large",
+        "hdb1_left_shoulder",
+        "hdb1_left_forearm_rot",
+        "hdb1_left_hand_fixed",
+        "hdb1_right_shoulder",
+        "hdb1_right_forearm_rot",
+        "hdb1_right_hand_fixed",
+      ]
+      num_future_frames: 10
+      dt_future_ref_frames: 0.1
+      smpl_num_future_frames: 10
+      smpl_dt_future_ref_frames: 0.02
+      cat_upper_body_poses: true
+      cat_upper_body_poses_prob: 0.5
+
+      freeze_frame_aug: true
+      teleop_sample_prob_when_smpl: 0.5
+
+      motion_lib_cfg:
+        adaptive_sampling:
+          adp_samp_failure_rate_max_over_mean: 200
+        motion_file: null
+        smpl_motion_file: dummy
+        smpl_y_up: true
+        # Emptied: the prefixes in sonic_release.yaml are BONES-SEED motion keys. B1
+        # clips come from LAFAN1 via GMR and match none of them, so upper-body
+        # augmentation would silently never fire. Repopulate with your own key prefixes.
+        upper_body_augment_prefixes: []
+        asset:
+          assetFileName: "b1.xml"
+
+algo:
+  config:
+    empty_cache_every_n_ppo_epoch: -1
+    num_steps_per_env: 24
+    use_clampped_std: true
+    std_clamp_min: 0.001
+    std_clamp_max: 0.5
+    max_grad_norm: 0.1
+    actor:
+      backbone:
+        reencode_smpl_g1_recon: true
+        encoders:
+          g1:
+            inputs: ["command_multi_future_nonflat", "motion_anchor_ori_b_mf_nonflat"]
+          teleop:
+            inputs:
+              [
+                "command_multi_future_lower_body",
+                "vr_3point_local_target",
+                "vr_3point_local_orn_target",
+                "motion_anchor_ori_b",
+              ]
+          smpl:
+            inputs:
+              [
+                "smpl_joints_multi_future_local_nonflat",
+                "smpl_root_ori_b_multi_future",
+                "joint_pos_multi_future_wrist_for_smpl",
+              ]
+        decoders:
+          g1_kin:
+            outputs: ["command_multi_future_nonflat", "motion_anchor_ori_b_mf_nonflat"]
+
+    critic:
+      backbone:
+        module_config_dict:
+          layer_config:
+            hidden_dims: [2048, 2048, 1024, 1024, 512, 512]

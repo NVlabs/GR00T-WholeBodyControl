@@ -202,6 +202,50 @@ class H2Converter(IsaacLabMuJoCoConverter):
     FOOT_BODY_NAMES = ["left_ankle_roll_link", "right_ankle_roll_link"]
 
 
+class B1Converter(IsaacLabMuJoCoConverter):
+    """happydroid B1 joint/body order converter between IsaacLab and MuJoCo conventions.
+
+    B1 has 23 DOF across 24 bodies, and -- unlike G1 and H2 -- it is TORSO-rooted: the
+    floating base is ``hdb1_torso_contoured`` and the pelvis hangs off it through
+    ``Torso_Rz``. So index 0 of the body orderings is the torso, and the root portion of
+    a qpos (``[trans(3), quat(4)]``) is the TORSO pose, not the pelvis pose.
+
+    The base class reuses DOF_MAPPINGS for per-body transforms, which is valid only when
+    every non-root body carries exactly one joint. B1's collapsed model satisfies this
+    (24 bodies == 23 DOF + 1, joint i drives body i+1 in both orderings); the ankle
+    four-bar's crank and coupler bodies, which would break it, are absent by
+    construction. See the approximations note in ``robots/b1.py``.
+    """
+
+    def __init__(self):
+        from gear_sonic.envs.manager_env.robots.b1 import (
+            B1_ISAACLAB_JOINTS,
+            B1_ISAACLAB_TO_MUJOCO_BODY,
+            B1_ISAACLAB_TO_MUJOCO_DOF,
+            B1_MUJOCO_TO_ISAACLAB_BODY,
+            B1_MUJOCO_TO_ISAACLAB_DOF,
+        )
+
+        self.JOINT_NAMES = B1_ISAACLAB_JOINTS
+        self.DOF_MAPPINGS = {
+            ("isaaclab", "mujoco"): B1_ISAACLAB_TO_MUJOCO_DOF,
+            ("mujoco", "isaaclab"): B1_MUJOCO_TO_ISAACLAB_DOF,
+        }
+        self.BODY_MAPPINGS = {
+            ("isaaclab", "mujoco"): B1_ISAACLAB_TO_MUJOCO_BODY,
+            ("mujoco", "isaaclab"): B1_MUJOCO_TO_ISAACLAB_BODY,
+        }
+
+    # B1 has no wrist yaw/pitch -- the hand is the last link on the arm, so it stands in
+    # for G1's wrist frames. Likewise no ankle roll: the foot body is the contact frame.
+    VR_3POINTS_BODY_NAMES = [
+        "hdb1_torso_contoured",
+        "hdb1_left_hand_fixed",
+        "hdb1_right_hand_fixed",
+    ]
+    FOOT_BODY_NAMES = ["hdb1_left_foot", "hdb1_right_foot"]
+
+
 def load_qpos_from_csv(csv_path: str) -> torch.Tensor:
     """Load qpos [T, D] from CSV."""
     import pandas as pd
