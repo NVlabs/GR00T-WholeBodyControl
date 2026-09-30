@@ -28,9 +28,9 @@ Design choices (see ARM_COMPLIANCE.md, "User study"):
 - Set order: balanced Latin square (Williams design) by participant number, so
   each set appears equally often in each position and after each other set.
 - Gesture order inside a set: rotates across sets and participants.
-- Practice round ALWAYS first, ALWAYS with the RIGID profile (the baseline). It is
-  rated like any trial and saved with trial_kind=practice, so it can serve as the
-  rigid reference; the main analysis uses trial_kind=main.
+- Practice round ALWAYS first, ALWAYS with the RIGID profile: familiarisation only,
+  NOT rated by default (--rate-practice to rate it). The rigid condition that is
+  analysed is the all-rigid set inside the 8 (counterbalanced like the others).
 - Ratings 1-7 per gesture: perceived safety, comfort, naturalness (edit QUESTIONS).
 - Unix timestamps at trial start/end, to join with robot telemetry (tau_est, ...).
 """
@@ -404,14 +404,13 @@ def run_trial(p, link, session, profiles, kind, pos, profile, gesture, gpos, rep
     m = session.meta
     spec = profiles.get(profile, {})
     label = m["set_codes"].get(profile, "practice") if kind == "main" else "practice"
-    shown = f"practice ({profile}, baseline)" if kind == "practice" else (
+    shown = f"practice ({profile}, familiarisation)" if kind == "practice" else (
         label if args.blind else f"{label} ({profile})")
     print(f"\n--- Set {shown} | gesture {gpos}/{len(args.gestures)}: {gesture.upper()}"
           + (f" | rep {rep}" if args.reps > 1 else ""))
-    p.ask(f"  Press Enter when the participant is ready for the {gesture} (!s = skip): ",
+    t0 = time.time()  # start = when this gesture is announced
+    p.ask(f"  Do the {gesture} now. Press Enter when it is finished (!s = skip): ",
           allow_empty=True, allow_skip=True)
-    t0 = time.time()
-    p.ask("  Press Enter when the gesture is finished: ", allow_empty=True, allow_skip=True)
     t1 = time.time()
     row = {
         "participant_id": m["participant_id"], "session_id": m["session_id"],
@@ -422,14 +421,19 @@ def run_trial(p, link, session, profiles, kind, pos, profile, gesture, gpos, rep
         "gesture": gesture, "gesture_position": gpos, "rep": rep,
         "t_start_unix": f"{t0:.3f}", "t_end_unix": f"{t1:.3f}", "duration_s": f"{t1 - t0:.2f}",
     }
+    if kind == "practice" and not args.rate_practice:
+        row["note"] = p.take_note()
+        session.append_row(row)  # kept (unrated) so --resume knows practice is done
+        print("  practice done.")
+        return
     print(f"  Ask the participant ({SCALE_MIN} = low, {SCALE_MAX} = high):")
     for key, text, low, high in QUESTIONS:
         row[key] = p.ask(f"    {text.format(gesture=gesture.replace('_', ' '))} "
                          f"[{SCALE_MIN} {low} … {SCALE_MAX} {high}]: ",
                          parse_int(SCALE_MIN, SCALE_MAX))
-    valid = p.ask("  Trial valid? (Enter = yes, x = invalid, e.g. robot stumbled / wrong gesture): ",
-                  allow_empty=True)
-    row["valid"] = 0 if valid.lower() in ("x", "n", "no", "invalid") else 1
+    valid = p.ask("  Trial valid? (y = yes, n = no, e.g. robot stumbled / wrong gesture): ",
+                  parse_choice(["y", "n"]))
+    row["valid"] = 1 if valid == "y" else 0
     if row["valid"] == 0 and not p.pending_note:
         p.pending_note.append(input("  reason: ").strip())
     row["note"] = p.take_note()
@@ -452,6 +456,8 @@ def main():
                     help="(kept for old commands; the RIGID practice round now always runs)")
     ap.add_argument("--no-practice", action="store_true",
                     help="skip the RIGID practice round (debugging only, not for real participants)")
+    ap.add_argument("--rate-practice", action="store_true",
+                    help="also ask the ratings in the RIGID practice round (default: familiarisation only)")
     ap.add_argument("--settle", type=float, default=2.0, help="seconds to wait after a profile switch")
     ap.add_argument("--blind", action="store_true", help="show only set letters (A-H), not profile names")
     ap.add_argument("--port", type=int, default=5565)
@@ -497,7 +503,7 @@ def main():
                 print("  ESTOP is active — release it (!r) first.")
                 p.ask("  Press Enter when released: ", allow_empty=True)
                 link.set_profile(BASELINE_PROFILE)
-            print(f"\n=== Practice / baseline ({BASELINE_PROFILE}) ===")
+            print(f"\n=== Practice ({BASELINE_PROFILE}, familiarisation) ===")
             countdown(args.settle, "settling")
             for g in practice_todo:
                 gpos = args.gestures.index(g) + 1

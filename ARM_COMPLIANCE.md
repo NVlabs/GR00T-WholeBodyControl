@@ -172,19 +172,20 @@ python gear_sonic/scripts/arm_compliance_study.py \
 - **Intake:** consent check, then age, gender, height, weight (optional),
   dominant hand, robot experience, prior contact with a humanoid. The name goes
   only to `names_key.csv`; data files use the ID (P01, P02, ...).
-- **Practice / baseline:** always first, always the built-in **RIGID** profile,
-  rated like every trial and saved as `trial_kind=practice` (the rigid reference).
+- **Practice:** always first, always the built-in **RIGID** profile, one Enter per
+  gesture, no ratings (familiarisation). `--rate-practice` asks the ratings too.
+  The analysed rigid condition is `Sr_Er_Wr` inside the 8 counterbalanced sets.
   `--no-practice` exists only for debugging.
 - **Order:** sets in a balanced Latin square (Williams design) by participant
   number; gesture order rotates across sets. Fixed at the first run, reused on
   resume.
-- **Per gesture:** Enter when ready, Enter when done (timestamps for syncing with
-  robot telemetry), then 3 ratings on 1–7: **perceived safety**, **comfort** and
+- **Per gesture:** one Enter when the gesture is done (start time = when the
+  gesture is announced, end = Enter; for syncing with robot telemetry), then 3 ratings on 1–7: **perceived safety**, **comfort** and
   **naturalness** (edit `QUESTIONS` at the top of the script to add items, e.g.
   perceived softness as a manipulation check). A CSV started with the old 2-question
   version is upgraded automatically on `--resume` (old rows keep an empty
-  naturalness cell). Mark a trial invalid with `x`
-  (e.g. robot stumbled).
+  naturalness cell). Then `y`/`n`: was the trial valid
+  (`n` e.g. robot stumbled; a reason is asked).
 - **Commands at any prompt:** `!e` ESTOP, `!r` release, `!b` break (robot →
   RIGID), `!n` note, `!s` skip trial, `!q` save and quit.
 - **Output** (default `~/arm_compliance_study_data/`, outside the repo):
