@@ -44,6 +44,9 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <thread>
+
+#include <zmq.hpp>
 
 namespace safe_stop {
 
@@ -96,6 +99,7 @@ struct Config {
   double forward_min = 0.12;    ///< Hug = both hands at least this far in front of the rest pose (m).
   std::string log_file;         ///< Optional CSV log of each stop (--safe-stop-log).
   int voice_port = 5570;        ///< Port of the voice node's PUB socket on --zmq-host (0 = off).
+  int status_port = 5571;       ///< PUB of the stop state for the hand scripts (BrainCo); 0 = off.
 };
 
 inline Config& Settings() {
@@ -271,6 +275,61 @@ class StopLogger {
   std::chrono::steady_clock::time_point start_{}, last_active_{};
   bool was_active_ = false;
   int stop_id_ = 0;
+};
+
+/// Publishes the stop state for other processes (the BrainCo hand senders open the
+/// hands while it is active): PUB tcp://*:<status_port>, topic "safe_stop_state",
+/// message `safe_stop_state {"active":0|1,"epoch":n}`, at 10 Hz and at once on change.
+class StatusPublisher {
+ public:
+  explicit StatusPublisher(int port) {
+    if (port <= 0) return;
+    try {
+      sock_ = std::make_unique<zmq::socket_t>(ctx_, ZMQ_PUB);
+      sock_->set(zmq::sockopt::linger, 0);
+      sock_->set(zmq::sockopt::sndhwm, 10);
+      sock_->bind("tcp://*:" + std::to_string(port));
+    } catch (const zmq::error_t& e) {
+      std::cerr << "[SafeStop] Status publisher on port " << port << " failed: " << e.what()
+                << " (BrainCo hands will not open on a safe stop)" << std::endl;
+      sock_.reset();
+      return;
+    }
+    std::cout << "  - Safe-stop state: PUB tcp://*:" << port << " topic 'safe_stop_state' (BrainCo hands)"
+              << std::endl;
+    thread_ = std::thread([this] { Loop(); });
+  }
+  ~StatusPublisher() {
+    run_ = false;
+    if (thread_.joinable()) thread_.join();
+  }
+  StatusPublisher(const StatusPublisher&) = delete;
+  StatusPublisher& operator=(const StatusPublisher&) = delete;
+
+ private:
+  void Loop() {
+    bool last_active = !Active().load();
+    auto last_send = std::chrono::steady_clock::now() - std::chrono::seconds(1);
+    while (run_) {
+      const bool active = Active().load();
+      const auto now = std::chrono::steady_clock::now();
+      if (active != last_active || now - last_send >= std::chrono::milliseconds(100)) {
+        const std::string msg = std::string("safe_stop_state {\"active\":") + (active ? "1" : "0") +
+                                ",\"epoch\":" + std::to_string(Epoch().load()) + "}";
+        try {
+          sock_->send(zmq::buffer(msg), zmq::send_flags::dontwait);
+        } catch (const zmq::error_t&) {
+        }
+        last_active = active;
+        last_send = now;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+  }
+  zmq::context_t ctx_{1};
+  std::unique_ptr<zmq::socket_t> sock_;
+  std::atomic<bool> run_{true};
+  std::thread thread_;
 };
 
 }  // namespace safe_stop

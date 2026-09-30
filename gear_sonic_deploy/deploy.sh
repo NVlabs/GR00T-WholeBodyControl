@@ -332,7 +332,7 @@ while [[ $# -gt 0 ]]; do
             COMPLIANCE_ARGS="$COMPLIANCE_ARGS --arm-compliance"
             shift
             ;;
-        --compliance-host|--compliance-port|--compliance-profile|--compliance-profiles|--compliance-slew|--compliance-soften|--compliance-stiffen|--compliance-estop-kp|--compliance-estop-kd|--compliance-estop-ramp|--compliance-estop-release|--compliance-estop-mode|--compliance-handoff|--safe-stop-profile|--safe-stop-hand-speed|--safe-stop-soften|--safe-stop-open-width|--safe-stop-log|--safe-stop-voice-port|--compliance-retract-speed|--compliance-retract-kp|--compliance-retract-max)
+        --compliance-host|--compliance-port|--compliance-profile|--compliance-profiles|--compliance-slew|--compliance-soften|--compliance-stiffen|--compliance-estop-kp|--compliance-estop-kd|--compliance-estop-ramp|--compliance-estop-release|--compliance-estop-mode|--compliance-handoff|--safe-stop-profile|--safe-stop-hand-speed|--safe-stop-soften|--safe-stop-open-width|--safe-stop-log|--safe-stop-voice-port|--safe-stop-status-port|--compliance-retract-speed|--compliance-retract-kp|--compliance-retract-max)
             if [[ -z "$2" ]]; then
                 echo -e "${RED}Error: $1 requires a value${NC}" >&2
                 exit 1

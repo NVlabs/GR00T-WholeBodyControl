@@ -144,6 +144,9 @@ class ZMQManager : public InputInterface {
       
       planner_subscriber_->Start();
 
+      // Safe-stop state for the BrainCo hand senders (they open the hands while stopped).
+      safe_stop_status_ = std::make_unique<safe_stop::StatusPublisher>(safe_stop::Settings().status_port);
+
       // Safety topic from the voice node (voice_safe_stop.py), own port on the same host.
       if (safe_stop::Settings().voice_port > 0) {
         safety_subscriber_ = std::make_unique<ZMQPackedMessageSubscriber>(
@@ -1330,6 +1333,7 @@ class ZMQManager : public InputInterface {
     /// Background subscriber for the planner topic.
     std::unique_ptr<ZMQPackedMessageSubscriber> planner_subscriber_;
     std::unique_ptr<ZMQPackedMessageSubscriber> safety_subscriber_;  ///< Voice safe stop (own port).
+    std::unique_ptr<safe_stop::StatusPublisher> safe_stop_status_;   ///< Stop state -> BrainCo hand scripts.
     
     // ------------------------------------------------------------------
     // Mode / message state

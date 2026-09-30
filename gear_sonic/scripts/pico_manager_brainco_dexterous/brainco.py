@@ -17,6 +17,13 @@ from .runtime import (
     MotorStates_, _BRAINCO_DDS_IMPORT_ERROR, unitree_go_msg_dds__MotorCmd_,
 )
 
+try:  # Safe stop (SONIC deploy k / voice): open the hands. Optional helper.
+    from .safe_stop_hands import get_hand_guard
+except Exception as _safe_stop_import_error:  # noqa: BLE001
+    get_hand_guard = None
+    print(f"[BrainCoHand] safe_stop_hands unavailable ({_safe_stop_import_error}); "
+          "hands will not open on a safe stop")
+
 def _normalize_trigger_value(trigger: float, trigger_range: str = "auto") -> float:
     """Return trigger press in [0, 1], accepting both 0..1 and legacy 10..0 ranges."""
     if trigger_range not in BRAINCO_TRIGGER_RANGE_CHOICES:
@@ -129,6 +136,7 @@ class BraincoHandCommandPublisher:
             "right": np.zeros(BRAINCO_NUM_MOTORS, dtype=bool),
         }
         self._trigger_active = {"left": False, "right": False}
+        self._safe_stop_guard = get_hand_guard("rearm") if get_hand_guard else None
 
         ChannelFactoryInitialize(dds_domain_id, networkInterface=dds_network_interface)
 
@@ -172,8 +180,8 @@ class BraincoHandCommandPublisher:
         right_q_target = self._zero_excluded_fingers("right", right_q_target)
 
         with self._lock:
-            left_q_target = self._adapt_target("left", left_q_target)
-            right_q_target = self._adapt_target("right", right_q_target)
+            left_q_target = self._guarded_target("left", left_q_target)
+            right_q_target = self._guarded_target("right", right_q_target)
             # Enforce the mask immediately before DDS Write as a final safety
             # barrier, independent of the adaptive controller state.
             left_q_target = self._zero_excluded_fingers("left", left_q_target)
@@ -187,6 +195,19 @@ class BraincoHandCommandPublisher:
             self.left_publisher.Write(self.left_msg)
             self.right_publisher.Write(self.right_msg)
             return left_q_target.copy(), right_q_target.copy()
+
+    def _guarded_target(self, hand: str, target: np.ndarray) -> np.ndarray:
+        """Safe stop active: open slowly and ignore the trigger; else the adaptive grasp."""
+        if self._safe_stop_guard is not None:
+            q, overridden = self._safe_stop_guard.apply(hand, target, self._q_cmd[hand])
+            if overridden:
+                # Reset the grasp state so the next trigger press starts a fresh close.
+                self._stopped[hand][:] = False
+                self._armed[hand][:] = False
+                self._trigger_active[hand] = False
+                self._requested_target[hand] = BRAINCO_OPEN_Q.copy()
+                return np.asarray(q, dtype=np.float32)
+        return self._adapt_target(hand, target)
 
     def _zero_excluded_fingers(self, hand: str, target: np.ndarray) -> np.ndarray:
         """Return a command copy with excluded motor positions forced to zero."""

@@ -92,9 +92,30 @@ def safe_msg(field, topic=b"command"):  # field = "safe_stop" or "safe_release"
    arms never jump. The next start / mode command (a button or key press on the
    PICO or VLA keyboard) is accepted normally.
 
-Not covered: the **BrainCo hands**. `run_inference_affectivevla.py` drives them
-directly (not through deploy), so the safe stop cannot open or freeze them; add a
-check in that script (e.g. listen for the same stop and open the hands).
+## BrainCo hands
+
+The BrainCo hands are driven by the teleop / VLA scripts, not by deploy, so deploy
+**publishes its stop state** (PUB `tcp://*:5571`, topic `safe_stop_state`,
+`{"active":0|1,"epoch":n}`, 10 Hz and at once on change; `--safe-stop-status-port`,
+0 = off) and each hand sender passes its command through
+`safe_stop_hands.py` (`SafeHandGuard`) just before the DDS write:
+
+- **Stop active:** every finger ramps from where it is to **0 (open)** at
+  0.5 /s (fully closed → open in ~2 s); trigger / VLA finger commands are ignored.
+- **After release — teleop** (`pico_manager_brainco_dexterous/brainco.py`): the
+  hands stay open until the operator lets go of the trigger; the next press closes
+  as usual (a trigger held through the stop never re-closes the hand by itself).
+- **After release — VLA** (`run_inference_affectivevla.py`, copy
+  `safe_stop_hands.py` next to it): the hands stay open until the VLA is restarted
+  from its keyboard (`i`, `k` start, or `p` resume), then blend back to the VLA's
+  command at 0.5 /s. With the VLA loop paused, the hands still open.
+
+Environment of the hand scripts: `SAFE_STOP_HOST` (default `localhost`: deploy on the
+same computer), `SAFE_STOP_PORT` (5571; 0 = off), `SAFE_STOP_HAND_OPEN_RATE`,
+`SAFE_STOP_HAND_RESUME_RATE` (finger q per second). If deploy is not running the
+guard never acts; if deploy dies during a stop, the hands stay open.
+Log lines: `[SafeStopHands] connected ...`, `SAFE STOP: left hand opening`,
+`released: ... stays open until ...`, `... follows the trigger again`.
 
 ## Run
 
@@ -103,6 +124,7 @@ check in that script (e.g. listen for the same stop and open the hands).
 # in this terminal:  k = safe stop,  u = release
 # options: --safe-stop-profile SOFT  --safe-stop-soften 0.5  --safe-stop-hand-speed 0.2
 #          --safe-stop-open-width 0.25  --safe-stop-log ~/safe_stop_log.csv
+#          --safe-stop-voice-port 5570  --safe-stop-status-port 5571
 ```
 
 Log lines to expect:
@@ -130,3 +152,4 @@ jerky motion comes from the targets or from the tracking.
 - `gear_sonic_deploy/src/g1/g1_deploy_onnx_ref/src/g1_deploy_onnx_ref.cpp` — softening + log in `CreatePolicyCommand()`, `--safe-stop-*` flags, profile lookup
 - `gear_sonic_deploy/deploy.sh` — flag pass-through
 - `gear_sonic/scripts/voice_safe_stop.py` — voice trigger (Vosk, offline)
+- `gear_sonic/scripts/pico_manager_brainco_dexterous/safe_stop_hands.py` — opens the BrainCo hands on a stop (used by `brainco.py` and the VLA script)
