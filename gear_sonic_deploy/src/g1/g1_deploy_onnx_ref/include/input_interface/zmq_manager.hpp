@@ -241,7 +241,7 @@ class ZMQManager : public InputInterface {
       const bool safe_stop_active = safe_stop::Active().load();
       if (safe_stop_active && !safe_stop_prev_) {
         rearm_vr_.store(true);
-        has_vr_3point_control_ = false;   // policy encoder goes back to the planner
+        StartLoweringPath();              // VR hands -> rest pose, smoothly (if in VR teleop)
         has_upper_body_control_ = false;
         has_hand_joints_ = false;
         if (active_mode_ == ManagedMode::STREAMED_MOTION) {
@@ -622,7 +622,7 @@ class ZMQManager : public InputInterface {
         std::lock_guard<std::mutex> lock(planner_mutex_);
         has_upper_body_control_ = false;
         has_hand_joints_ = false;
-        has_vr_3point_control_ = false;
+        UpdateLoweringPath();  // keeps VR control on the synthetic hands, or off if there were none
         latest_planner_message_.valid = false;
         auto current_facing = movement_state_buffer.GetDataWithTime().data->facing_direction;
         movement_state_buffer.SetData(MovementState(static_cast<int>(LocomotionMode::IDLE),
@@ -869,6 +869,7 @@ class ZMQManager : public InputInterface {
       // until the operator sends a message without VR hands (= left teleop).
       if (rearm_vr_.load() && !safe_stop::Active().load() && vr_position_idx < 0 && upper_body_position_idx < 0) {
         rearm_vr_.store(false);
+        synthetic_vr_.store(false);  // hands already at the rest pose -> planner takes over
         std::cout << "[SafeStop] Operator left teleop: VR / upper-body targets accepted again." << std::endl;
       }
       if (safe_stop::Active().load() || rearm_vr_.load()) {
@@ -1268,8 +1269,9 @@ class ZMQManager : public InputInterface {
             }
         }
       }
-      else {
+      else if (!(safe_stop::Active().load() || rearm_vr_.load())) {
         // No VR position provided - disable VR 3-point control
+        // (not during a safe stop: then the synthetic lowering path owns the VR targets)
         has_vr_3point_control_ = false;
       }
 
@@ -1331,6 +1333,78 @@ class ZMQManager : public InputInterface {
     /// Tracks the previous frame's VR-3-point state to detect enable/disable transitions
     /// and automatically toggle encoder mode accordingly.
     bool last_has_vr_3point_control_ = false;
+
+    // ------------------------------------------------------------------
+    // Safe stop: smooth lowering path of the VR hand targets
+    // ------------------------------------------------------------------
+    /// Rest pose of the VR 3-point targets = InputInterface defaults (arms down, idle).
+    static constexpr std::array<double, 9> kRestVRPos = {0.0903, 0.1615, -0.2411, 0.1280, -0.1522, -0.2461,
+                                                         0.0241, -0.0081, 0.4028};
+    static constexpr std::array<double, 12> kRestVROrn = {0.7295, 0.3145, 0.5533, -0.2506, 0.7320, -0.2639,
+                                                          0.5395, 0.3217, 0.9991, 0.011, 0.0402, -0.0002};
+
+    void StartLoweringPath() {
+      if (!has_vr_3point_control_) {           // not in VR teleop: planner idle as before
+        synthetic_vr_.store(false);
+        safe_stop::LoweringDuration().store(0.0);
+        has_vr_3point_control_ = false;
+        return;
+      }
+      auto pos = vr_3point_position_.GetDataWithTime().data;
+      auto orn = vr_3point_orientation_.GetDataWithTime().data;
+      path_from_pos_ = pos ? *pos : kRestVRPos;
+      path_from_orn_ = orn ? *orn : kRestVROrn;
+      double d = 0.0;
+      for (int p = 0; p < 2; ++p) {             // the two wrists
+        double sq = 0.0;
+        for (int k = 0; k < 3; ++k) sq += std::pow(kRestVRPos[p * 3 + k] - path_from_pos_[p * 3 + k], 2);
+        d = std::max(d, std::sqrt(sq));
+      }
+      const auto& c = safe_stop::Settings();
+      // min-jerk peak speed = 1.875 * distance / duration
+      path_dur_ = std::clamp(1.875 * d / std::max(c.hand_speed, 0.01), c.lower_min_s, c.lower_max_s);
+      path_start_ = std::chrono::steady_clock::now();
+      safe_stop::LoweringDuration().store(path_dur_);
+      synthetic_vr_.store(true);
+      has_vr_3point_control_ = true;
+      std::cout << "[SafeStop] Lowering the hands to the rest pose over " << path_dur_ << " s (farthest hand "
+                << d << " m away)" << std::endl;
+    }
+
+    /// Called every input tick while stopped (and until the operator has left teleop).
+    void UpdateLoweringPath() {
+      if (!synthetic_vr_.load()) { has_vr_3point_control_ = false; return; }
+      const double t = std::chrono::duration<double>(std::chrono::steady_clock::now() - path_start_).count();
+      const double r = std::clamp(t / std::max(path_dur_, 1e-3), 0.0, 1.0);
+      const double s = r * r * r * (10.0 + r * (-15.0 + 6.0 * r));
+      std::array<double, 9> pos;
+      for (int i = 0; i < 9; ++i) pos[i] = path_from_pos_[i] + s * (kRestVRPos[i] - path_from_pos_[i]);
+      std::array<double, 12> orn;
+      for (int q = 0; q < 3; ++q) {             // slerp each quaternion
+        const double* a = &path_from_orn_[q * 4];
+        const double* b = &kRestVROrn[q * 4];
+        double dot = 0.0;
+        for (int k = 0; k < 4; ++k) dot += a[k] * b[k];
+        const double sgn = dot < 0.0 ? -1.0 : 1.0;
+        dot = std::min(1.0, std::fabs(dot));
+        const double th = std::acos(dot);
+        double wa = 1.0 - s, wb = s;
+        if (th > 1e-4) { wa = std::sin((1.0 - s) * th) / std::sin(th); wb = std::sin(s * th) / std::sin(th); }
+        double n = 0.0;
+        for (int k = 0; k < 4; ++k) { orn[q * 4 + k] = wa * a[k] + wb * sgn * b[k]; n += orn[q * 4 + k] * orn[q * 4 + k]; }
+        n = std::sqrt(n);
+        for (int k = 0; k < 4; ++k) orn[q * 4 + k] /= (n > 1e-9 ? n : 1.0);
+      }
+      vr_3point_position_.SetData(pos);
+      vr_3point_orientation_.SetData(orn);
+      has_vr_3point_control_ = true;
+    }
+
+    std::atomic<bool> synthetic_vr_{false};   ///< VR targets come from the lowering path.
+    std::array<double, 9> path_from_pos_{};
+    std::array<double, 12> path_from_orn_{};
+    double path_dur_ = 0.0;
+    std::chrono::steady_clock::time_point path_start_{};
 
     // Safe stop (safe_stop.hpp)
     bool safe_stop_prev_ = false;             ///< Safe stop state seen last update().

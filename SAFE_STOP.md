@@ -38,17 +38,21 @@ PICO / VLA script (it already has a PUB socket to deploy).
 ## What happens
 
 1. **Stop following** (input thread, `zmq_manager.hpp`)
-   - VR 3-point teleop (planner mode): VR hands, upper-body and hand targets and
-     walking commands are ignored; locomotion is forced to IDLE. The policy's
-     encoder goes back to the planner, so **the policy lowers the arms itself**
-     (the same thing you see when you leave teleop on the PICO).
+   - VR 3-point teleop (planner mode): the operator's hands, upper-body / hand
+     targets and walking commands are ignored; locomotion is forced to IDLE.
+     The **VR hand targets follow a smooth minimum-jerk path** from where the
+     hands were to the rest pose (peak hand speed `--safe-stop-hand-speed`,
+     0.2 m/s, 2–5 s) and then stay there. The policy follows it like an operator
+     slowly lowering the hands, so it keeps its balance. (Dropping the VR hands
+     instantly, as in the first version, lowered the arms too fast.)
    - Streamed motion (full-body POSE, **VLA tokens**): switched to PLANNER idle
      with SONIC's own safety reset (the same path as a `{planner: true}` command).
    - While stopped, any request to switch to streamed motion or to start is ignored.
 2. **Soften slowly** (control thread, `safe_stop.hpp` + `CreatePolicyCommand`)
-   - Wait until the arms are down and still (all arm joints slower than
-     0.15 rad/s for 0.3 s, at least 1 s after the stop; at most
-     `--safe-stop-settle-max`, 4 s).
+   - Wait until the lowering path is done and the arms are still (all arm
+     joints slower than 0.15 rad/s for 0.3 s; at the latest 2 s after the path).
+     The log reports the peak arm joint speed of the lowering — use it to
+     compare settings.
    - Then ramp the arm stiffness (minimum-jerk) over `--safe-stop-soften` (2 s)
      to `--safe-stop-kp` × default Kp (0.5); Kd × √0.5 keeps the damping ratio.
      If the compliance layer is also running, the softer of the two wins.
@@ -70,15 +74,15 @@ check in that script (e.g. listen for the same stop and open the hands).
 ```bash
 ./deploy.sh --input-type zmq_manager sim      # or real; add --arm-compliance etc. as usual
 # in this terminal:  k = safe stop,  u = release
-# options: --safe-stop-kp 0.5  --safe-stop-soften 2.0  --safe-stop-settle-max 4.0
+# options: --safe-stop-hand-speed 0.2  --safe-stop-kp 0.5  --safe-stop-soften 2.0  --safe-stop-settle-max 4.0
 ```
 
 Log lines to expect:
 ```
 [SafeStop] STOP (key k): teleop/VLA ignored, going to ready stand; ...
-[ZMQManager] VR 3-point control disabled            (VR teleop)   or
+[SafeStop] Lowering the hands to the rest pose over 3.9 s (farthest hand 0.42 m away)   (VR teleop)   or
 [SafeStop] Streamed motion -> PLANNER idle (safety reset)   (VLA / full body)
-[SafeStop] Arms down and still after 1.6 s -> softening arms to Kp x0.5 over 2 s
+[SafeStop] Arms down and still after 4.3 s (peak arm joint speed 0.6 rad/s) -> softening arms to Kp x0.5 over 2 s
 [SafeStop] RELEASED (key u): ...
 [SafeStop] Operator left teleop: VR / upper-body targets accepted again.
 ```

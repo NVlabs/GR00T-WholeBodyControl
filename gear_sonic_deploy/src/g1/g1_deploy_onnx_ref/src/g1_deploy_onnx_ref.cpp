@@ -4249,6 +4249,7 @@ int main(int argc, char const* argv[]) {
     std::cout << "  --compliance-slew <s>: set both ramp times at once" << std::endl;
     std::cout << "Safe stop (zmq_manager input; k = stop, u = release in this terminal, or command fields safe_stop / safe_release):\n"
               << "  stops teleop / VLA, robot goes to planner idle (arms down by the policy), then the arms soften slowly." << std::endl;
+    std::cout << "  --safe-stop-hand-speed <m/s>: peak hand speed of the lowering path in VR teleop (default: 0.2; 2-5 s)" << std::endl;
     std::cout << "  --safe-stop-kp <scale>: arm Kp x scale once the arms are down (default: 0.5; Kd x sqrt)" << std::endl;
     std::cout << "  --safe-stop-soften <s>: duration of the softening ramp (default: 2.0)" << std::endl;
     std::cout << "  --safe-stop-settle-max <s>: soften at the latest this long after the stop (default: 4.0)" << std::endl;
@@ -4555,7 +4556,7 @@ int main(int argc, char const* argv[]) {
     } else if (std::string(argv[i]) == "--compliance-profiles") {
       arm_compliance_config.profiles_file = require_value(i, "--compliance-profiles");
     } else if (std::string(argv[i]) == "--safe-stop-kp" || std::string(argv[i]) == "--safe-stop-soften" ||
-               std::string(argv[i]) == "--safe-stop-settle-max") {
+               std::string(argv[i]) == "--safe-stop-settle-max" || std::string(argv[i]) == "--safe-stop-hand-speed") {
       const std::string flag = argv[i];
       const std::string value = require_value(i, flag.c_str());
       double v = 0.0;
@@ -4568,6 +4569,9 @@ int main(int argc, char const* argv[]) {
       } else if (flag == "--safe-stop-soften") {
         if (!(v >= 0.0 && v <= 10.0)) { std::cerr << "Error: --safe-stop-soften must be in [0, 10] s" << std::endl; exit(1); }
         safe_stop::Settings().soften_s = v;
+      } else if (flag == "--safe-stop-hand-speed") {
+        if (!(v >= 0.05 && v <= 1.0)) { std::cerr << "Error: --safe-stop-hand-speed must be in [0.05, 1] m/s" << std::endl; exit(1); }
+        safe_stop::Settings().hand_speed = v;
       } else {
         if (!(v >= 1.0 && v <= 10.0)) { std::cerr << "Error: --safe-stop-settle-max must be in [1, 10] s" << std::endl; exit(1); }
         safe_stop::Settings().settle_max_s = v;

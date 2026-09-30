@@ -7,11 +7,15 @@
  *
  * What happens on a stop request:
  *   1. ZMQManager (input thread) stops listening to the operator / VLA:
+ *        - VR 3-point teleop: the operator's hands are replaced by a smooth
+ *          minimum-jerk path of the VR hand targets from where they were to the
+ *          rest pose (peak hand speed hand_speed, lower_min_s..lower_max_s); the
+ *          POLICY follows it (it looks like an operator slowly lowering the
+ *          hands) and keeps its balance. The hands then stay at the rest pose.
+ *        - planner messages are ignored: locomotion forced to IDLE, upper-body
+ *          and hand targets dropped;
  *        - streamed full-body motion -> switched to PLANNER mode (SONIC's own
- *          safety-reset path, the same one the PICO uses to leave teleop);
- *        - planner messages are ignored: locomotion forced to IDLE, VR 3-point,
- *          upper-body and hand targets dropped -> the policy's encoder goes back
- *          to the planner and the POLICY lowers the arms to its idle pose itself.
+ *          safety-reset path, the same one the PICO uses to leave teleop).
  *   2. The deploy (control thread) waits until the arms have come down and are
  *      still, then ramps the arm stiffness down slowly (min-jerk) to a soft level
  *      (default Kp x 0.5, Kd x sqrt(0.5) so the damping ratio is unchanged).
@@ -78,8 +82,18 @@ struct Config {
   double settle_speed = 0.15;  ///< Arms count as "still" below this joint speed (rad/s)...
   double settle_hold_s = 0.3;  ///< ...for this long,
   double settle_min_s = 1.0;   ///< but not earlier than this after the stop,
-  double settle_max_s = 4.0;   ///< and at the latest after this.
+  double settle_max_s = 4.0;   ///< and at the latest after this (after the lowering path).
+  // Lowering path of the VR hand targets (VR 3-point teleop)
+  double hand_speed = 0.20;    ///< Peak hand speed of the path (m/s).
+  double lower_min_s = 2.0;    ///< Path duration limits (s).
+  double lower_max_s = 5.0;
 };
+
+/// Duration of the current lowering path (s), set by ZMQManager, read by ArmSoftener.
+inline std::atomic<double>& LoweringDuration() {
+  static std::atomic<double> d{0.0};
+  return d;
+}
 
 inline Config& Settings() {
   static Config cfg;
@@ -109,6 +123,7 @@ class ArmSoftener {
       state_ = State::kWaitSettle;
       t_ = 0.0;
       still_t_ = 0.0;
+      peak_speed_ = 0.0;
     } else if (!active && state_ != State::kIdle && state_ != State::kRestoring) {
       Start(State::kRestoring, 1.0, c.restore_s);
       std::cout << "[SafeStop] Restoring arm stiffness over " << c.restore_s << " s" << std::endl;
@@ -120,14 +135,19 @@ class ArmSoftener {
       case State::kWaitSettle: {
         float vmax = 0.0f;
         for (float v : arm_dq) vmax = std::max(vmax, std::fabs(v));
+        peak_speed_ = std::max(peak_speed_, static_cast<double>(vmax));
         still_t_ = (vmax < c.settle_speed) ? still_t_ + dt : 0.0;
-        const bool settled = t_ >= c.settle_min_s && still_t_ >= c.settle_hold_s;
-        if (settled || t_ >= c.settle_max_s) {
+        // Never soften before the lowering path is done.
+        const double path = LoweringDuration().load();
+        const double min_t = std::max(c.settle_min_s, path + 0.2);
+        const double max_t = std::max(c.settle_max_s, path + 2.0);
+        const bool settled = t_ >= min_t && still_t_ >= c.settle_hold_s;
+        if (settled || t_ >= max_t) {
           const double waited = t_;
           Start(State::kSoftening, std::clamp(c.kp_scale, 0.05, 1.0), c.soften_s);
           std::cout << "[SafeStop] Arms " << (settled ? "down and still" : "settle timeout")
-                    << " after " << waited << " s -> softening arms to Kp x" << to_ << " over " << c.soften_s
-                    << " s" << std::endl;
+                    << " after " << waited << " s (peak arm joint speed " << peak_speed_
+                    << " rad/s) -> softening arms to Kp x" << to_ << " over " << c.soften_s << " s" << std::endl;
         }
         break;
       }
@@ -153,7 +173,7 @@ class ArmSoftener {
   }
   State state_ = State::kIdle;
   unsigned epoch_ = 0;
-  double scale_ = 1.0, from_ = 1.0, to_ = 1.0, dur_ = 0.0, t_ = 0.0, still_t_ = 0.0;
+  double scale_ = 1.0, from_ = 1.0, to_ = 1.0, dur_ = 0.0, t_ = 0.0, still_t_ = 0.0, peak_speed_ = 0.0;
 };
 
 }  // namespace safe_stop
