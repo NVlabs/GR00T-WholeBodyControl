@@ -105,8 +105,9 @@ The BrainCo hands are driven by the teleop / VLA scripts, not by deploy, so depl
 - **After release — teleop** (`pico_manager_brainco_dexterous/brainco.py`): the
   hands stay open until the operator lets go of the trigger; the next press closes
   as usual (a trigger held through the stop never re-closes the hand by itself).
-- **After release — VLA** (`run_inference_affectivevla.py`, copy
-  `safe_stop_hands.py` next to it): the hands stay open until the VLA is restarted
+- **After release — VLA** (the robot's `run_inference_affective_vla.py`; apply
+  `gear_sonic/scripts/safe_stop_vla_hands.diff` to it and copy
+  `safe_stop_hands.py` next to it — tested on the robot 2026-10-01): the hands stay open until the VLA is restarted
   from its keyboard (`i`, `k` start, or `p` resume), then blend back to the VLA's
   command at 0.5 /s. With the VLA loop paused, the hands still open.
 

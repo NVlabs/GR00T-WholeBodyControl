@@ -1,0 +1,115 @@
+--- a/gear_sonic/scripts/run_inference_affective_vla.py	2026-10-01 00:10:45.583502643 +0300
++++ b/gear_sonic/scripts/run_inference_affective_vla.py	2026-10-01 00:10:45.585716872 +0300
+@@ -441,6 +441,61 @@
+     return output
+ 
+ 
++_SAFE_STOP_GUARD = []  # SAFESTOP-HANDS: lazily created SafeHandGuard (or None)
++
++
++def _safe_stop_guard():  # SAFESTOP-HANDS
++    """Deploy safe stop (k / voice) -> open the BrainCo hands (safe_stop_hands.py)."""
++    if not _SAFE_STOP_GUARD:
++        try:
++            try:  # copy next to this script ...
++                from safe_stop_hands import get_hand_guard
++            except ImportError:  # ... or the one in the PICO manager package
++                from gear_sonic.scripts.pico_manager_brainco_dexterous.safe_stop_hands import (
++                    get_hand_guard,
++                )
++            _SAFE_STOP_GUARD.append(get_hand_guard("hold"))
++        except Exception as e:  # noqa: BLE001
++            print(f"[BrainCo] safe_stop_hands unavailable ({e}); hands will not open on a safe stop",
++                  flush=True)
++            _SAFE_STOP_GUARD.append(None)
++    return _SAFE_STOP_GUARD[0]
++
++
++def _apply_safe_stop_to_hands(l, r):  # SAFESTOP-HANDS
++    """Override l / r while a safe stop is active (open slowly) or after it (hold open)."""
++    guard = _safe_stop_guard()
++    if guard is None:
++        return l, r
++    out = []
++    for hand, q in (("left", l), ("right", r)):
++        q_safe, overridden = guard.apply(hand, q, _brainco_last_command[hand])
++        if overridden:
++            q = np.asarray(q_safe, dtype=np.float32)
++            # Keep the contact filter and slew history on what was actually sent.
++            _brainco_last_command[hand] = q.copy()
++            _slew_hand_prev[hand] = q.copy()
++        out.append(q)
++    return out[0], out[1]
++
++
++def _safe_stop_hands_idle():  # SAFESTOP-HANDS
++    """Loop paused / no chunk: still open the hands if a safe stop is active."""
++    guard = _safe_stop_guard()
++    if guard is None or not guard.active():
++        return
++    if os.environ.get("HAND_ENABLE", "0") != "1":
++        return
++    last_l, last_r = _brainco_last_command["left"], _brainco_last_command["right"]
++    if last_l is None or last_r is None:
++        return
++    try:
++        l, r = _apply_safe_stop_to_hands(last_l.copy(), last_r.copy())
++        _get_brainco().send_targets_normalized(l, r, dry_run=False)
++    except Exception as e:  # noqa: BLE001
++        print(f"[BrainCo] safe-stop send failed: {e}", flush=True)
++
++
+ def _send_brainco_hands(
+     left,
+     right,
+@@ -465,6 +520,7 @@
+             # Keep slew history aligned with the command that was actually sent.
+             _slew_hand_prev["left"] = l.copy()
+             _slew_hand_prev["right"] = r.copy()
++            l, r = _apply_safe_stop_to_hands(l, r)  # SAFESTOP-HANDS
+         ctrl.send_targets_normalized(l, r, dry_run=not enable)
+         if not enable:
+             print(f"[BrainCo] DRY-RUN right={r.round(3)}", flush=True)
+@@ -844,6 +900,8 @@
+             print("Keyboard: 'f' (stop recording failure -- handled by data exporter)")
+         elif key == "i":
+             print("Moving to initial pose")
++            if _safe_stop_guard() is not None:  # SAFESTOP-HANDS: VLA restarted
++                _safe_stop_guard().resume()
+             zmq_frame_counter = 0
+             print("Reset ZMQ frame counter")
+             publish_initial_pose()
+@@ -863,6 +921,8 @@
+         elif key == "p":
+             pause_loop = not pause_loop
+             print(f"{'Paused' if pause_loop else 'Resumed'} policy loop")
++            if not pause_loop and _safe_stop_guard() is not None:  # SAFESTOP-HANDS
++                _safe_stop_guard().resume()
+             if pause_loop:
+                 print("Policy loop paused (C++ loop still running - press 'k' to stop)")
+             else:
+@@ -877,6 +937,8 @@
+                 print("Starting C++ control loop in PLANNER mode...")
+                 if send_cpp_control_command(start=True, planner=True):
+                     print("Started C++ control loop in PLANNER mode")
++                    if _safe_stop_guard() is not None:  # SAFESTOP-HANDS
++                        _safe_stop_guard().resume()
+                     print("Press 'i' to send initial pose and switch to POSE mode")
+                     if pause_loop:
+                         print("Note: Policy loop is paused - press 'p' to resume")
+@@ -963,6 +1025,7 @@
+                     pass
+ 
+             if pause_loop:
++                _safe_stop_hands_idle()  # SAFESTOP-HANDS
+                 print("Pausing...", end="", flush=True)
+                 time.sleep(0.2)
+                 print(".", end="", flush=True)
+@@ -970,6 +1033,7 @@
+ 
+             with telemetry.timer("total_loop"):
+                 if cached_action_chunk is None:
++                    _safe_stop_hands_idle()  # SAFESTOP-HANDS
+                     print("[DEBUG] No cached chunk yet, waiting...", flush=True)
+                     _sleep_remaining(t_start, loop_period)
+                     continue
