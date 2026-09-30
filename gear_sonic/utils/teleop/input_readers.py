@@ -647,7 +647,7 @@ class IsaacTeleopReader:
                 except Exception:
                     logger.exception(
                         "[IsaacTeleopReader] skeleton geometry check failed; "
-                        "forwarding this frame unverified"
+                        "counting this frame as unverified"
                     )
                     match = None
 
@@ -668,27 +668,37 @@ class IsaacTeleopReader:
                         continue
                     # Verified against the resolved source: clear the streak.
                     self._unverified_streak = 0
-                elif match is not None:
-                    # AMBIGUOUS or UNUSABLE. One such frame is not evidence of
-                    # anything -- but a skeleton that never resembles either
-                    # convention is not one to drive a robot from, and passing
-                    # these through silently was the gap here: only a confident
-                    # *mismatch* used to refuse, so a frame that matched nothing
-                    # was forwarded.
+                else:
+                    # Every way of not being DECIDED lands here: AMBIGUOUS,
+                    # UNUSABLE, and the matcher raising. They differ in cause but
+                    # not in consequence -- this frame was not verified against
+                    # the resolved source -- so they share one streak.
+                    #
+                    # The raising case used to fall through both branches and be
+                    # forwarded, without even incrementing the streak. A matcher
+                    # that threw on every frame therefore streamed every frame to
+                    # the policy unverified, forever, which is the one failure
+                    # mode this guard exists to prevent. Catching the exception
+                    # keeps the reader thread alive; it must not also buy the
+                    # frame a free pass.
                     self._unverified_streak += 1
                     if self._unverified_streak >= _UNVERIFIED_REFUSE_FRAMES:
                         now_ns = time.monotonic_ns()
                         if now_ns - self._last_unverified_log_ns > _DEGENERATE_LOG_INTERVAL_NS:
                             self._last_unverified_log_ns = now_ns
+                            detail = (
+                                "the geometry check raised"
+                                if match is None
+                                else f"{match.outcome.value}, scores {match.scores}, "
+                                f"margin {match.margin_deg:.1f} deg"
+                            )
                             logger.error(
                                 "[IsaacTeleopReader] DEGENERATE SKELETON: %d consecutive "
-                                "frames matched neither orientation convention (%s, scores "
-                                "%s, margin %.1f deg). Refusing to forward them to the robot "
-                                "control policy.",
+                                "frames could not be verified against resolved source %r "
+                                "(%s). Refusing to forward them to the robot control policy.",
                                 self._unverified_streak,
-                                match.outcome.value,
-                                match.scores,
-                                match.margin_deg,
+                                self.resolved_skeleton_source,
+                                detail,
                             )
                         time.sleep(self._period)
                         continue
