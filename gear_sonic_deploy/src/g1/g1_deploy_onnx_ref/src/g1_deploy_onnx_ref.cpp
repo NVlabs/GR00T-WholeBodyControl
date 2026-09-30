@@ -4274,6 +4274,7 @@ int main(int argc, char const* argv[]) {
     std::cout << "  --safe-stop-soften <s>: soften first, hands hold (default: 0.5)" << std::endl;
     std::cout << "  --safe-stop-hand-speed <m/s>: peak hand speed of the lowering path (default: 0.2; 2-6 s)" << std::endl;
     std::cout << "  --safe-stop-open-width <m>: hug (both hands forward): open each hand this much before lowering (default: 0.25; 0 = off)" << std::endl;
+    std::cout << "  --safe-stop-voice-port <port>: voice node (voice_safe_stop.py) PUB port on --zmq-host (default: 5570; 0 = off)" << std::endl;
     std::cout << "  --safe-stop-log <file.csv>: log every stop at 50 Hz (hand targets, arm targets, q, dq, Kp)" << std::endl;
     std::cout << "  --compliance-estop-mode <auto|retract|limp>: auto = policy brings the arms down (hand-target handoff) when possible,\n"
               << "                                   else retract override; retract = always override; limp = gains only (default: auto)" << std::endl;
@@ -4580,6 +4581,10 @@ int main(int argc, char const* argv[]) {
       arm_compliance_config.profiles_file = require_value(i, "--compliance-profiles");
     } else if (std::string(argv[i]) == "--safe-stop-profile") {
       safe_stop_profile = require_value(i, "--safe-stop-profile");
+    } else if (std::string(argv[i]) == "--safe-stop-voice-port") {
+      try { safe_stop::Settings().voice_port = std::stoi(require_value(i, "--safe-stop-voice-port")); } catch (...) {
+        std::cerr << "Error: --safe-stop-voice-port needs a port number (0 = off)" << std::endl; exit(1);
+      }
     } else if (std::string(argv[i]) == "--safe-stop-log") {
       safe_stop::Settings().log_file = require_value(i, "--safe-stop-log");
     } else if (std::string(argv[i]) == "--safe-stop-soften" || std::string(argv[i]) == "--safe-stop-hand-speed" ||

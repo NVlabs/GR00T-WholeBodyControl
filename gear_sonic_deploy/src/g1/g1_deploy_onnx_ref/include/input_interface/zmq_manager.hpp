@@ -143,6 +143,28 @@ class ZMQManager : public InputInterface {
       );
       
       planner_subscriber_->Start();
+
+      // Safety topic from the voice node (voice_safe_stop.py), own port on the same host.
+      if (safe_stop::Settings().voice_port > 0) {
+        safety_subscriber_ = std::make_unique<ZMQPackedMessageSubscriber>(
+          zmq_host_, safe_stop::Settings().voice_port, "safety",
+          /*timeout_ms=*/100, zmq_verbose_, /*use_conflate=*/false, /*rcv_hwm=*/10);
+        safety_subscriber_->SetOnDecodedMessage(
+          [](const std::string&, const ZMQPackedMessageSubscriber::DecodedHeader& hdr,
+             const std::vector<ZMQPackedMessageSubscriber::BufferView>& bufs) {
+            for (size_t i = 0; i < hdr.fields.size() && i < bufs.size(); ++i) {
+              if (bufs[i].size < 1) continue;
+              uint8_t v = 0;
+              std::memcpy(&v, bufs[i].data, 1);
+              if (v == 0) continue;
+              if (hdr.fields[i].name == "safe_stop") safe_stop::Request("voice");
+              else if (hdr.fields[i].name == "safe_release") safe_stop::Release("voice");
+            }
+          });
+        safety_subscriber_->Start();
+        std::cout << "  - Safety topic: 'safety' on " << zmq_host_ << ":" << safe_stop::Settings().voice_port
+                  << " (voice safe stop)" << std::endl;
+      }
       
       std::cout << "[ZMQManager] Initialized (default: PLANNER mode)" << std::endl;
       std::cout << "  - Host: " << zmq_host_ << ":" << zmq_port_ << std::endl;
@@ -154,6 +176,7 @@ class ZMQManager : public InputInterface {
     
     ~ZMQManager() {
       if (command_subscriber_) command_subscriber_->Stop();
+      if (safety_subscriber_) safety_subscriber_->Stop();
       if (planner_subscriber_) planner_subscriber_->Stop();
     }
 
@@ -1306,6 +1329,7 @@ class ZMQManager : public InputInterface {
     std::unique_ptr<ZMQPackedMessageSubscriber> command_subscriber_;
     /// Background subscriber for the planner topic.
     std::unique_ptr<ZMQPackedMessageSubscriber> planner_subscriber_;
+    std::unique_ptr<ZMQPackedMessageSubscriber> safety_subscriber_;  ///< Voice safe stop (own port).
     
     // ------------------------------------------------------------------
     // Mode / message state

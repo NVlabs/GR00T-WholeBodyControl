@@ -14,27 +14,49 @@ The Unitree remote and the `O` key remain the whole-robot emergency stop.
 | How | Stop | Release |
 |---|---|---|
 | Keyboard, typed in the **deploy terminal** | `k` | `u` |
-| ZMQ `command` topic (e.g. a future voice node) | bool field `safe_stop` = 1 | bool field `safe_release` = 1 |
+| ZMQ `command` topic (from the PICO / VLA script) | bool field `safe_stop` = 1 | bool field `safe_release` = 1 |
+| **Voice** (`voice_safe_stop.py`, mic on the station PC) | say "stop" | `u` (voice release only with `--allow-release`) |
 | Code (any thread) | `safe_stop::Request("why")` | `safe_stop::Release("why")` |
 
-A voice node can send a message containing only the `safe_stop` field; `start` /
-`stop` / `planner` are not needed:
+## Voice (`gear_sonic/scripts/voice_safe_stop.py`)
+
+Offline speech recognition (Vosk, small English model) with a **restricted
+vocabulary** (stop, robot stop, freeze; everything else decodes to "unknown"),
+so ordinary talk rarely triggers it. It acts on the first partial result
+containing a stop word (typically ~0.3–0.5 s after the word; `--no-fast` waits
+for the end of the utterance) and publishes on its own socket, port 5570, topic
+`safety`; deploy connects to `<--zmq-host>:5570` automatically
+(`--safe-stop-voice-port`, 0 = off). Voice **release** is off by default so a
+misheard word can never restart the robot.
+
+```bash
+# once, on the station PC (teleop venv)
+uv pip install vosk sounddevice              # sudo apt install libportaudio2 if needed
+cd ~/yara_sonic && wget https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip \
+  && unzip vosk-model-small-en-us-0.15.zip
+
+python gear_sonic/scripts/voice_safe_stop.py --list-devices   # find the microphone index
+python gear_sonic/scripts/voice_safe_stop.py --device N       # run next to the PICO manager
+python gear_sonic/scripts/voice_safe_stop.py --typed          # no mic: type "stop" (tests the chain)
+python gear_sonic/scripts/voice_safe_stop.py --device N --dry-run --verbose   # check recognition only
+```
+Options: `--stop-words "stop,robot stop,freeze"`, `--min-conf 0.6`,
+`--allow-release` (+ `--release-words "release,continue"`). On the real robot,
+deploy runs on the robot and `--zmq-host` is the station PC, so the voice node
+on the station PC is reached the same way as the PICO manager. The robot's own
+microphone can replace the PC mic later (only the audio source changes).
+
+Other senders can publish the same thing on the `command` topic (e.g. from inside
+the PICO / VLA script):
 
 ```python
-import json, struct, zmq
+import json, struct
 HEADER_SIZE = 1280
-def safe_msg(field):  # field = "safe_stop" or "safe_release"
+def safe_msg(field, topic=b"command"):  # field = "safe_stop" or "safe_release"
     hdr = json.dumps({"v": 1, "endian": "le", "count": 1,
                       "fields": [{"name": field, "dtype": "u8", "shape": [1]}]}).encode()
-    return b"command" + hdr.ljust(HEADER_SIZE, b"\x00") + struct.pack("B", 1)
-# pub = zmq.Context().socket(zmq.PUB); pub.connect("tcp://<host>:5556")  # the port deploy's --zmq-port listens on
-# pub.send(safe_msg("safe_stop"))
+    return topic + hdr.ljust(HEADER_SIZE, b"\x00") + struct.pack("B", 1)
 ```
-
-Note: deploy SUBSCRIBES to the sender's PUB socket. The PICO / VLA script already
-binds that port, so a voice node must either publish through that script or the
-deploy must be pointed at it; the simplest is to add a `safe_stop` call inside the
-PICO / VLA script (it already has a PUB socket to deploy).
 
 ## What happens
 
@@ -104,3 +126,4 @@ jerky motion comes from the targets or from the tracking.
 - `gear_sonic_deploy/src/g1/g1_deploy_onnx_ref/include/input_interface/zmq_manager.hpp` — `k` / `u`, command fields, stop / re-engage logic
 - `gear_sonic_deploy/src/g1/g1_deploy_onnx_ref/src/g1_deploy_onnx_ref.cpp` — softening + log in `CreatePolicyCommand()`, `--safe-stop-*` flags, profile lookup
 - `gear_sonic_deploy/deploy.sh` — flag pass-through
+- `gear_sonic/scripts/voice_safe_stop.py` — voice trigger (Vosk, offline)

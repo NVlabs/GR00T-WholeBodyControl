@@ -27,7 +27,8 @@
  * Triggers (any thread):
  *   - keyboard in the deploy terminal: k = stop, u = release   (ZMQManager)
  *   - ZMQ command topic: optional bool fields "safe_stop" / "safe_release"
- *     (e.g. from a voice-command node)
+ *   - voice node (gear_sonic/scripts/voice_safe_stop.py): its own PUB socket,
+ *     topic "safety", same fields; deploy connects to <zmq-host>:<voice_port>
  *   - code: safe_stop::Request("reason") / safe_stop::Release("reason")
  *
  * The Unitree remote and the 'O' key remain the whole-robot emergency stop.
@@ -74,7 +75,7 @@ inline void Release(const std::string& source) {
   if (Active().exchange(false)) {
     std::cout << "\n[SafeStop] RELEASED (" << source << "): arm stiffness back to normal; robot stays in "
               << "idle. Leave and re-enter teleop / restart the VLA to continue." << std::endl;
-  } else {
+  } else if (source != "voice") {  // the voice node sends a few copies of each command
     std::cout << "[SafeStop] (" << source << ") no safe stop active." << std::endl;
   }
 }
@@ -94,6 +95,7 @@ struct Config {
   double open_width = 0.25;     ///< Hug: extra outward opening of each hand (m); 0 = always straight.
   double forward_min = 0.12;    ///< Hug = both hands at least this far in front of the rest pose (m).
   std::string log_file;         ///< Optional CSV log of each stop (--safe-stop-log).
+  int voice_port = 5570;        ///< Port of the voice node's PUB socket on --zmq-host (0 = off).
 };
 
 inline Config& Settings() {
