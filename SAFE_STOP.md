@@ -15,13 +15,13 @@ The Unitree remote and the `O` key remain the whole-robot emergency stop.
 |---|---|---|
 | Keyboard, typed in the **deploy terminal** | `k` | `u` |
 | ZMQ `command` topic (from the PICO / VLA script) | bool field `safe_stop` = 1 | bool field `safe_release` = 1 |
-| **Voice** (`voice_safe_stop.py`, mic on the station PC) | say "stop" | `u` (voice release only with `--allow-release`) |
+| **Voice** (`voice_safe_stop.py`, G1 mic or a PC mic) | say "hold on" or "stop" | `u` (voice release only with `--allow-release`) |
 | Code (any thread) | `safe_stop::Request("why")` | `safe_stop::Release("why")` |
 
 ## Voice (`gear_sonic/scripts/voice_safe_stop.py`)
 
 Offline speech recognition (Vosk, small English model) with a **restricted
-vocabulary** (stop, robot stop, freeze; everything else decodes to "unknown"),
+vocabulary** (hold on, stop; everything else decodes to "unknown"),
 so ordinary talk rarely triggers it. It acts on the first partial result
 containing a stop word (typically ~0.3–0.5 s after the word; `--no-fast` waits
 for the end of the utterance) and publishes on its own socket, port 5570, topic
@@ -43,7 +43,7 @@ python gear_sonic/scripts/voice_safe_stop.py --device N --dry-run --verbose   # 
 **On the robot**, the G1's built-in 4-mic array works directly: `--g1-mic` reads the
 voice service's UDP multicast (239.168.123.161:5555, 16 kHz mono) instead of a sound card.
 
-Options: `--stop-words "stop,robot stop,freeze"`, `--min-conf 0.6`,
+Options: `--stop-words "hold on,stop"` (default; tested on the G1 mic: 10/10 each at close range, 0 false triggers; avoid "let go": "hello" was heard as it), `--min-conf 0.6`,
 `--allow-release` (+ `--release-words "release,continue"`). On the real robot,
 deploy runs on the robot and `--zmq-host` is the station PC, so the voice node
 on the station PC is reached the same way as the PICO manager. The robot's own

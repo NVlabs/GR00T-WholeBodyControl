@@ -6,7 +6,10 @@ Listens to a microphone on this PC, recognises a few command words offline
 command on its own ZMQ socket. deploy (--input-type zmq_manager) connects to it
 on <--zmq-host>:5570, topic "safety" (see SAFE_STOP.md).
 
-    say "stop" (or "robot stop", "freeze")      -> safe stop
+    say "hold on" or "stop"                      -> safe stop
+    (chosen on the G1's own mic: the mic is muffled, and words carried by s/t/f
+    sounds get lost; "hold on" 10/10 + "stop" 10/10 at close range, 0 false
+    triggers in normal conversation. "let go" is NOT used: "hello" was heard as it.)
     release: press u in the deploy terminal (default). Voice release only with
     --allow-release: say "release" / "continue".
 
@@ -204,13 +207,14 @@ def run_mic(args, sender, stop_words, release_words):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port", type=int, default=5570, help="PUB port (deploy --safe-stop-voice-port)")
-    ap.add_argument("--model", default="~/yara_sonic/vosk-model-small-en-us-0.15", help="Vosk model folder")
+    ap.add_argument("--model", default=None,
+                    help="Vosk model folder (default: ~/vosk-model-small-en-us-0.15 or ~/yara_sonic/...)")
     ap.add_argument("--device", type=int, default=None, help="input device index (see --list-devices)")
     ap.add_argument("--list-devices", action="store_true")
     ap.add_argument("--g1-mic", action="store_true",
                     help="use the G1's built-in microphone (UDP multicast, run on the robot)")
     ap.add_argument("--g1-iface-ip", default=None, help="this machine's 192.168.123.x address (auto)")
-    ap.add_argument("--stop-words", default="stop,robot stop,freeze", help="comma-separated phrases")
+    ap.add_argument("--stop-words", default="hold on,stop", help="comma-separated phrases")
     ap.add_argument("--allow-release", action="store_true", help="also release by voice (off by default)")
     ap.add_argument("--release-words", default="release,continue")
     ap.add_argument("--min-conf", type=float, default=0.6, help="min word confidence (final results)")
@@ -223,6 +227,9 @@ def main():
     ap.add_argument("--verbose", action="store_true", help="print every recognised phrase")
     args = ap.parse_args()
 
+    if args.model is None:
+        candidates = ["~/vosk-model-small-en-us-0.15", "~/yara_sonic/vosk-model-small-en-us-0.15"]
+        args.model = next((c for c in candidates if os.path.isdir(os.path.expanduser(c))), candidates[0])
     if args.list_devices:
         import sounddevice as sd
         print(sd.query_devices())
