@@ -22,16 +22,22 @@ Run (from the repo root):
     python gear_sonic/scripts/voice_safe_stop.py --typed             # no mic: type words (tests the chain)
     python gear_sonic/scripts/voice_safe_stop.py --dry-run           # recognise only, send nothing
 
-Later the robot's own microphone can replace the PC mic: only the audio source
-(read_audio) changes; the recogniser and the ZMQ message stay the same.
+On the robot, use the G1's built-in microphone array instead of a sound card:
+    python gear_sonic/scripts/voice_safe_stop.py --g1-mic --dry-run --verbose
+The G1's voice service streams the mic as UDP multicast 239.168.123.161:5555
+(16 kHz, s16le, mono, 5120-byte packets) on the robot network (192.168.123.x);
+it only streams while the voice service's mic mode is on.
 """
 
 import argparse
 import json
 import os
 import queue
+import socket
 import struct
+import subprocess
 import sys
+import threading
 import time
 
 import zmq
@@ -95,12 +101,45 @@ def run_typed(sender, stop_words, release_words):
             print(f"[voice] '{heard}': no command")
 
 
+G1_MIC_GROUP = "239.168.123.161"
+G1_MIC_PORT = 5555
+
+
+def robot_ip():
+    """This machine's address on the robot network (192.168.123.x)."""
+    out = subprocess.run(["hostname", "-I"], capture_output=True, text=True).stdout.split()
+    return next((ip for ip in out if ip.startswith("192.168.123.")), None)
+
+
+def start_g1_mic(blocks, iface_ip):
+    """Receive the G1 microphone multicast into `blocks` (same format as the sound card path)."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(("", G1_MIC_PORT))
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP,
+                    socket.inet_aton(G1_MIC_GROUP) + socket.inet_aton(iface_ip))
+    sock.settimeout(1.0)
+
+    def loop():
+        silent = 0
+        while True:
+            try:
+                data, _ = sock.recvfrom(65536)
+                silent = 0
+                blocks.put((data[:len(data) // 2 * 2], time.time()))
+            except socket.timeout:
+                silent += 1
+                if silent == 3:
+                    print("[voice] no G1 mic packets for 3 s (is the voice service's mic mode on?)")
+
+    threading.Thread(target=loop, daemon=True).start()
+
+
 def run_mic(args, sender, stop_words, release_words):
     try:
-        import sounddevice as sd
         import vosk
     except ImportError as e:
-        sys.exit(f"missing package ({e}); install with: uv pip install vosk sounddevice")
+        sys.exit(f"missing package ({e}); install with: uv pip install vosk")
     model_path = os.path.expanduser(args.model)
     if not os.path.isdir(model_path):
         sys.exit(f"Vosk model not found at {model_path} (see the setup lines at the top of this file)")
@@ -113,17 +152,33 @@ def run_mic(args, sender, stop_words, release_words):
     rec.SetWords(True)
 
     blocks = queue.Queue()
+    words_msg = (f"stop words: {', '.join(stop_words)}"
+                 + (f"; release words: {', '.join(release_words)}" if release_words else "; release = u in deploy"))
 
-    def on_audio(indata, frames, t, status):  # audio thread
-        if status:
-            print(f"[voice] audio: {status}", file=sys.stderr)
-        blocks.put((bytes(indata), time.time()))
+    if args.g1_mic:
+        iface_ip = args.g1_iface_ip or robot_ip()
+        if not iface_ip:
+            sys.exit("no 192.168.123.x address found; run this on the robot or pass --g1-iface-ip")
+        start_g1_mic(blocks, iface_ip)
+        print(f"[voice] listening to the G1 microphone ({G1_MIC_GROUP}:{G1_MIC_PORT} via {iface_ip}); {words_msg}")
+        stream = None
+    else:
+        try:
+            import sounddevice as sd
+        except (ImportError, OSError) as e:
+            sys.exit(f"sound card input unavailable ({e}); install: uv pip install sounddevice "
+                     "+ sudo apt install libportaudio2, or use --g1-mic on the robot")
 
-    print(f"[voice] listening (device {args.device if args.device is not None else 'default'}); "
-          f"stop words: {', '.join(stop_words)}"
-          + (f"; release words: {', '.join(release_words)}" if release_words else "; release = u in deploy"))
-    with sd.RawInputStream(samplerate=SAMPLE_RATE, blocksize=int(SAMPLE_RATE * args.block),
-                           device=args.device, dtype="int16", channels=1, callback=on_audio):
+        def on_audio(indata, frames, t, status):  # audio thread
+            if status:
+                print(f"[voice] audio: {status}", file=sys.stderr)
+            blocks.put((bytes(indata), time.time()))
+
+        print(f"[voice] listening (device {args.device if args.device is not None else 'default'}); {words_msg}")
+        stream = sd.RawInputStream(samplerate=SAMPLE_RATE, blocksize=int(SAMPLE_RATE * args.block),
+                                   device=args.device, dtype="int16", channels=1, callback=on_audio)
+        stream.start()
+    try:
         while True:
             data, t = blocks.get()
             if rec.AcceptWaveform(data):
@@ -141,6 +196,9 @@ def run_mic(args, sender, stop_words, release_words):
                 part = json.loads(rec.PartialResult()).get("partial", "")
                 if part and match(part, stop_words):
                     sender.send("safe_stop", part + " (partial)", t)
+    finally:
+        if stream is not None:
+            stream.stop()
 
 
 def main():
@@ -149,6 +207,9 @@ def main():
     ap.add_argument("--model", default="~/yara_sonic/vosk-model-small-en-us-0.15", help="Vosk model folder")
     ap.add_argument("--device", type=int, default=None, help="input device index (see --list-devices)")
     ap.add_argument("--list-devices", action="store_true")
+    ap.add_argument("--g1-mic", action="store_true",
+                    help="use the G1's built-in microphone (UDP multicast, run on the robot)")
+    ap.add_argument("--g1-iface-ip", default=None, help="this machine's 192.168.123.x address (auto)")
     ap.add_argument("--stop-words", default="stop,robot stop,freeze", help="comma-separated phrases")
     ap.add_argument("--allow-release", action="store_true", help="also release by voice (off by default)")
     ap.add_argument("--release-words", default="release,continue")

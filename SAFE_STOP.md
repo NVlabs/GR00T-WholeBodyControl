@@ -40,6 +40,9 @@ python gear_sonic/scripts/voice_safe_stop.py --device N       # run next to the 
 python gear_sonic/scripts/voice_safe_stop.py --typed          # no mic: type "stop" (tests the chain)
 python gear_sonic/scripts/voice_safe_stop.py --device N --dry-run --verbose   # check recognition only
 ```
+**On the robot**, the G1's built-in 4-mic array works directly: `--g1-mic` reads the
+voice service's UDP multicast (239.168.123.161:5555, 16 kHz mono) instead of a sound card.
+
 Options: `--stop-words "stop,robot stop,freeze"`, `--min-conf 0.6`,
 `--allow-release` (+ `--release-words "release,continue"`). On the real robot,
 deploy runs on the robot and `--zmq-host` is the station PC, so the voice node
