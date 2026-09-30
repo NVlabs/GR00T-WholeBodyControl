@@ -347,6 +347,13 @@ class G1Deploy {
     // Runtime arm impedance layer (null unless --arm-compliance is given)
     std::unique_ptr<arm_compliance::Controller> arm_compliance_;
     safe_stop::ArmSoftener safe_stop_softener_;  ///< Safe-stop arm softening (control thread)
+    safe_stop::StopLogger safe_stop_logger_;      ///< --safe-stop-log
+    static std::string SafeStopLogHeader() {
+      std::string h = "stop,t,soft_blend,vr_live,vrL_x,vrL_y,vrL_z,vrR_x,vrR_y,vrR_z";
+      for (const char* pre : {"q_target_", "q_", "dq_", "kp_"})
+        for (int j = 15; j < 29; ++j) h += std::string(",") + pre + std::to_string(j);
+      return h;
+    }
     bool arm_ref_is_planner_ = false;  ///< Reference motion is the planner's (set each control tick)
     std::unique_ptr<arm_compliance::Subscriber> arm_compliance_sub_;
 
@@ -3212,21 +3219,35 @@ class G1Deploy {
         arm_compliance_->Apply(motor_command_tmp.q_target, motor_command_tmp.kp, motor_command_tmp.kd,
                                arm_q_meas, control_dt_, policy_can_retract);
       }
-      // Safe stop (safe_stop.hpp): once the policy has lowered the arms, soften them
-      // slowly. Independent of the compliance layer: the softer of the two wins.
+      // Safe stop (safe_stop.hpp): arm gains ramp to the safe-stop profile FIRST (the
+      // hands hold), then the input thread lowers the hands. Independent of the
+      // compliance layer: the softer of the two wins.
       {
-        constexpr int kArm0 = 15, kArmN = 14;
-        std::array<float, kArmN> arm_dq{};
-        const std::shared_ptr<const LowState_> ls = low_state_buffer_.GetDataWithTime().data;
-        if (ls) for (int j = 0; j < kArmN; ++j) arm_dq[j] = ls->motor_state()[kArm0 + j].dq();
-        const double s = safe_stop_softener_.Update(arm_dq, control_dt_);
-        if (s < 1.0) {
-          const double sd = std::sqrt(s);
-          for (int m = kArm0; m < kArm0 + kArmN; ++m) {
-            motor_command_tmp.kp.at(m) = std::min(motor_command_tmp.kp.at(m), static_cast<float>(kps[m] * s));
-            motor_command_tmp.kd.at(m) = std::min(motor_command_tmp.kd.at(m), static_cast<float>(kds[m] * sd));
+        constexpr int kArm0 = 15, kArmN = safe_stop::kNumArm;
+        const auto& ss = safe_stop::Settings();
+        const double b = safe_stop_softener_.Update(control_dt_);
+        if (b > 0.0) {
+          for (int j = 0; j < kArmN; ++j) {
+            const int m = kArm0 + j;
+            const float kp_ss = static_cast<float>(kps[m] * (1.0 + b * (ss.kp_scale[j] - 1.0)));
+            const float kd_ss = static_cast<float>(kds[m] * (1.0 + b * (ss.kd_scale[j] - 1.0)));
+            motor_command_tmp.kp.at(m) = std::min(motor_command_tmp.kp.at(m), kp_ss);
+            motor_command_tmp.kd.at(m) = std::min(motor_command_tmp.kd.at(m), kd_ss);
           }
         }
+        // Optional CSV log of the stop (--safe-stop-log): what the policy is asked to do
+        // (VR hand targets), what it commands (arm joint targets) and what the arms do.
+        safe_stop_logger_.Tick(safe_stop::Active().load(), SafeStopLogHeader(),
+          [&](std::ostream& o, int stop_id, double t) {
+            const std::shared_ptr<const LowState_> ls = low_state_buffer_.GetDataWithTime().data;
+            o << stop_id << "," << std::fixed << std::setprecision(4) << t << "," << b << "," << has_vr_3point_data_;
+            for (int i = 0; i < 6; ++i) o << "," << vr_3point_position_buffer_[i];
+            for (int j = 0; j < kArmN; ++j) o << "," << motor_command_tmp.q_target.at(kArm0 + j);
+            for (int j = 0; j < kArmN; ++j) o << "," << (ls ? ls->motor_state()[kArm0 + j].q() : 0.0f);
+            for (int j = 0; j < kArmN; ++j) o << "," << (ls ? ls->motor_state()[kArm0 + j].dq() : 0.0f);
+            for (int j = 0; j < kArmN; ++j) o << "," << motor_command_tmp.kp.at(kArm0 + j);
+            o << "\n";
+          });
       }
       motor_command_buffer_.SetData(motor_command_tmp);
       return true;
@@ -4249,10 +4270,11 @@ int main(int argc, char const* argv[]) {
     std::cout << "  --compliance-slew <s>: set both ramp times at once" << std::endl;
     std::cout << "Safe stop (zmq_manager input; k = stop, u = release in this terminal, or command fields safe_stop / safe_release):\n"
               << "  stops teleop / VLA, robot goes to planner idle (arms down by the policy), then the arms soften slowly." << std::endl;
-    std::cout << "  --safe-stop-hand-speed <m/s>: peak hand speed of the lowering path in VR teleop (default: 0.2; 2-5 s)" << std::endl;
-    std::cout << "  --safe-stop-kp <scale>: arm Kp x scale once the arms are down (default: 0.5; Kd x sqrt)" << std::endl;
-    std::cout << "  --safe-stop-soften <s>: duration of the softening ramp (default: 2.0)" << std::endl;
-    std::cout << "  --safe-stop-settle-max <s>: soften at the latest this long after the stop (default: 4.0)" << std::endl;
+    std::cout << "  --safe-stop-profile <name>: arm stiffness while stopped, a compliance profile (default: SOFT)" << std::endl;
+    std::cout << "  --safe-stop-soften <s>: soften first, hands hold (default: 0.5)" << std::endl;
+    std::cout << "  --safe-stop-hand-speed <m/s>: peak hand speed of the lowering path (default: 0.2; 2-6 s)" << std::endl;
+    std::cout << "  --safe-stop-open-width <m>: hug (both hands forward): open each hand this much before lowering (default: 0.25; 0 = off)" << std::endl;
+    std::cout << "  --safe-stop-log <file.csv>: log every stop at 50 Hz (hand targets, arm targets, q, dq, Kp)" << std::endl;
     std::cout << "  --compliance-estop-mode <auto|retract|limp>: auto = policy brings the arms down (hand-target handoff) when possible,\n"
               << "                                   else retract override; retract = always override; limp = gains only (default: auto)" << std::endl;
     std::cout << "  --compliance-handoff <s>: hand-target blend time in auto ESTOP (default: 1.5)" << std::endl;
@@ -4308,6 +4330,7 @@ int main(int argc, char const* argv[]) {
   std::array<double, 3> initial_compliance = {0.5, 0.5, 0.0}; // initial compliance is 0.5 for both hands (keyboard controllable)
   double initial_max_close_ratio = 1.0; // default allows full closure, use --max-close-ratio to limit
   arm_compliance::Config arm_compliance_config;  // disabled unless --arm-compliance
+  std::string safe_stop_profile = "SOFT";  // --safe-stop-profile
   // Helper: fetch the value after a flag or exit with an error
   auto require_value = [&](int& i, const char* flag) -> std::string {
     if (i + 1 >= argc) {
@@ -4555,26 +4578,27 @@ int main(int argc, char const* argv[]) {
       arm_compliance_config.initial_profile = require_value(i, "--compliance-profile");
     } else if (std::string(argv[i]) == "--compliance-profiles") {
       arm_compliance_config.profiles_file = require_value(i, "--compliance-profiles");
-    } else if (std::string(argv[i]) == "--safe-stop-kp" || std::string(argv[i]) == "--safe-stop-soften" ||
-               std::string(argv[i]) == "--safe-stop-settle-max" || std::string(argv[i]) == "--safe-stop-hand-speed") {
+    } else if (std::string(argv[i]) == "--safe-stop-profile") {
+      safe_stop_profile = require_value(i, "--safe-stop-profile");
+    } else if (std::string(argv[i]) == "--safe-stop-log") {
+      safe_stop::Settings().log_file = require_value(i, "--safe-stop-log");
+    } else if (std::string(argv[i]) == "--safe-stop-soften" || std::string(argv[i]) == "--safe-stop-hand-speed" ||
+               std::string(argv[i]) == "--safe-stop-open-width") {
       const std::string flag = argv[i];
       const std::string value = require_value(i, flag.c_str());
       double v = 0.0;
       try { v = std::stod(value); } catch (...) {
         std::cerr << "Error: " << flag << " needs a number" << std::endl; exit(1);
       }
-      if (flag == "--safe-stop-kp") {
-        if (!(v > 0.0 && v <= 1.0)) { std::cerr << "Error: --safe-stop-kp must be in (0, 1]" << std::endl; exit(1); }
-        safe_stop::Settings().kp_scale = v;
-      } else if (flag == "--safe-stop-soften") {
-        if (!(v >= 0.0 && v <= 10.0)) { std::cerr << "Error: --safe-stop-soften must be in [0, 10] s" << std::endl; exit(1); }
+      if (flag == "--safe-stop-soften") {
+        if (!(v >= 0.0 && v <= 5.0)) { std::cerr << "Error: --safe-stop-soften must be in [0, 5] s" << std::endl; exit(1); }
         safe_stop::Settings().soften_s = v;
       } else if (flag == "--safe-stop-hand-speed") {
         if (!(v >= 0.05 && v <= 1.0)) { std::cerr << "Error: --safe-stop-hand-speed must be in [0.05, 1] m/s" << std::endl; exit(1); }
         safe_stop::Settings().hand_speed = v;
       } else {
-        if (!(v >= 1.0 && v <= 10.0)) { std::cerr << "Error: --safe-stop-settle-max must be in [1, 10] s" << std::endl; exit(1); }
-        safe_stop::Settings().settle_max_s = v;
+        if (!(v >= 0.0 && v <= 0.5)) { std::cerr << "Error: --safe-stop-open-width must be in [0, 0.5] m" << std::endl; exit(1); }
+        safe_stop::Settings().open_width = v;
       }
     } else if (std::string(argv[i]) == "--compliance-estop-mode") {
       const std::string mode = require_value(i, "--compliance-estop-mode");
@@ -4637,6 +4661,24 @@ int main(int argc, char const* argv[]) {
         exit(1);
       }
     }
+  }
+
+  // Safe stop: arm gains while stopped = a compliance profile (built-ins + --compliance-profiles).
+  {
+    arm_compliance::ProfileRegistry registry;
+    std::string err;
+    if (!arm_compliance_config.profiles_file.empty() && !registry.LoadFile(arm_compliance_config.profiles_file, err)) {
+      std::cerr << "[SafeStop] Could not load " << arm_compliance_config.profiles_file << ": " << err << std::endl;
+    }
+    const arm_compliance::Profile* p = registry.Find(safe_stop_profile);
+    if (!p) {
+      std::cerr << "Error: --safe-stop-profile '" << safe_stop_profile << "' not found (built-ins: RIGID, HANDSHAKE, "
+                << "HUG, FISTBUMP, FISTBUMP_SOFTWRIST, SOFT, or one from --compliance-profiles)" << std::endl;
+      exit(1);
+    }
+    auto& ss = safe_stop::Settings();
+    ss.profile = p->name;
+    for (int j = 0; j < safe_stop::kNumArm; ++j) { ss.kp_scale[j] = p->kp_scale[j]; ss.kd_scale[j] = p->kd_scale[j]; }
   }
 
   std::cout << "[DEBUG] Creating G1Deploy object..." << std::endl;
