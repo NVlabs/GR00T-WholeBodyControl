@@ -346,20 +346,33 @@ class TrackersDisconnectedDetector:
         pos_spread = np.linalg.norm(pos.std(axis=0), axis=-1)  # (J,)
 
         # Orientation dispersion, the rotational counterpart: per joint, the
-        # standard deviation over the window of the angle between each sample
-        # and the window's mean orientation, in degrees. A joint holding one
-        # pose scores ~0; a joint being tracked jitters by a measurable amount
-        # even when the operator stands still.
+        # mean angle between each sample and the window's mean orientation, in
+        # degrees. A joint holding one pose scores 0; a tracked joint jitters
+        # measurably even when the operator stands still.
         #
-        # Averaging quaternions componentwise is only valid because the samples
-        # are near-identical when this matters -- a frozen skeleton repeats the
-        # same quaternion exactly. A spread-out cluster would need hemisphere
-        # alignment first, but that case yields a large spread and a "not
-        # frozen" answer either way, which is the fail-safe direction.
-        mean_q = quat.mean(axis=0)
+        # Mean, not standard deviation. _quat_angle_deg returns a magnitude, so
+        # it is already sign invariant and already *is* the deviation from the
+        # mean. Taking its standard deviation measured the wrong thing: a joint
+        # rocking between -d and +d produces a constant angle d, whose standard
+        # deviation is 0, so a live joint read as perfectly frozen. Measured on
+        # a 30-frame window oscillating +/-0.5 deg: std 0.0000 (frozen, wrong)
+        # against mean 0.5000 (moving, right).
+        #
+        # The threshold is unaffected. Both statistics give exactly 0 for a
+        # genuinely frozen joint, and for live data the mean angle is the larger
+        # of the two, so the margin over FROZEN_ROT_EPS_DEG only widens.
+        #
+        # q and -q are the same rotation, so align the window to its first
+        # sample before averaging componentwise; a tracker that flips sign
+        # between frames would otherwise drag the mean toward zero and make a
+        # still joint look like it is moving.
+        ref = quat[0]  # (J, 4)
+        flip = np.where((quat * ref).sum(axis=-1, keepdims=True) < 0.0, -1.0, 1.0)
+        aligned = quat * flip
+        mean_q = aligned.mean(axis=0)
         mean_q = mean_q / np.linalg.norm(mean_q, axis=-1, keepdims=True)
         rot_spread = np.array(
-            [np.std(_quat_angle_deg(quat[:, j, :], mean_q[j])) for j in range(quat.shape[1])]
+            [np.mean(_quat_angle_deg(aligned[:, j, :], mean_q[j])) for j in range(quat.shape[1])]
         )
 
         return bool(np.all(pos_spread < FROZEN_POS_EPS_M) and np.all(rot_spread < FROZEN_ROT_EPS_DEG))
