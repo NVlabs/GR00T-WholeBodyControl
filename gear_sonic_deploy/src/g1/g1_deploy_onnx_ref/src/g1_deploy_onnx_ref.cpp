@@ -139,6 +139,7 @@
 // Runtime arm impedance (Kp/Kd) profiles
 #include "../include/arm_compliance.hpp"
 #include "../include/arm_compliance_subscriber.hpp"
+#include "../include/safe_stop.hpp"
 
 #include "audio_thread/audio_thread.hpp"
 
@@ -345,6 +346,7 @@ class G1Deploy {
 
     // Runtime arm impedance layer (null unless --arm-compliance is given)
     std::unique_ptr<arm_compliance::Controller> arm_compliance_;
+    safe_stop::ArmSoftener safe_stop_softener_;  ///< Safe-stop arm softening (control thread)
     bool arm_ref_is_planner_ = false;  ///< Reference motion is the planner's (set each control tick)
     std::unique_ptr<arm_compliance::Subscriber> arm_compliance_sub_;
 
@@ -3210,6 +3212,22 @@ class G1Deploy {
         arm_compliance_->Apply(motor_command_tmp.q_target, motor_command_tmp.kp, motor_command_tmp.kd,
                                arm_q_meas, control_dt_, policy_can_retract);
       }
+      // Safe stop (safe_stop.hpp): once the policy has lowered the arms, soften them
+      // slowly. Independent of the compliance layer: the softer of the two wins.
+      {
+        constexpr int kArm0 = 15, kArmN = 14;
+        std::array<float, kArmN> arm_dq{};
+        const std::shared_ptr<const LowState_> ls = low_state_buffer_.GetDataWithTime().data;
+        if (ls) for (int j = 0; j < kArmN; ++j) arm_dq[j] = ls->motor_state()[kArm0 + j].dq();
+        const double s = safe_stop_softener_.Update(arm_dq, control_dt_);
+        if (s < 1.0) {
+          const double sd = std::sqrt(s);
+          for (int m = kArm0; m < kArm0 + kArmN; ++m) {
+            motor_command_tmp.kp.at(m) = std::min(motor_command_tmp.kp.at(m), static_cast<float>(kps[m] * s));
+            motor_command_tmp.kd.at(m) = std::min(motor_command_tmp.kd.at(m), static_cast<float>(kds[m] * sd));
+          }
+        }
+      }
       motor_command_buffer_.SetData(motor_command_tmp);
       return true;
     }
@@ -4229,6 +4247,11 @@ int main(int argc, char const* argv[]) {
     std::cout << "  --compliance-soften <s>: ramp time when a joint gets softer (default: 0.3)" << std::endl;
     std::cout << "  --compliance-stiffen <s>: ramp time when a joint gets stiffer (default: 1.0)" << std::endl;
     std::cout << "  --compliance-slew <s>: set both ramp times at once" << std::endl;
+    std::cout << "Safe stop (zmq_manager input; k = stop, u = release in this terminal, or command fields safe_stop / safe_release):\n"
+              << "  stops teleop / VLA, robot goes to planner idle (arms down by the policy), then the arms soften slowly." << std::endl;
+    std::cout << "  --safe-stop-kp <scale>: arm Kp x scale once the arms are down (default: 0.5; Kd x sqrt)" << std::endl;
+    std::cout << "  --safe-stop-soften <s>: duration of the softening ramp (default: 2.0)" << std::endl;
+    std::cout << "  --safe-stop-settle-max <s>: soften at the latest this long after the stop (default: 4.0)" << std::endl;
     std::cout << "  --compliance-estop-mode <auto|retract|limp>: auto = policy brings the arms down (hand-target handoff) when possible,\n"
               << "                                   else retract override; retract = always override; limp = gains only (default: auto)" << std::endl;
     std::cout << "  --compliance-handoff <s>: hand-target blend time in auto ESTOP (default: 1.5)" << std::endl;
@@ -4531,6 +4554,24 @@ int main(int argc, char const* argv[]) {
       arm_compliance_config.initial_profile = require_value(i, "--compliance-profile");
     } else if (std::string(argv[i]) == "--compliance-profiles") {
       arm_compliance_config.profiles_file = require_value(i, "--compliance-profiles");
+    } else if (std::string(argv[i]) == "--safe-stop-kp" || std::string(argv[i]) == "--safe-stop-soften" ||
+               std::string(argv[i]) == "--safe-stop-settle-max") {
+      const std::string flag = argv[i];
+      const std::string value = require_value(i, flag.c_str());
+      double v = 0.0;
+      try { v = std::stod(value); } catch (...) {
+        std::cerr << "Error: " << flag << " needs a number" << std::endl; exit(1);
+      }
+      if (flag == "--safe-stop-kp") {
+        if (!(v > 0.0 && v <= 1.0)) { std::cerr << "Error: --safe-stop-kp must be in (0, 1]" << std::endl; exit(1); }
+        safe_stop::Settings().kp_scale = v;
+      } else if (flag == "--safe-stop-soften") {
+        if (!(v >= 0.0 && v <= 10.0)) { std::cerr << "Error: --safe-stop-soften must be in [0, 10] s" << std::endl; exit(1); }
+        safe_stop::Settings().soften_s = v;
+      } else {
+        if (!(v >= 1.0 && v <= 10.0)) { std::cerr << "Error: --safe-stop-settle-max must be in [1, 10] s" << std::endl; exit(1); }
+        safe_stop::Settings().settle_max_s = v;
+      }
     } else if (std::string(argv[i]) == "--compliance-estop-mode") {
       const std::string mode = require_value(i, "--compliance-estop-mode");
       if (mode == "auto") {
