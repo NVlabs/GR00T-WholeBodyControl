@@ -204,12 +204,19 @@ show_usage() {
     echo ""
     echo "Options:"
     echo "  -h, --help              Show this help message"
-    echo "  --cp, --checkpoint PATH Set the checkpoint path (default: policy/checkpoints/example/model_step_000000)"
-    echo "  --obs-config PATH       Set the observation config file (default: policy/configs/example.yaml)"
-    echo "  --planner PATH          Set the planner model path (default: planner/example.onnx)"
-    echo "  --motion-data PATH      Set the motion data path (default: reference/example_motion/)"
-    echo "  --input-type TYPE       Set the input type (default: zmq_manager)"
-    echo "  --output-type TYPE      Set the output type (default: ros2)"
+    echo "  --cp, --checkpoint PATH Set the checkpoint path (default: policy/release/model)"
+    echo "  --obs-config PATH       Set the observation config file (default: policy/release/observation_config.yaml)"
+    echo "  --planner PATH          Set the planner model path (default: planner/target_vel/V2/planner_sonic.onnx)"
+    echo "  --motion-data PATH      Set the motion data path (default: reference/example/)"
+    echo "  --input-type TYPE       Set the input type (default: manager)"
+    echo "  --output-type TYPE      Set the output type (default: all)"
+    echo "  --enable-csv-logs       Enable existing body CSV logs (default: off)"
+    echo "  --logs-dir PATH         Body log output directory (default: timestamped logs directory)"
+    echo "  --hand dex3|inspire     Select hand backend (default: dex3)"
+    echo "  --hand-remote          Connect to an existing Inspire bridge (real only)"
+    echo "  --hand-config PATH     Inspire configuration (default: packaged hand_config.yaml)"
+    echo "  --hand-driver PATH     Compiled Inspire gateway (real only)"
+    echo "  --hand-python PATH     Python with gear_sonic simulation dependencies (default: python3)"
     echo "  --zmq-host HOST         Set the ZMQ host (default: localhost)"
     echo "  --motor-kp-scale SPEC   Scale Kp for hardware motor indices/ranges"
     echo "  --motor-kd-scale SPEC   Scale Kd for hardware motor indices/ranges"
@@ -253,8 +260,16 @@ MOTION_DATA="$MOTION_DATA_DEFAULT"
 INPUT_TYPE="$INPUT_TYPE_DEFAULT"
 OUTPUT_TYPE="$OUTPUT_TYPE_DEFAULT"
 ZMQ_HOST="$ZMQ_HOST_DEFAULT"
+HAND_TYPE="dex3"
+HAND_CONFIG="$SCRIPT_DIR/../gear_sonic/data/robots/g1/inspire/hand_config.yaml"
+HAND_DRIVER="$SCRIPT_DIR/../build/inspire-native/inspire_direct_serial_hand_gateway"
+HAND_PYTHON="python3"
+HAND_OPTIONS_SET=false
+HAND_REMOTE=false
+HAND_DRIVER_SET=false
 MOTOR_KP_SCALES=()
 MOTOR_KD_SCALES=()
+BODY_LOG_ARGS=()
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -262,6 +277,35 @@ while [[ $# -gt 0 ]]; do
         -h|--help)
             show_usage
             exit 0
+            ;;
+        --hand-remote)
+            HAND_REMOTE=true; HAND_OPTIONS_SET=true
+            shift
+            ;;
+        --enable-csv-logs)
+            BODY_LOG_ARGS+=(--enable-csv-logs)
+            shift
+            ;;
+        --logs-dir)
+            if [[ $# -lt 2 || -z "$2" || "$2" == --* ]]; then
+                echo "Error: --logs-dir requires a path" >&2
+                exit 1
+            fi
+            BODY_LOG_ARGS+=(--logs-dir "$2")
+            shift 2
+            ;;
+        --hand|--hand-config|--hand-driver|--hand-python)
+            if [[ $# -lt 2 || -z "$2" || "$2" == --* ]]; then
+                echo "Error: $1 requires a value" >&2
+                exit 1
+            fi
+            case "$1" in
+                --hand) HAND_TYPE="$2" ;;
+                --hand-config) HAND_CONFIG="$2"; HAND_OPTIONS_SET=true ;;
+                --hand-driver) HAND_DRIVER="$2"; HAND_OPTIONS_SET=true; HAND_DRIVER_SET=true ;;
+                --hand-python) HAND_PYTHON="$2"; HAND_OPTIONS_SET=true ;;
+            esac
+            shift 2
             ;;
         --cp|--checkpoint)
             if [[ -z "$2" ]]; then
@@ -339,6 +383,10 @@ while [[ $# -gt 0 ]]; do
             INTERFACE_MODE="$1"
             shift
             ;;
+        --*)
+            echo "Error: unknown option $1" >&2
+            exit 1
+            ;;
         *)
             # Could be interface name or IP
             INTERFACE_MODE="$1"
@@ -346,6 +394,15 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+case "$HAND_TYPE" in
+    dex3|inspire) ;;
+    *) echo "Error: --hand must be dex3 or inspire" >&2; exit 1 ;;
+esac
+if [[ "$HAND_TYPE" == dex3 && "$HAND_OPTIONS_SET" == true ]]; then
+    echo "Error: --hand-remote/--hand-config/--hand-driver/--hand-python require --hand inspire" >&2
+    exit 1
+fi
 
 # ============================================================================
 # Display Header
@@ -365,6 +422,23 @@ echo -e "${BLUE}[Interface Resolution]${NC}"
 echo "Requested mode: $INTERFACE_MODE"
 
 resolve_interface "$INTERFACE_MODE"
+if [[ "$HAND_REMOTE" == true && ( "$ENV_TYPE" != real || "$HAND_DRIVER_SET" == true ) ]]; then
+    echo "Error: --hand-remote requires real mode and cannot use --hand-driver" >&2
+    exit 1
+fi
+
+HAND_LAUNCH=()
+if [[ "$HAND_TYPE" == "inspire" ]]; then
+    export PYTHONPATH="$SCRIPT_DIR/..${PYTHONPATH:+:$PYTHONPATH}"
+    HAND_LAUNCH=("$HAND_PYTHON" -m gear_sonic_deploy.scripts.inspire_hand
+        --mode "$ENV_TYPE" --config "$HAND_CONFIG")
+    if [[ "$HAND_REMOTE" == true ]]; then
+        HAND_LAUNCH+=(--remote)
+    else
+        HAND_LAUNCH+=(--driver "$HAND_DRIVER")
+    fi
+    "${HAND_LAUNCH[@]}" --check
+fi
 
 echo -e "Resolved interface: ${GREEN}$TARGET${NC}"
 echo -e "Environment type:   ${GREEN}$ENV_TYPE${NC}"
@@ -400,7 +474,7 @@ CHECKPOINT_ENCODER="${CHECKPOINT}_encoder.onnx"
 # ZMQ_HOST is already set from argument parsing above
 
 # Additional flags for simulation mode
-EXTRA_ARGS=()
+EXTRA_ARGS=("--hand" "$HAND_TYPE")
 if [[ "$ENV_TYPE" == "sim" ]]; then
     EXTRA_ARGS+=("--disable-crc-check")
     echo -e "${YELLOW}📋 Simulation mode: CRC check will be disabled${NC}"
@@ -525,6 +599,23 @@ echo ""
 # Step 4: Deploy
 # ============================================================================
 
+# Keep the body arguments, preview and execution on one path for both hands.
+BODY_ARGS=("$TARGET" "$CHECKPOINT_DECODER" "$MOTION_DATA"
+    --obs-config "$OBS_CONFIG"
+    --encoder-file "$CHECKPOINT_ENCODER"
+    --planner-file "$PLANNER"
+    --input-type "$INPUT_TYPE"
+    --output-type "$OUTPUT_TYPE"
+    --zmq-host "$ZMQ_HOST"
+    "${BODY_LOG_ARGS[@]}"
+    "${EXTRA_ARGS[@]}")
+DEPLOY_COMMAND=(just run g1_deploy_onnx_ref "${BODY_ARGS[@]}")
+if [[ "$HAND_TYPE" == "inspire" ]]; then
+    # The existing supervisor owns the body directly and cleans up local hand IO.
+    DEPLOY_COMMAND=("${HAND_LAUNCH[@]}" --
+        "$SCRIPT_DIR/target/release/g1_deploy_onnx_ref" "${BODY_ARGS[@]}")
+fi
+
 echo -e "${BLUE}[Step 4/4]${NC} Ready to deploy!"
 echo ""
 echo -e "${CYAN}═══════════════════════════════════════════════════════════════════════${NC}"
@@ -532,6 +623,7 @@ echo -e "${CYAN}                         DEPLOYMENT CONFIGURATION               
 echo -e "${CYAN}═══════════════════════════════════════════════════════════════════════${NC}"
 echo ""
 echo -e "  Environment:        ${GREEN}$ENV_TYPE${NC}"
+echo -e "  Hand Backend:       ${GREEN}$HAND_TYPE${NC}"
 echo -e "  Network Interface:  ${GREEN}$TARGET${NC}"
 echo -e "  Decoder Model:      ${GREEN}$CHECKPOINT_DECODER${NC}"
 echo -e "  Encoder Model:      ${GREEN}$CHECKPOINT_ENCODER${NC}"
@@ -550,16 +642,8 @@ echo -e "${CYAN}═════════════════════�
 echo ""
 echo -e "${YELLOW}The following command will be executed:${NC}"
 echo ""
-echo -e "${BLUE}just run g1_deploy_onnx_ref $TARGET $CHECKPOINT_DECODER $MOTION_DATA \\${NC}"
-echo -e "${BLUE}    --obs-config $OBS_CONFIG \\${NC}"
-echo -e "${BLUE}    --encoder-file $CHECKPOINT_ENCODER \\${NC}"
-echo -e "${BLUE}    --planner-file $PLANNER \\${NC}"
-echo -e "${BLUE}    --input-type $INPUT_TYPE \\${NC}"
-echo -e "${BLUE}    --output-type $OUTPUT_TYPE \\${NC}"
-echo -e "${BLUE}    --zmq-host $ZMQ_HOST${NC}"
-if (( ${#EXTRA_ARGS[@]} > 0 )); then
-echo -e "${BLUE}    ${EXTRA_ARGS_DISPLAY# }${NC}"
-fi
+printf '  %q' "${DEPLOY_COMMAND[@]}"
+printf '\n'
 echo ""
 echo -e "${CYAN}═══════════════════════════════════════════════════════════════════════${NC}"
 echo ""
@@ -578,14 +662,7 @@ if [[ "$confirm" =~ ^[Yy]$ ]] || [[ -z "$confirm" ]]; then
     echo -e "${GREEN}🚀 Starting deployment...${NC}"
     echo ""
     
-    just run g1_deploy_onnx_ref "$TARGET" "$CHECKPOINT_DECODER" "$MOTION_DATA" \
-        --obs-config "$OBS_CONFIG" \
-        --encoder-file "$CHECKPOINT_ENCODER" \
-        --planner-file "$PLANNER" \
-        --input-type "$INPUT_TYPE" \
-        --output-type "$OUTPUT_TYPE" \
-        --zmq-host "$ZMQ_HOST" \
-        "${EXTRA_ARGS[@]}"
+    exec "${DEPLOY_COMMAND[@]}"
 else
     echo ""
     echo -e "${YELLOW}Deployment cancelled.${NC}"

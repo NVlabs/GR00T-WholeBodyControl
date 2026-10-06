@@ -411,6 +411,7 @@ Training is the only one that requires Isaac Lab (installed separately).
 - [Keyboard Control](https://nvlabs.github.io/GR00T-WholeBodyControl/tutorials/keyboard.html)
 - [Gamepad Control](https://nvlabs.github.io/GR00T-WholeBodyControl/tutorials/gamepad.html)
 - [ZMQ Communication](https://nvlabs.github.io/GR00T-WholeBodyControl/tutorials/zmq.html)
+- [Inspire Hands: Simulation and Hardware](docs/source/tutorials/inspire_hands.md)
 - [ZMQ Manager / PICO VR](https://nvlabs.github.io/GR00T-WholeBodyControl/tutorials/vr_wholebody_teleop.html)
 
 ### Training
