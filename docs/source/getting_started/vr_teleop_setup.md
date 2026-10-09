@@ -1,6 +1,6 @@
 # VR Teleop Setup (PICO)
 
-This page covers the one-time hardware and software setup for PICO VR whole-body teleoperation.
+This page covers the one-time hardware and software setup for PICO VR whole-body teleoperation. After completing these steps, proceed to the [ZMQ Manager tutorial](../tutorials/vr_wholebody_teleop.md) to run teleop in sim or on real hardware.
 
 ```{note}
 The steps below use XRoboToolkit. To use IsaacTeleop, complete Steps 1 and 2, then continue with the [Isaac Teleop Setup](../tutorials/isaac_teleop_publisher_setup.md).
@@ -12,108 +12,136 @@ The steps below use XRoboToolkit. To use IsaacTeleop, complete Steps 1 and 2, th
 
 - [PICO 4 / PICO 4 Pro headset](https://www.picoxr.com/global/products/pico4)
 - [2x PICO controllers](https://www.picoxr.com/global/products/pico4)
-- [2x PICO motion trackers](https://www.picoxr.com/global/products/pico-motion-tracker), strapped to the ankles
-- A high-speed, low-latency Wi-Fi connection. Teleoperation performance depends heavily on network quality.
+- [2x PICO motion trackers](https://www.picoxr.com/global/products/pico-motion-tracker) (strapped to ankles)
+- A high-speed, low-latency Wi-Fi connection; teleoperation performance is heavily dependent on network quality.
 
 ---
 
 (motion-tracker-setup)=
-## Step 1: Set Up the Motion Trackers
+## Step 1: Motion Tracker Setup
 
 ```{image} ../_static/pico_setup/pico_setup_screenshot.png
 :width: 600px
 :align: center
 ```
 
-1. Strap one PICO motion tracker to your left ankle and one to your right ankle. Scrunch down any baggy clothing so that the trackers are visible. Make sure that the side with the light indicator faces up.
-2. Open PICO settings. Select **Developer** in the menu and turn off **Safeguard**.
-   - If the Developer option is not active, tap **Software** until it appears.
-3. Select the **Wi-Fi icon** in the PICO menu. A picture of the headset appears. Select the small circular Motion Tracker icon above the headset. If the icon does not appear, open the **Motion Tracker** app.
-4. Select the **i** icon next to each tracker, then unpair all trackers.
-5. Select **Pair** in the top-right corner.
-6. Press and hold the button on each motion tracker for 6 seconds. The lights flash red and blue in pairing mode.
+1. Strap one PICO motion tracker to your left ankle and one to your right ankle. **Scrunch** down any baggy clothing so the trackers are visible. Make sure the side with the light indicator faces up.
+2. Go to PICO settings. In the menu on the left, scroll down to the last option: **"Developer"**. Make sure **"Safeguard"** is turned off.
+   - If the Developer option is not active, tap on "Software" until it appears.
+3. Click the **Wi-Fi icon** in the PICO menu. A picture of the headset will appear. Above the headset, there will be a small circular logo for the motion trackers. If there is no logo, open the **"Motion Tracker"** app itself.
+   - Headset and 2 controllers will populate — select **Motion Tracker** (small circle).
+4. Next to each tracker, there is an **"i"** icon. Click on this and **unpair all trackers**.
+5. Once all trackers are cleared, click the **"Pair"** button in the top right corner.
+6. Press and hold the button on the top of each motion tracker for **6 seconds**. Once in pairing mode, the lights will flash red and blue.
 
-### Calibrate the Motion Trackers
+### Motion Tracker Calibration
 
 1. Wear the PICO headset over your eyes.
-2. Select **Calibrate** and complete both calibration sequences:
-   - Stand upright with the handheld controllers down by your sides.
-   - Look down at the foot motion trackers until the headset cameras recognize them.
-3. After calibration, wear the PICO headset around your forehead. Keep the headset facing forward so that it continues to detect the motion trackers.
+2. Press the blue **"Calibrate"** button and follow the two calibration sequences:
+   - **Sequence 1:** Stand stiff with the handheld controllers down by your sides.
+   - **Sequence 2:** Look down at the foot motion trackers until the headset cameras recognize them.
+3. Once calibrated, wear the PICO headset around your forehead (ensuring PICO faces forward to continue detecting motion trackers).
 
 ---
 
-## Step 2: Install the Teleop Environment
+## Step 2: Install the PICO Teleop Environment
 
-On the host receiving PICO tracking data, run the install script from the repository root:
+From the **repo root**:
 
 ```bash
 bash install_scripts/install_pico.sh
 ```
 
-The script creates a Python 3.10 virtual environment at `.venv_teleop`. The environment includes:
-
-- The `gear_sonic[teleop]` extra for ZMQ, Pinocchio, and visualization
+This creates a `.venv_teleop` virtual environment (Python 3.10) that includes:
+- `teleop` extra (ZMQ, Pinocchio, PyVista)
+- `sim` extra (MuJoCo, tyro)
 - XRoboToolkit SDK
 - IsaacTeleop 1.4 with the CloudXR runtime
-- The simulation extra for MuJoCo
 - Unitree SDK2 Python bindings
 
-Activate the environment:
+Activate it with:
 
 ```bash
-source .venv_teleop/bin/activate
+source .venv_teleop/bin/activate   # prompt: (gear_sonic_teleop)
 ```
 
 ---
 
-## Step 3: Set Up XRoboToolkit
+## Step 3: Install XRoboToolkit
 
-XRoboToolkit uses a PC service on the host computer and an application on the PICO headset.
+XRoboToolkit consists of a PC service (running on your host computer) and a PICO app (running on the headset) that streams body-tracking data.
 
-### Install the PC Service
+### PC Service
 
-The XRoboToolkit PC service must run on the computer that receives tracking data.
+The PC service must be installed and running on your host computer **before** the PICO can connect.
 
-**Ubuntu 22.04 on x86_64:**
+**Ubuntu 22.04 (x86_64 workstation):**
 
 ```bash
 wget https://github.com/XR-Robotics/XRoboToolkit-PC-Service/releases/download/v1.0.0/XRoboToolkit_PC_Service_1.0.0_ubuntu_22.04_amd64.deb
 sudo dpkg -i XRoboToolkit_PC_Service_1.0.0_ubuntu_22.04_amd64.deb
 ```
 
-**Ubuntu 24.04 on x86_64:**
+**Ubuntu 24.04 (x86_64 workstation):**
 
 ```bash
 wget https://github.com/XR-Robotics/XRoboToolkit-PC-Service/releases/download/v1.0.0/XRoboToolkit_PC_Service_1.0.0_ubuntu_24.04_amd64.deb
 sudo dpkg -i XRoboToolkit_PC_Service_1.0.0_ubuntu_24.04_amd64.deb
 ```
 
-**Jetson on aarch64:**
+**Jetson (aarch64):**
 
 ```bash
 sudo dpkg -i gear_sonic_deploy/thirdparty/roboticsservice_1.0.0.0_arm64.deb
 ```
 
-See the [XRoboToolkit PC Service releases](https://github.com/XR-Robotics/XRoboToolkit-PC-Service/releases) for other versions.
+See [XRoboToolkit-PC-Service releases](https://github.com/XR-Robotics/XRoboToolkit-PC-Service/releases) for other platforms or newer versions.
 
-### Install the PICO Application
+### PICO App
 
-1. Open the browser in the PICO headset.
-2. Enable **Developer Mode** in PICO settings.
-3. Download [XRoboToolkit-PICO-1.1.1.apk](https://github.com/XR-Robotics/XRoboToolkit-Unity-Client/releases/download/v1.1.1/XRoboToolkit-PICO-1.1.1.apk). See [other releases](https://github.com/XR-Robotics/XRoboToolkit-Unity-Client/releases) if you need a different version.
-4. Open the browser download manager and select the APK.
-5. Select **Install**. The application appears in the **Unknown** section of the PICO library.
+1. Wear the PICO headset to begin the setup and installation process.
+2. Complete the quick setup on PICO.
+3. Make sure the PICO is connected to Wi-Fi.
+4. Open the browser application in the PICO.
+5. Type **"xrobotoolkit"** in the search bar and select the GitHub page [https://github.com/XR-Robotics](https://github.com/XR-Robotics).
+
+```{image} ../_static/pico_setup/google_search_screenshot.png
+:width: 600px
+:align: center
+```
+
+6. Make sure **Developer Mode** is enabled (Settings → Developer).
+7. **[INSIDE PICO]** Scroll down in the GitHub page until you see the APK download option and click with the PICO trigger to download it.
+
+```{tip}
+Download [XRoboToolkit-PICO-1.1.1.apk](https://github.com/XR-Robotics/XRoboToolkit-Unity-Client/releases/download/v1.1.1/XRoboToolkit-PICO-1.1.1.apk) on PICO using the browser. ([Other Versions](https://github.com/XR-Robotics/XRoboToolkit-Unity-Client/releases))
+```
+
+8. **[INSIDE PICO]** Open the manage downloads option on the top right section of the browser page and click to open the `XRoboToolkit-PICO-1.1.1.apk` download.
+9. **[INSIDE PICO]** Select **Install** — the application will appear in the **Unknown** section of your library.
 
 ### Connect XRoboToolkit
 
-1. Connect the host computer and PICO headset to the same Wi-Fi network.
-2. Open the **XRoboToolkit** application in the headset.
-3. Select the host computer's IP address in the server connection prompt. If it is not listed, enter its IPv4 address next to **PC Service**.
-4. Verify that the status is **WORKING**.
-5. Enable **Head** and **Controller** under Tracking.
-6. Select **Send** under Data/Control.
-7. Select **Full body** for the PICO Motion Tracker.
+1. Open the Wi-Fi settings on both the laptop/PC and PICO and ensure they are on the **same Wi-Fi network**. Take note of the Wi-Fi IPv4 address.
+   - To find the PICO's Wi-Fi, select the control center on the bottom right of the menu.
+
+```{image} ../_static/pico_setup/internet.png
+:width: 600px
+:align: center
+```
+
+```{image} ../_static/pico_setup/pico_vr_screenshot.png
+:width: 600px
+:align: center
+```
+
+2. Open the **XRoboToolKit** application. Select the host computer's IP address in the server connection prompt. If it is not listed, enter its IPv4 address next to **PC Service**. You will know it is properly connected if **WORKING** appears next to "Status:".
+   - If your IP address is already inputted, select **"Reconnect"** where it says "Status:" in the Network section.
+
+3. Make sure the following boxes are ticked as shown in the picture below:
+   - **"Head"** and **"Controller"** under the "Tracking" section.
+   - For Data/Control, make sure to select the **"Send"** button.
+   - For "Pico Motion Tracker" make sure to select **"Full body"**.
 
 ```{image} ../_static/pico_setup/xrrobot_setup.png
 :width: 600px
@@ -124,4 +152,4 @@ See the [XRoboToolkit PC Service releases](https://github.com/XR-Robotics/XRoboT
 
 ## Next Steps
 
-Continue to the [ZMQ Manager tutorial](../tutorials/vr_wholebody_teleop.md) to run whole-body teleoperation in simulation or on a real robot.
+Your PICO hardware and software are now ready. Proceed to the [ZMQ Manager (`zmq_manager`) tutorial](../tutorials/vr_wholebody_teleop.md) to run whole-body teleoperation in simulation or on the real robot.

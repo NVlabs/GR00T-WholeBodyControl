@@ -1,6 +1,6 @@
 """Input source readers for body tracking data.
 
-PicoReader         -- pulls data from XRoboToolkit SDK (PICO headset).
+PicoReader         -- pulls data from XRoboToolkit SDK (Pico headset).
 IsaacTeleopReader  -- in-process IsaacTeleop / CloudXR DeviceIO session.
 """
 
@@ -187,8 +187,8 @@ def _quat_xyzw(orientation: Any) -> tuple[float, float, float, float] | None:
         return None
 
 
-# Number of joints in the Isaac Teleop FullBodyPoseT (XR_BD_body_tracking).
-# Mirrors core.BodyJoint.NUM_JOINTS in Isaac Teleop's schema bindings.
+# Number of joints in the IsaacTeleop FullBodyPoseT (XR_BD_body_tracking).
+# Mirrors core.BodyJoint.NUM_JOINTS in IsaacTeleop's schema bindings.
 _NUM_BODY_JOINTS = 24
 
 _UNRECOGNISED_SCHEMA_LOGGED: set[str] = set()
@@ -220,7 +220,7 @@ def _body_data_to_24x7(body_data: Any) -> np.ndarray | None:
 
     Two accepted schemas:
 
-    Schema A — Isaac Teleop ``FullBodyPoseT`` (DeviceIO direct).
+    Schema A — IsaacTeleop ``FullBodyPoseT`` (DeviceIO direct).
         Defined in IsaacTeleop's ``schema/full_body.fbs`` /
         ``schema/python/full_body_bindings.h``::
 
@@ -343,7 +343,7 @@ def _build_controller_dict(raw: dict[str, Any] | None) -> dict[str, Any] | None:
 class IsaacTeleopReader:
     """Background reader using the in-process IsaacTeleop / CloudXR DeviceIO session.
 
-    Drop-in alternative to ``PicoReader`` with the same ``get_latest()`` /
+    Drop-in alternative to ``PicoReader`` — same ``get_latest()`` /
     ``get_controller_data()`` contract. Hosts the CloudXR runtime in-process
     via :class:`IsaacTeleopClient` (no separate publisher container, no host
     ``~/.cloudxr`` sharing required).
@@ -489,3 +489,5 @@ class IsaacTeleopReader:
                 last_report = now
 
             time.sleep(self._period)
+
+

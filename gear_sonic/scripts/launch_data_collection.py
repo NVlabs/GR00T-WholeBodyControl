@@ -27,10 +27,10 @@ Prerequisites:
     - For sim: .venv_sim must exist (see install instructions)
 
 Usage (from repo root — no venv activation needed):
-    python gear_sonic/scripts/launch_data_collection.py                          # real robot: XRoboToolkit default
+    python gear_sonic/scripts/launch_data_collection.py                          # real robot (default)
     python gear_sonic/scripts/launch_data_collection.py --sim                    # MuJoCo sim
     python gear_sonic/scripts/launch_data_collection.py --no-camera-viewer       # skip viewer
-    python gear_sonic/scripts/launch_data_collection.py --pico-input-source isaac-teleop  # real robot: IsaacTeleop
+    python gear_sonic/scripts/launch_data_collection.py --pico-input-source isaac-teleop  # in-process CloudXR / DeviceIO
 """
 
 from dataclasses import dataclass
@@ -124,7 +124,7 @@ class DataCollectionLaunchConfig:
     """Run pico_manager_thread_server with --manager flag."""
 
     pico_input_source: str = "xrt"
-    """PICO input backend: xrt for XRoboToolkit or isaac-teleop for IsaacTeleop."""
+    """Teleop input source for pico_manager_thread_server.py (xrt or isaac-teleop)."""
 
     pico_vis_vr3pt: bool = False
     """Enable VR 3-point visualization on the teleop streamer."""

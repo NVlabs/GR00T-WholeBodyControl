@@ -6,8 +6,8 @@
 - **Ubuntu 20.04/22.04/24.04** or other Debian-based Linux distributions
 - **CUDA Toolkit** (for GPU acceleration)
 - **TensorRT** (for inference optimization) — **Install this first!**
-- **JetPack 6 on Jetson AGX Orin** (for native onboard deployment)
-- **JetPack 7.1 on Jetson AGX Thor** (for native onboard deployment)
+- **JetPack 6 on Jetson AGX Orin** (for onboard deployment)
+- **JetPack 7.1 on Jetson AGX Thor** (for onboard deployment)
 - Python 3.8+
 - Git with LFS support
 
@@ -16,7 +16,7 @@
 | Platform | TensorRT Version |
 |---|---|
 | x86_64 (Desktop) | **10.13** (required) |
-| Jetson / G1 onboard Orin | **10.7** (required; requires JetPack 6; see the [flashing guide](../references/jetpack6.md)) |
+| Jetson / G1 onboard Orin | **10.7** (required; requires JetPack 6 — [flashing guide](../references/jetpack6.md)) |
 | Jetson / G1 onboard Thor | **10.13** (required) |
 
 ```{tip}
@@ -24,7 +24,7 @@ Download the **TAR** package (not the DEB one) so you can extract TensorRT to an
 ```
 
 ```{danger}
-For native deployment, you **must** use the exact TensorRT versions listed above. Using a different version is known to produce incorrect inference results. The planner can output incorrect motion and cause dangerous robot behavior.
+You **must** use the exact TensorRT versions listed above. Using a different version is known to produce incorrect inference results — the planner will output wrong motion, which can cause dangerous robot behavior.
 ```
 
 ```sh
@@ -32,7 +32,7 @@ sudo apt-get install -y pv
 pv TensorRT-*.tar.gz | tar -xz -f -
 ```
 
-Move the unzipped TensorRT to `~/TensorRT` (or similar) and add it to your `~/.bashrc`:
+Move the unzipped TensorRT to `~/TensorRT` (or similar) and add to your `~/.bashrc`:
 
 ```sh
 export TensorRT_ROOT=$HOME/TensorRT
@@ -53,7 +53,8 @@ git lfs pull          # make sure all large files are fetched
 **Advantages:** Direct system installation, faster builds, production-ready.
 
 ```{warning}
-For G1 onboard deployment, AGX Orin requires JetPack 6 and AGX Thor requires JetPack 7.1. Follow the [flashing guide](../references/jetpack6.md) when upgrading Orin.
+For G1 onboard deployment, we require the onboard Orin to be upgraded to Jetpack 6 to support TensorRT. Please follow the [flashing guide](../references/jetpack6.md) for upgrading!
+AGX Thor requires JetPack 7.1.
 ```
 
 **Prerequisites:**
@@ -108,7 +109,7 @@ We provide a unified Docker environment with ROS2 Humble, supporting x86_64 and 
 sudo usermod -aG docker $USER
 newgrp docker
 
-# 2. Set TensorRT path on x86_64 (add to ~/.bashrc for persistence).
+# 2. Set TensorRT path on x86_64 (add to ~/.bashrc for persistence)
 export TensorRT_ROOT=/path/to/TensorRT
 
 # 3. Launch container
@@ -140,3 +141,7 @@ just --list                 # Show all commands
 - If you get "permission denied", ensure you're in the docker group
 - On x86_64, `TensorRT_ROOT` must be set on the **host** before starting the container
 - For Jetson: Run `source scripts/setup_env.sh` on host first (sets jetson_clocks)
+
+
+
+

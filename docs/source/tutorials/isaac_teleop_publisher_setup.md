@@ -9,17 +9,17 @@ The streamer can run on an x86_64 workstation with an NVIDIA GPU, Jetson AGX Ori
 
 ## Prerequisites
 
-1. **Completed the [Quick Start](../getting_started/quickstart.md) on the deployment host:** you can run the Sim2Sim loop, including [installing the deployment](../getting_started/installation_deploy.md) and [downloading model checkpoints](../getting_started/download_models.md).
-2. **Completed the motion tracker and teleop environment steps in [VR Teleop Setup](../getting_started/vr_teleop_setup.md) on the streamer host:** `.venv_teleop` is ready and `install_pico.sh` has been run.
+1. **Completed the [Quick Start](../getting_started/quickstart.md) on the deployment host** — you can run the Sim2Sim loop (includes [installing the deployment](../getting_started/installation_deploy.md) and [downloading model checkpoints](../getting_started/download_models.md)).
+2. **Completed the motion tracker and teleop environment steps in [VR Teleop Setup](../getting_started/vr_teleop_setup.md) on the streamer host** — `.venv_teleop` is ready and `install_pico.sh` has been run.
 
 This page is a condensed, repo-specific version of the upstream [Isaac Teleop](https://nvidia.github.io/IsaacCapture/release/1.4.x/) docs:
 
-- [Isaac Teleop Quick Start](https://nvidia.github.io/IsaacCapture/release/1.4.x/getting_started/quick_start.html)
-- [`isaacteleop[cloudxr]` documentation](https://nvidia.github.io/IsaacCapture/release/1.4.x/)
+- [Quick Start](https://nvidia.github.io/IsaacCapture/release/1.4.x/getting_started/quick_start.html)
+- [`isaacteleop[cloudxr]` Python API](https://nvidia.github.io/IsaacCapture/release/1.4.x/)
 
 ## Step 1: Prepare the Host
 
-Install the prerequisites on each host. Skip packages that are already available:
+Install the prerequisites on each host (skip any you've already done for the rest of the deploy):
 
 ```bash
 sudo apt install -y build-essential curl git-lfs
@@ -39,7 +39,7 @@ Optional thermal / over-current check on Jetson:
 cat /sys/class/hwmon/hwmon*/oc*_event_cnt
 ```
 
-## Step 2: Verify the Isaac Teleop Package
+## Step 2: Confirm `isaacteleop[cloudxr]` Installed
 
 On the streamer host, activate the teleoperation environment and check the installed package version:
 
@@ -55,8 +55,6 @@ The command should print a version beginning with `1.4`. If the package is not f
 ## Step 3: Start the C++ Deployment
 
 On the deployment host, set `TensorRT_ROOT` to the package installed from the [Installation Guide](../getting_started/installation_deploy.md):
-
-Run the common setup commands, then run one deployment command for your target:
 
 ```bash
 cd gear_sonic_deploy
@@ -120,14 +118,13 @@ git clone --branch release/1.4.x --recurse-submodules https://github.com/NVIDIA/
 Then create the environment for the camera visualization streamer:
 
 ```bash
-cd IsaacTeleop/examples/camera_viz
-./camera_viz.sh setup
-source .venv/bin/activate
+cd IsaacTeleop
+examples/camera_viz/camera_viz.sh setup
+source examples/camera_viz/.venv/bin/activate
+cd examples/camera_viz
 ```
-
 ### Optional: Camera Preview in a Window
-
-If a local display is available, test the camera first in window mode:
+If you have video preview available, it might be best to test your camera first with the "window" mode:
 ```bash
 ./camera_viz.sh run configs/YOUR_CAMERA.yaml --mode window
 ```
@@ -197,5 +194,5 @@ Re-run `install_pico.sh` to reinstall `isaacteleop[cloudxr]~=1.4.0` into `.venv_
 The streamer logs `[IsaacTeleopReader] No DeviceIO data for 5.0s, flagging disconnect` if the headset stops feeding body data. Confirm:
 
 1. The headset is still connected to CloudXR (Step 5).
-2. The Pico body trackers are paired and calibrated (see {ref}`VR Teleop Setup: Step 1: Set Up the Motion Trackers <motion-tracker-setup>`).
+2. The Pico body trackers are paired and calibrated (see {ref}`VR Teleop Setup → Motion Tracker Setup <motion-tracker-setup>`).
 3. The first time the schema runs, watch for `[IsaacTeleopReader] Unrecognised body_data schema: type=...` — if you see it, the upstream `FullBodyTracker.get_body_pose().data` shape changed and `_body_data_to_24x7()` in `gear_sonic/utils/teleop/input_readers.py` needs an extra branch for the new layout.

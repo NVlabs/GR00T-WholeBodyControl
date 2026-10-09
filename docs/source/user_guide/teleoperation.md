@@ -44,15 +44,15 @@ bash deploy.sh --input-type zmq_manager sim
 **Terminal 3 — PICO Teleop Streamer**:
 ```bash
 source .venv_teleop/bin/activate
-python gear_sonic/scripts/pico_manager_thread_server.py --manager
+python gear_sonic/scripts/pico_manager_thread_server.py --manager 
 ```
 
 The command above uses XRoboToolkit. To use IsaacTeleop, add `--input-source isaac-teleop` and follow the [Isaac Teleop setup instructions](../tutorials/isaac_teleop_publisher_setup.md).
 
 **Operator Actions**:
-1. **Put on PICO headset and controllers** — Ensure foot trackers are securely attached.
+1. **Put on PICO headset and controllers** — Ensure foot trackers are securely attached. 
 2. **Stand in calibration pose** — Upright, feet together, arms in down. Recalibrate often!!!
-3. **Make robot stand loose but standing** - Put the G1 somehow slack on gantry (the policy will start and start balancing on its own).
+3. **Make robot stand loose but standing** - Put the G1 somehow slack on gantry (the policy will start and start balancing on its own). 
 4. **Press A+B+X+Y** on controllers — Initializes the policy and calibrates (enters Planner mode)
 5. **Press A+X** — Switches to Pose mode (whole-body teleoperation active)
 6. **Teleoperate** — Your movements are now mirrored by the robot
@@ -200,7 +200,7 @@ When switching between modes, **always match the robot's current pose first**.
 2. Verify you're wearing tight-fitting pants
 3. Improve lighting (avoid very bright or very dark areas)
 4. Restart XRoboToolKit on the PICO headset
-5. Recalibrate
+5. Recalibrate 
 
 For IsaacTeleop, verify that the Web Client is connected to the streamer IP.
 
@@ -246,4 +246,4 @@ Both methods immediately halt the policy and exit control mode.
 
 - **Understand input interfaces** — See tutorials for [Keyboard](../tutorials/keyboard.md), [Gamepad](../tutorials/gamepad.md), [ZMQ](../tutorials/zmq.md), [Manager](../tutorials/manager.md)
 - **Learn about deployment** — See [Deployment Code & Program Flow](../references/deployment_code)
-- **General troubleshooting** — See [Troubleshooting Guide](troubleshooting)
+- **General troubleshooting** — See [Troubleshooting Guide](troubleshooting) 

@@ -2248,7 +2248,7 @@ if __name__ == "__main__":
         choices=["xrt", "isaac-teleop"],
         help=(
             "Input source: 'xrt' for XRoboToolkit SDK (default), "
-            "or 'isaac-teleop' for in-process IsaacTeleop / CloudXR DeviceIO"
+            "'isaac-teleop' for in-process IsaacTeleop / CloudXR DeviceIO"
         ),
     )
     args = parser.parse_args()

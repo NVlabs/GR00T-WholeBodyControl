@@ -28,7 +28,7 @@ You **must wear tight-fitting pants or leggings** to guarantee line-of-sight for
 ## Prerequisites
 
 1. **Completed the [Quick Start](../getting_started/quickstart.md)** — you can run the sim2sim loop (includes [installing the deployment](../getting_started/installation_deploy.md) and [downloading model checkpoints](../getting_started/download_models.md)).
-2. **Completed the [VR Teleop Setup](../getting_started/vr_teleop_setup.md):** `.venv_teleop` is ready, and the PICO hardware is paired and calibrated.
+2. **Completed the [VR Teleop Setup](../getting_started/vr_teleop_setup.md)** — `.venv_teleop` is ready, and the PICO hardware is paired and calibrated.
 
 ---
 
@@ -81,17 +81,17 @@ On the streamer host, from the **repo root**:
 ```bash
 source .venv_teleop/bin/activate
 
-# Add visualization for the first run:
+# With full visualization (recommended for first run):
 python gear_sonic/scripts/pico_manager_thread_server.py --manager \
     --vis_vr3pt --vis_smpl
 
-# Without visualization:
+# Without visualization (for headless / onboard practice):
 # python gear_sonic/scripts/pico_manager_thread_server.py --manager
 ```
 
 To use IsaacTeleop, add `--input-source isaac-teleop` and follow the [Isaac Teleop Setup](isaac_teleop_publisher_setup.md).
 
-When you turn on visualization, wait for a window that shows a Unitree G1 mesh with all joints at the default angles. If poses are missing, check the XRoboToolkit PC service and the IP configuration in the headset application. For IsaacTeleop, verify that the Web Client is connected to the streamer.
+When you turn on the visualization, wait for a window to pop up showing a Unitree G1 mesh with all joints at the default angles. If no window shows up on the default PICO path, double-check the PICO's XRoboToolKit IP configuration in the [VR Teleop Setup](../getting_started/vr_teleop_setup.md). If you are using Isaac Teleop instead, verify the headset is connected to the in-process CloudXR runtime — see [Isaac Teleop Setup](isaac_teleop_publisher_setup.md) for connection steps.
 
 ### Your First Teleop Session
 
