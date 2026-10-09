@@ -86,11 +86,11 @@ echo "[OK] cmake $(cmake --version | head -1)"
 export CMAKE_PREFIX_PATH="$(python -m pybind11 --cmakedir)"
 echo "[OK] pybind11 cmake dir: $CMAKE_PREFIX_PATH"
 
-# On aarch64 (Jetson Orin), build the PXREARobotSDK native lib from source
+# On aarch64 (Jetson), build the PXREARobotSDK native lib from source
 # because pre-built aarch64 binaries are not shipped in the repo.
 XRT_DIR="$REPO_ROOT/external_dependencies/XRoboToolkit-PC-Service-Pybind_X86_and_ARM64"
 if [ "$ARCH" = "aarch64" ] && [ ! -f "$XRT_DIR/lib/aarch64/libPXREARobotSDK.so" ]; then
-    echo "[INFO] Building PXREARobotSDK for aarch64 (Jetson Orin) …"
+    echo "[INFO] Building PXREARobotSDK for aarch64 (Jetson) …"
     XRT_TMP="$XRT_DIR/tmp"
     mkdir -p "$XRT_TMP"
     if [ ! -d "$XRT_TMP/XRoboToolkit-PC-Service" ]; then
@@ -116,8 +116,8 @@ uv pip install --no-build-isolation -e external_dependencies/XRoboToolkit-PC-Ser
 #       (--input-source isaac-teleop in pico_manager_thread_server.py).
 # Hosted on pypi.nvidia.com (public index, no auth). Replaces the legacy
 # multi-container path (./scripts/run_cloudxr_via_docker.sh + teleop_ros2_ref).
-echo "[INFO] Installing isaacteleop[cloudxr]~=1.3.0 from pypi.nvidia.com …"
-uv pip install 'isaacteleop[cloudxr]~=1.3.0' --prerelease=allow \
+echo "[INFO] Installing isaacteleop[cloudxr]~=1.4.0 from pypi.nvidia.com …"
+uv pip install 'isaacteleop[cloudxr]~=1.4.0' --prerelease=allow \
     --extra-index-url https://pypi.nvidia.com
 
 # Seed ~/cloudxr.env with the device profile CloudXRLauncher negotiates against.

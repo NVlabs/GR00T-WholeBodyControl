@@ -23,9 +23,10 @@ This codebase serves as the foundation for:
 News
 ----
 
+- **[2026-09-14]** **IsaacTeleop 1.4 and AGX Orin support**: Added IsaacTeleop 1.4 and Jetson AGX Orin support for PICO teleoperation.
 - **[2026-08-31]** **SONIC deployment update** — added per-motor Kp/Kd scaling to reduce stumbling.
 - **[2026-07-23]** **SONIC v1.1 checkpoint** — released a robot-heading-normalized SONIC controller trained with wrist-pose augmentation for whole-body teleoperation and SONIC-backed VLA execution. See the `Model Card <model_card.html>`_ and `Download Models <getting_started/download_models.html#sonic-v11-checkpoint>`_.
-- **[06/16]** **Isaac Teleop Setup (CloudXR / DeviceIO, in-process)** — added bring-up docs for the in-process CloudXR path via ``isaacteleop[cloudxr]``, with no separate publisher container. See `Isaac Teleop Setup <tutorials/isaac_teleop_publisher_setup.html>`_.
+- **[2026-06-16]** **Isaac Teleop Setup (CloudXR / DeviceIO, in-process)** — added bring-up docs for the in-process CloudXR path via ``isaacteleop[cloudxr]``, with no separate publisher container. See `Isaac Teleop Setup <tutorials/isaac_teleop_publisher_setup.html>`_.
 - **[2026-06-16]** **Low-latency teleoperation checkpoint** — released a SONIC checkpoint with 4-frame SMPL reference lookahead for more responsive whole-body teleoperation. See the `Model Card <model_card.html>`_, `Download Models <getting_started/download_models.html#low-latency-teleoperation-checkpoint>`_, and `VLA Inference <tutorials/vla_inference.html#low-latency-teleoperation-checkpoint>`_ for usage.
 - **[2026-05-07]** **End-to-end VLA workflow on G1** — collect teleop data, fine-tune Isaac-GR00T N1.7, and deploy with SONIC whole-body control. See `Data Collection <tutorials/data_collection.html>`_, `VLA Workflow <tutorials/vla_workflow.html>`_, and `VLA Inference <tutorials/vla_inference.html>`_.
 - **[2026-04-14]** `Live web demo <https://nvlabs.github.io/GEAR-SONIC/demo.html>`_ — try SONIC interactively in your browser. Features `Kimodo <https://github.com/nv-tlabs/kimodo>`_ text-to-motion generation.

@@ -137,7 +137,7 @@ class IsaacTeleopClient:
             self._head_tracker = deviceio.HeadTracker()
             self._hand_tracker = deviceio.HandTracker()
             self._controller_tracker = deviceio.ControllerTracker()
-            self._body_tracker = deviceio.FullBodyTrackerPico()
+            self._body_tracker = deviceio.FullBodyTracker()
             trackers = [
                 self._head_tracker,
                 self._hand_tracker,
@@ -286,7 +286,7 @@ class IsaacTeleopClient:
         return [float(inp.thumbstick_x), float(inp.thumbstick_y)]
 
     def get_full_body_data(self) -> Any | None:
-        """Return the raw DeviceIO ``FullBodyTrackerPico`` data payload (or None).
+        """Return the raw DeviceIO ``FullBodyTracker`` data payload (or None).
 
         Body-joint extraction (24×7 pose array) lives in
         ``input_readers.IsaacTeleopReader``, which knows the gear_sonic schema.

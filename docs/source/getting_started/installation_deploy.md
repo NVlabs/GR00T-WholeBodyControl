@@ -6,7 +6,8 @@
 - **Ubuntu 20.04/22.04/24.04** or other Debian-based Linux distributions
 - **CUDA Toolkit** (for GPU acceleration)
 - **TensorRT** (for inference optimization) — **Install this first!**
-- **Jetpack 6** (for onboard deployment)
+- **JetPack 6 on Jetson AGX Orin** (for onboard deployment)
+- **JetPack 7.1 on Jetson AGX Thor** (for onboard deployment)
 - Python 3.8+
 - Git with LFS support
 
@@ -16,6 +17,7 @@
 |---|---|
 | x86_64 (Desktop) | **10.13** (required) |
 | Jetson / G1 onboard Orin | **10.7** (required; requires JetPack 6 — [flashing guide](../references/jetpack6.md)) |
+| Jetson / G1 onboard Thor | **10.13** (required) |
 
 ```{tip}
 Download the **TAR** package (not the DEB one) so you can extract TensorRT to any location. The archive is ~10 GB; consider using `pv` to monitor progress:
@@ -52,6 +54,7 @@ git lfs pull          # make sure all large files are fetched
 
 ```{warning}
 For G1 onboard deployment, we require the onboard Orin to be upgraded to Jetpack 6 to support TensorRT. Please follow the [flashing guide](../references/jetpack6.md) for upgrading!
+AGX Thor requires JetPack 7.1.
 ```
 
 **Prerequisites:**
@@ -96,8 +99,8 @@ We provide a unified Docker environment with ROS2 Humble, supporting x86_64 and 
 
 **Prerequisites:**
 - Docker installed and user added to docker group
-- `TensorRT_ROOT` environment variable set on host
-- For Jetson: JetPack 6.1+ (CUDA 12.6)
+- `TensorRT_ROOT` environment variable set on x86_64 hosts
+- For Jetson: JetPack 6.1+ on AGX Orin or JetPack 7.1 on AGX Thor
 
 **Quick Setup:**
 
@@ -106,7 +109,7 @@ We provide a unified Docker environment with ROS2 Humble, supporting x86_64 and 
 sudo usermod -aG docker $USER
 newgrp docker
 
-# 2. Set TensorRT path (add to ~/.bashrc for persistence)
+# 2. Set TensorRT path on x86_64 (add to ~/.bashrc for persistence)
 export TensorRT_ROOT=/path/to/TensorRT
 
 # 3. Launch container
@@ -124,7 +127,7 @@ cd gear_sonic_deploy
 
 **Architecture Support:**
 - **x86_64**: CUDA 12.4.1 (requires NVIDIA driver 550+)
-- **Jetson**: CUDA 12.4.1 container on CUDA 12.6 host (forward compatible)
+- **Jetson**: AGX Orin and AGX Thor
 
 **Inside the container:**
 
@@ -136,9 +139,8 @@ just --list                 # Show all commands
 
 **Troubleshooting:**
 - If you get "permission denied", ensure you're in the docker group
-- TensorRT must be set on the **host** before starting container
+- On x86_64, `TensorRT_ROOT` must be set on the **host** before starting the container
 - For Jetson: Run `source scripts/setup_env.sh` on host first (sets jetson_clocks)
-
 
 
 

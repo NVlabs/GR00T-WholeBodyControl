@@ -39,6 +39,8 @@ This environment is separate from `.venv_teleop` and `.venv_sim` — the data ex
 
 ---
 
+(camera-server-setup-on-robot)=
+
 ## Camera Server Setup (On-Robot)
 
 The camera server is the **only component that runs on the robot computer** (e.g., Jetson Orin). Everything else — the C++ deployment, PICO teleop streamer, data exporter, and camera viewer — runs on your workstation.
@@ -272,6 +274,7 @@ Common options:
 | `--sim / --no-sim` | `False` | Run deploy.sh in sim mode (also starts the sim loop) |
 | `--camera-host` | `localhost` | Camera server host (e.g., `192.168.123.164` for real robot) |
 | `--camera-port` | `5555` | Camera server port |
+| `--pico-input-source` | `xrt` | PICO input backend: `xrt` for XRoboToolkit or `isaac-teleop` for IsaacTeleop. |
 | `--no-camera-viewer` | *(viewer on)* | Disable the camera viewer pane |
 | `--data-exporter-frequency` | `50` | Recording frequency (Hz) |
 | `--deploy-checkpoint` | *(default)* | Custom checkpoint path for deploy.sh |
@@ -332,6 +335,8 @@ source scripts/setup_env.sh
 source .venv_teleop/bin/activate
 python gear_sonic/scripts/pico_manager_thread_server.py --manager
 ```
+
+To use IsaacTeleop, add `--input-source isaac-teleop` and connect the headset as described in [Isaac Teleop Setup](isaac_teleop_publisher_setup.md).
 
 **Terminal 4 — Data Exporter:**
 
