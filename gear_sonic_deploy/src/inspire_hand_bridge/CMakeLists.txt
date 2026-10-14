@@ -1,0 +1,26 @@
+cmake_minimum_required(VERSION 3.14)
+project(inspire_hand_driver LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+include(CTest)
+
+find_package(Threads REQUIRED)
+find_path(MSGPACK_INCLUDE_DIR msgpack.hpp REQUIRED)
+find_path(ZMQ_INCLUDE_DIR zmq.hpp REQUIRED)
+find_library(ZMQ_LIBRARY zmq REQUIRED)
+
+add_library(inspire_contract INTERFACE)
+target_include_directories(inspire_contract INTERFACE include ${MSGPACK_INCLUDE_DIR})
+add_executable(inspire_direct_serial_hand_gateway src/inspire_direct_serial_hand_gateway.cpp)
+target_include_directories(inspire_direct_serial_hand_gateway PRIVATE ${ZMQ_INCLUDE_DIR})
+target_link_libraries(inspire_direct_serial_hand_gateway PRIVATE inspire_contract Threads::Threads ${ZMQ_LIBRARY})
+
+if(BUILD_TESTING)
+foreach(name contract safety_guard feedback_guard real_hardware_codec direct_serial_protocol direct_serial_io operator_session)
+  add_executable(inspire_${name}_test tests/${name}_test.cpp)
+  target_link_libraries(inspire_${name}_test PRIVATE inspire_contract Threads::Threads)
+  # Source tests use assert; keep their checks active in Release builds too.
+  target_compile_options(inspire_${name}_test PRIVATE -UNDEBUG)
+  add_test(NAME inspire_${name}_test COMMAND inspire_${name}_test)
+endforeach()
+endif()

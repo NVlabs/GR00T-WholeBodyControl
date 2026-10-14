@@ -59,6 +59,7 @@ class DefaultEnv:
 
         self.reward_lock = Lock()
         self.unitree_bridge = None
+        self.hand_controller = None
         self.onscreen = onscreen
 
         self.init_scene()
@@ -222,30 +223,70 @@ class DefaultEnv:
             self.viewer.cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
             self.viewer.cam.trackbodyid = self.mj_model.body("pelvis").id
 
+        named_hands = self.config.get("HAND_JOINT_NAMES")
+        if named_hands:
+            self.left_hand_index = [self.mj_model.joint(name).id for name in named_hands["left"]]
+            self.right_hand_index = [self.mj_model.joint(name).id for name in named_hands["right"]]
+            hand_ids = set(self.left_hand_index + self.right_hand_index)
+        else:
+            self.left_hand_index = []
+            self.right_hand_index = []
+            hand_ids = set()
+
         self.body_joint_index = []
-        self.left_hand_index = []
-        self.right_hand_index = []
         for i in range(self.mj_model.njnt):
             name = self.mj_model.joint(i).name
             if any(
-                [
-                    part_name in name
-                    for part_name in ["hip", "knee", "ankle", "waist", "shoulder", "elbow", "wrist"]
-                ]
+                part_name in name
+                for part_name in ["hip", "knee", "ankle", "waist", "shoulder", "elbow", "wrist"]
             ):
                 self.body_joint_index.append(i)
-            elif "left_hand" in name:
+            elif not named_hands and "left_hand" in name:
                 self.left_hand_index.append(i)
-            elif "right_hand" in name:
+            elif not named_hands and "right_hand" in name:
                 self.right_hand_index.append(i)
+
+        if hand_ids.intersection(self.body_joint_index):
+            raise ValueError("HAND_JOINT_NAMES overlaps the body joint layout")
 
         assert len(self.body_joint_index) == self.robot.NUM_JOINTS
         assert len(self.left_hand_index) == self.robot.NUM_HAND_JOINTS
         assert len(self.right_hand_index) == self.robot.NUM_HAND_JOINTS
 
-        self.body_joint_index = np.array(self.body_joint_index)
-        self.left_hand_index = np.array(self.left_hand_index)
-        self.right_hand_index = np.array(self.right_hand_index)
+        self.body_joint_index = np.array(self.body_joint_index, dtype=np.int32)
+        self.left_hand_index = np.array(self.left_hand_index, dtype=np.int32)
+        self.right_hand_index = np.array(self.right_hand_index, dtype=np.int32)
+        self.body_qpos_index = self.mj_model.jnt_qposadr[self.body_joint_index]
+        self.body_dof_index = self.mj_model.jnt_dofadr[self.body_joint_index]
+        self.left_hand_qpos_index = self.mj_model.jnt_qposadr[self.left_hand_index]
+        self.left_hand_dof_index = self.mj_model.jnt_dofadr[self.left_hand_index]
+        self.right_hand_qpos_index = self.mj_model.jnt_qposadr[self.right_hand_index]
+        self.right_hand_dof_index = self.mj_model.jnt_dofadr[self.right_hand_index]
+
+        named_actuators = self.config.get("HAND_ACTUATOR_NAMES")
+        if named_actuators:
+            self.left_hand_actuator_index = np.array(
+                [self.mj_model.actuator(name).id for name in named_actuators["left"]]
+            )
+            self.right_hand_actuator_index = np.array(
+                [self.mj_model.actuator(name).id for name in named_actuators["right"]]
+            )
+        else:
+            self.left_hand_actuator_index = self._actuators_for_joints(self.left_hand_index)
+            self.right_hand_actuator_index = self._actuators_for_joints(self.right_hand_index)
+        self.body_actuator_index = self._actuators_for_joints(self.body_joint_index)
+
+    def _actuators_for_joints(self, joint_ids: np.ndarray) -> np.ndarray:
+        """Resolve one actuator per joint through MuJoCo transmissions."""
+        result = []
+        for joint_id in joint_ids:
+            matches = np.flatnonzero(self.mj_model.actuator_trnid[:, 0] == joint_id)
+            if matches.size != 1:
+                raise ValueError(
+                    f"joint {self.mj_model.joint(int(joint_id)).name!r} must have exactly one actuator"
+                )
+            result.append(int(matches[0]))
+        return np.asarray(result, dtype=np.int32)
 
     def init_renderers(self):
         self.renderers = {}
@@ -277,12 +318,12 @@ class DefaultEnv:
                         + self.unitree_bridge.low_cmd.motor_cmd[i].kp
                         * (
                             self.unitree_bridge.low_cmd.motor_cmd[i].q
-                            - self.mj_data.qpos[self.body_joint_index[i] + self.qpos_offset - 1]
+                            - self.mj_data.qpos[self.body_qpos_index[i]]
                         )
                         + self.unitree_bridge.low_cmd.motor_cmd[i].kd
                         * (
                             self.unitree_bridge.low_cmd.motor_cmd[i].dq
-                            - self.mj_data.qvel[self.body_joint_index[i] + self.qvel_offset - 1]
+                            - self.mj_data.qvel[self.body_dof_index[i]]
                         )
                     )
         return body_torques
@@ -307,12 +348,12 @@ class DefaultEnv:
                     + self.unitree_bridge.left_hand_cmd.motor_cmd[i].kp
                     * (
                         self.unitree_bridge.left_hand_cmd.motor_cmd[i].q
-                        - self.mj_data.qpos[self.left_hand_index[i] + self.qpos_offset - 1]
+                        - self.mj_data.qpos[self.left_hand_qpos_index[i]]
                     )
                     + self.unitree_bridge.left_hand_cmd.motor_cmd[i].kd
                     * (
                         self.unitree_bridge.left_hand_cmd.motor_cmd[i].dq
-                        - self.mj_data.qvel[self.left_hand_index[i] + self.qvel_offset - 1]
+                        - self.mj_data.qvel[self.left_hand_dof_index[i]]
                     )
                 )
                 right_hand_torques[i] = (
@@ -320,12 +361,12 @@ class DefaultEnv:
                     + self.unitree_bridge.right_hand_cmd.motor_cmd[i].kp
                     * (
                         self.unitree_bridge.right_hand_cmd.motor_cmd[i].q
-                        - self.mj_data.qpos[self.right_hand_index[i] + self.qpos_offset - 1]
+                        - self.mj_data.qpos[self.right_hand_qpos_index[i]]
                     )
                     + self.unitree_bridge.right_hand_cmd.motor_cmd[i].kd
                     * (
                         self.unitree_bridge.right_hand_cmd.motor_cmd[i].dq
-                        - self.mj_data.qvel[self.right_hand_index[i] + self.qvel_offset - 1]
+                        - self.mj_data.qvel[self.right_hand_dof_index[i]]
                     )
                 )
         return np.concatenate((left_hand_torques, right_hand_torques))
@@ -370,19 +411,19 @@ class DefaultEnv:
         )
         obs["secondary_imu_vel"] = pose[7:13]
 
-        obs["body_q"] = self.mj_data.qpos[self.body_joint_index + 7 - 1]
-        obs["body_dq"] = self.mj_data.qvel[self.body_joint_index + 6 - 1]
-        obs["body_ddq"] = self.mj_data.qacc[self.body_joint_index + 6 - 1]
-        obs["body_tau_est"] = self.mj_data.actuator_force[self.body_joint_index - 1]
+        obs["body_q"] = self.mj_data.qpos[self.body_qpos_index]
+        obs["body_dq"] = self.mj_data.qvel[self.body_dof_index]
+        obs["body_ddq"] = self.mj_data.qacc[self.body_dof_index]
+        obs["body_tau_est"] = self.mj_data.actuator_force[self.body_actuator_index]
         if self.num_hand_dof > 0:
-            obs["left_hand_q"] = self.mj_data.qpos[self.left_hand_index + self.qpos_offset - 1]
-            obs["left_hand_dq"] = self.mj_data.qvel[self.left_hand_index + self.qvel_offset - 1]
-            obs["left_hand_ddq"] = self.mj_data.qacc[self.left_hand_index + self.qvel_offset - 1]
-            obs["left_hand_tau_est"] = self.mj_data.actuator_force[self.left_hand_index - 1]
-            obs["right_hand_q"] = self.mj_data.qpos[self.right_hand_index + self.qpos_offset - 1]
-            obs["right_hand_dq"] = self.mj_data.qvel[self.right_hand_index + self.qvel_offset - 1]
-            obs["right_hand_ddq"] = self.mj_data.qacc[self.right_hand_index + self.qvel_offset - 1]
-            obs["right_hand_tau_est"] = self.mj_data.actuator_force[self.right_hand_index - 1]
+            obs["left_hand_q"] = self.mj_data.qpos[self.left_hand_qpos_index]
+            obs["left_hand_dq"] = self.mj_data.qvel[self.left_hand_dof_index]
+            obs["left_hand_ddq"] = self.mj_data.qacc[self.left_hand_dof_index]
+            obs["left_hand_tau_est"] = self.mj_data.actuator_force[self.left_hand_actuator_index]
+            obs["right_hand_q"] = self.mj_data.qpos[self.right_hand_qpos_index]
+            obs["right_hand_dq"] = self.mj_data.qvel[self.right_hand_dof_index]
+            obs["right_hand_ddq"] = self.mj_data.qacc[self.right_hand_dof_index]
+            obs["right_hand_tau_est"] = self.mj_data.actuator_force[self.right_hand_actuator_index]
         obs["time"] = self.mj_data.time
         return obs
 
@@ -413,12 +454,12 @@ class DefaultEnv:
             else:
                 self.mj_data.xfrc_applied[self.band_attached_link] = np.zeros(6)
         body_torques = self.compute_body_torques()
-        hand_torques = self.compute_hand_torques()
-        # -1: actuator array is 0-based while joint indices from the model are 1-based
-        self.torques[self.body_joint_index - 1] = body_torques
+        hand_torques = (self.compute_hand_torques() if self.hand_controller is None
+                        else np.zeros(self.num_hand_dof * 2))
+        self.torques[self.body_actuator_index] = body_torques
         if self.num_hand_dof > 0:
-            self.torques[self.left_hand_index - 1] = hand_torques[: self.num_hand_dof]
-            self.torques[self.right_hand_index - 1] = hand_torques[self.num_hand_dof :]
+            self.torques[self.left_hand_actuator_index] = hand_torques[: self.num_hand_dof]
+            self.torques[self.right_hand_actuator_index] = hand_torques[self.num_hand_dof :]
 
         self.torques = np.clip(self.torques, -self.torque_limit, self.torque_limit)
 
@@ -427,6 +468,8 @@ class DefaultEnv:
             self.mj_data.ctrl = np.concatenate((np.zeros(6), self.torques))
         else:
             self.mj_data.ctrl = self.torques
+        if self.hand_controller is not None:
+            self.hand_controller.step()
         mujoco.mj_step(self.mj_model, self.mj_data)
 
         self.check_fall()
@@ -525,13 +568,16 @@ class DefaultEnv:
 
     def reset(self):
         mujoco.mj_resetData(self.mj_model, self.mj_data)
+        if self.hand_controller is not None:
+            self.hand_controller.reset()
 
 
 class BaseSimulator:
     """Base simulator class that handles initialization and running of simulations"""
 
     def __init__(
-        self, config: Dict[str, any], env_name: str = "default", redis_client=None, **kwargs
+        self, config: Dict[str, any], env_name: str = "default", redis_client=None,
+        hand_controller_factory=None, **kwargs
     ):
         self.config = config
         self.env_name = env_name
@@ -569,6 +615,13 @@ class BaseSimulator:
 
         self.init_unitree_bridge()
         self.sim_env.set_unitree_bridge(self.unitree_bridge)
+        if hand_controller_factory is not None:
+            try:
+                self.sim_env.hand_controller = hand_controller_factory(
+                    self.sim_env.mj_model, self.sim_env.mj_data)
+            except BaseException:
+                self.close()
+                raise
 
         self.init_subscriber()
         self.init_publisher()
@@ -644,6 +697,8 @@ class BaseSimulator:
 
     def close(self):
         self._running = False
+        if self.sim_env.hand_controller is not None:
+            self.sim_env.hand_controller.close()
         try:
             if self.sim_env.image_publish_process is not None:
                 self.sim_env.image_publish_process.stop()

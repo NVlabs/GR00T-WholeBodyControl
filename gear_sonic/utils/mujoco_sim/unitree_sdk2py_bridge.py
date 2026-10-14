@@ -56,7 +56,8 @@ class UnitreeSdk2Bridge:
             raise ValueError(f"Invalid robot type '{robot_type}'. Expected 'g1', 'h1', or 'go2'.")
 
         self.num_body_motor = config["NUM_MOTORS"]
-        self.num_hand_motor = config.get("NUM_HAND_MOTORS", 0)
+        self.dex3_enabled = config.get("HAND_TYPE", "dex3") == "dex3"
+        self.num_hand_motor = config.get("NUM_HAND_MOTORS", 0) if self.dex3_enabled else 0
         self.use_sensor = config["USE_SENSOR"]
 
         self.have_imu_ = False
@@ -79,22 +80,24 @@ class UnitreeSdk2Bridge:
         self.torso_imu_puber = ChannelPublisher("rt/secondary_imu", IMUState_)
         self.torso_imu_puber.Init()
 
-        self.left_hand_state = HandState_default()
-        self.left_hand_state_puber = ChannelPublisher("rt/dex3/left/state", HandState_)
-        self.left_hand_state_puber.Init()
-        self.right_hand_state = HandState_default()
-        self.right_hand_state_puber = ChannelPublisher("rt/dex3/right/state", HandState_)
-        self.right_hand_state_puber.Init()
+        if self.dex3_enabled:
+            self.left_hand_state = HandState_default()
+            self.left_hand_state_puber = ChannelPublisher("rt/dex3/left/state", HandState_)
+            self.left_hand_state_puber.Init()
+            self.right_hand_state = HandState_default()
+            self.right_hand_state_puber = ChannelPublisher("rt/dex3/right/state", HandState_)
+            self.right_hand_state_puber.Init()
 
         self.low_cmd_suber = ChannelSubscriber("rt/lowcmd", LowCmd_)
         self.low_cmd_suber.Init(self.LowCmdHandler, 1)
 
-        self.left_hand_cmd = HandCmd_default()
-        self.left_hand_cmd_suber = ChannelSubscriber("rt/dex3/left/cmd", HandCmd_)
-        self.left_hand_cmd_suber.Init(self.LeftHandCmdHandler, 1)
-        self.right_hand_cmd = HandCmd_default()
-        self.right_hand_cmd_suber = ChannelSubscriber("rt/dex3/right/cmd", HandCmd_)
-        self.right_hand_cmd_suber.Init(self.RightHandCmdHandler, 1)
+        if self.dex3_enabled:
+            self.left_hand_cmd = HandCmd_default()
+            self.left_hand_cmd_suber = ChannelSubscriber("rt/dex3/left/cmd", HandCmd_)
+            self.left_hand_cmd_suber.Init(self.LeftHandCmdHandler, 1)
+            self.right_hand_cmd = HandCmd_default()
+            self.right_hand_cmd_suber = ChannelSubscriber("rt/dex3/right/cmd", HandCmd_)
+            self.right_hand_cmd_suber.Init(self.RightHandCmdHandler, 1)
 
         self.low_cmd_lock = threading.Lock()
         self.left_hand_cmd_lock = threading.Lock()
@@ -207,6 +210,9 @@ class UnitreeSdk2Bridge:
 
         self.torso_imu_puber.Write(self.torso_imu_state)
 
+        if not self.dex3_enabled:
+            return
+
         # publish hand state
         for i in range(self.num_hand_motor):
             self.left_hand_state.motor_state[i].q = obs["left_hand_q"][i]
@@ -219,6 +225,12 @@ class UnitreeSdk2Bridge:
         self.right_hand_state_puber.Write(self.right_hand_state)
 
     def GetAction(self) -> Tuple[np.ndarray, bool, bool]:
+        if not self.dex3_enabled:
+            with self.low_cmd_lock:
+                body_q = np.array([self.low_cmd.motor_cmd[i].q for i in range(self.num_body_motor)])
+                new = self.new_low_cmd
+                self.new_low_cmd = False
+                return body_q, self.low_cmd_received, new
         with self.low_cmd_lock:
             body_q = [self.low_cmd.motor_cmd[i].q for i in range(self.num_body_motor)]
         with self.left_hand_cmd_lock:
