@@ -29,6 +29,10 @@ def override_wbc_config(
         KeyError: If any required keys are missing from the WBC YAML configuration
                   (only when missed_keys_only=False)
     """
+    gravity_compensation_joints = config.gravity_compensation_joints
+    if config.enable_gravity_compensation and gravity_compensation_joints is None:
+        gravity_compensation_joints = ["arms"]
+
     # Override yaml values with dataclass values
     key_to_value = {
         "INTERFACE": config.interface,
@@ -46,7 +50,7 @@ def override_wbc_config(
         "upper_body_max_joint_speed": config.upper_body_joint_speed,
         "keyboard_dispatcher_type": config.keyboard_dispatcher_type,
         "enable_gravity_compensation": config.enable_gravity_compensation,
-        "gravity_compensation_joints": config.gravity_compensation_joints,
+        "gravity_compensation_joints": gravity_compensation_joints,
         "high_elbow_pose": config.high_elbow_pose,
     }
 
@@ -141,7 +145,8 @@ class BaseConfig(ArgsConfigTemplate):
     """Enable gravity compensation using pinocchio dynamics."""
 
     gravity_compensation_joints: Optional[list[str]] = None
-    """Joint groups to apply gravity compensation to (e.g., ['arms', 'left_arm', 'right_arm'])."""
+    """Joint groups to apply gravity compensation to (e.g., ['arms', 'left_arm', 'right_arm']).
+    Defaults to ['arms'] when enable_gravity_compensation is True and this is None."""
     # Teleop/Device Configuration
     body_control_device: str = "dummy"
     """Device to use for body control. Options: dummy, vive, iphone, leapmotion, joycon."""
