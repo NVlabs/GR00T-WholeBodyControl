@@ -102,6 +102,14 @@ class PoseMessageSchema:
 # =============================================================================
 # Image Message Schema
 # =============================================================================
+DEPTH_KEY_SUFFIX = "_depth"
+
+
+def is_depth_key(key: str) -> bool:
+    """Depth streams are published as ``<mount_position>_depth`` and carry metric uint16 values."""
+    return str(key).endswith(DEPTH_KEY_SUFFIX)
+
+
 @dataclass
 class ImageMessageSchema:
     """Standardized message schema for camera images.
@@ -120,6 +128,10 @@ class ImageMessageSchema:
         for key, image in self.images.items():
             if isinstance(image, bytes | bytearray):
                 serialized_msg["images"][key] = image
+            elif is_depth_key(key):
+                # Depth is metric and not 8-bit: JPEG would silently be down-converted to CV_8U
+                # by OpenCV (a warning, not an error) and the millimetre values would be lost.
+                serialized_msg["images"][key] = ImageUtils.encode_depth_image(image)
             else:
                 serialized_msg["images"][key] = ImageUtils.encode_image(image)
         return serialized_msg
@@ -133,7 +145,11 @@ class ImageMessageSchema:
                 mat = cv2.imdecode(np.frombuffer(value, dtype=np.uint8), cv2.IMREAD_COLOR)
                 images[key] = mat[..., ::-1]  # BGR -> RGB
             elif isinstance(value, str):
-                images[key] = ImageUtils.decode_image(value)
+                images[key] = (
+                    ImageUtils.decode_depth_image(value)
+                    if is_depth_key(key)
+                    else ImageUtils.decode_image(value)
+                )
             elif isinstance(value, np.ndarray):
                 images[key] = value
             elif isinstance(value, dict) and b"nd" in value:
