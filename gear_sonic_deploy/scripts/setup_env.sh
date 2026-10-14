@@ -30,10 +30,10 @@ ONNX_RUNTIME_PATHS=(
 )
 
 ONNX_FOUND=false
-for path in "${ONNX_RUNTIME_PATHS[@]}"; do
-    if [ -d "$path" ]; then
-        export onnxruntime_DIR="$path/lib/cmake/onnxruntime"
-        echo "✅ ONNX Runtime found at: $path"
+for onnx_path in "${ONNX_RUNTIME_PATHS[@]}"; do
+    if [ -d "$onnx_path" ]; then
+        export onnxruntime_DIR="$onnx_path/lib/cmake/onnxruntime"
+        echo "✅ ONNX Runtime found at: $onnx_path"
         ONNX_FOUND=true
         break
     fi
