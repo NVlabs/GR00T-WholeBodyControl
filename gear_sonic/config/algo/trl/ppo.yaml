@@ -1,6 +1,7 @@
 dataset_name: dummy
 output_dir: './trl'
 learning_rate: ${algo.config.actor_learning_rate}
+optim: adamw_torch_fused  # Use adamw_torch to restore the original behavior.
 num_total_batches: ${algo.config.num_learning_iterations}  # same as num of total training steps
 total_episodes:     # num_total_batches * num_envs (batch_size)
 num_ppo_epochs: ${algo.config.num_learning_epochs}

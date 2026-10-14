@@ -95,6 +95,8 @@ class UniversalTokenModule(nn.Module):
         optimize_encoders_ratio_for_CHIP=False,  # CHIP compliance training optimization
         active_encoders=None,  # Optional list of encoder names to activate (None = all)
         active_decoders=None,  # Optional list of decoder names to activate (None = all)
+        cache_encoded_outputs=True,  # Retain CPU debug snapshots for external consumers
+        cache_full_latent=True,  # Retain device latent for optional smoothness bookkeeping
         **kwargs,  # noqa: ARG002
     ):
         """Initialise encoders, FSQ quantizer, decoders, and auxiliary losses.
@@ -165,6 +167,8 @@ class UniversalTokenModule(nn.Module):
         self.stiff_compliance_threshold = stiff_compliance_threshold
         self.freeze_quantizer = freeze_quantizer
         self.optimize_encoders_ratio_for_CHIP = optimize_encoders_ratio_for_CHIP
+        self.cache_encoded_outputs = cache_encoded_outputs
+        self.cache_full_latent = cache_full_latent
 
         if self.optimize_encoders_ratio_for_CHIP:
             logger.info(
@@ -889,14 +893,16 @@ class UniversalTokenModule(nn.Module):
         if latent_residual is not None and latent_residual_mode == "post_quantization":
             all_tokens = all_tokens + residual_reshaped
 
-        # Cache tokens for external access (e.g., by callbacks)
-        self._last_encoded_tokens = {k: v.detach().cpu() for k, v in encoded_tokens.items()}
-        self._last_encoded_latents = {k: v.detach().cpu() for k, v in encoded_latents.items()}
+        # These snapshots are diagnostic-only and force a device synchronization.
+        if self.cache_encoded_outputs:
+            self._last_encoded_tokens = {k: v.detach().cpu() for k, v in encoded_tokens.items()}
+            self._last_encoded_latents = {k: v.detach().cpu() for k, v in encoded_latents.items()}
 
         # Cache flattened full latent on device for reward computation (token smoothness)
         # all_tokens is the post-quantization token that gets sent to decoder
         # Shape: (batch, seq, num_tokens, token_dim) -> (batch, seq, latent_dim)
-        self._last_full_latent_flat = all_tokens.detach().view(*all_tokens.shape[:-2], -1)
+        if self.cache_full_latent:
+            self._last_full_latent_flat = all_tokens.detach().view(*all_tokens.shape[:-2], -1)
 
         # decode action and motion
         decode_input_dict = {
