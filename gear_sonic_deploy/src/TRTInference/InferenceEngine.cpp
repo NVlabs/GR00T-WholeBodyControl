@@ -175,7 +175,13 @@ bool ConvertONNXToTRT(
     }
 
     // Create network
+#if NV_TENSORRT_MAJOR < 11
     const uint32_t explicitBatch = 1U << static_cast<uint32_t>( nvinfer1::NetworkDefinitionCreationFlag::kEXPLICIT_BATCH );
+#else
+    // Explicit batch has been the only mode since TensorRT 10; the flag itself
+    // was removed in TensorRT 11.
+    const uint32_t explicitBatch = 0U;
+#endif
     auto network = std::unique_ptr<nvinfer1::INetworkDefinition>( builder->createNetworkV2( explicitBatch ) );
     if ( !network )
     {
@@ -262,9 +268,20 @@ bool ConvertONNXToTRT(
             }
             auto &sizes = options.shape_tensor_sizes.at( name );
 
+#if NV_TENSORRT_MAJOR < 11
             profile->setShapeValues( name, nvinfer1::OptProfileSelector::kMIN, std::get<0>( sizes ).data(), std::get<0>( sizes ).size());
             profile->setShapeValues( name, nvinfer1::OptProfileSelector::kOPT, std::get<1>( sizes ).data(), std::get<1>( sizes ).size() );
             profile->setShapeValues( name, nvinfer1::OptProfileSelector::kMAX, std::get<2>( sizes ).data(), std::get<2>( sizes ).size() );
+#else
+            // TensorRT 11 removed setShapeValues; setShapeValuesV2 takes int64_t.
+            const auto toI64 = []( const std::vector<int> &v ) { return std::vector<int64_t>( v.begin(), v.end() ); };
+            const auto mins = toI64( std::get<0>( sizes ) );
+            const auto opts = toI64( std::get<1>( sizes ) );
+            const auto maxs = toI64( std::get<2>( sizes ) );
+            profile->setShapeValuesV2( name, nvinfer1::OptProfileSelector::kMIN, mins.data(), static_cast<int32_t>( mins.size() ) );
+            profile->setShapeValuesV2( name, nvinfer1::OptProfileSelector::kOPT, opts.data(), static_cast<int32_t>( opts.size() ) );
+            profile->setShapeValuesV2( name, nvinfer1::OptProfileSelector::kMAX, maxs.data(), static_cast<int32_t>( maxs.size() ) );
+#endif
         }
     }
 
@@ -279,6 +296,7 @@ bool ConvertONNXToTRT(
     // Set the precision level
     if ( options.precision == Precision::FP16 )
     {
+#if NV_TENSORRT_MAJOR < 11
         // Ensure the GPU supports FP16 inference
         if ( !builder->platformHasFastFp16() )
         {
@@ -286,6 +304,12 @@ bool ConvertONNXToTRT(
             return false;
         }
         config->setFlag( nvinfer1::BuilderFlag::kFP16 );
+#else
+        // TensorRT 11 removed BuilderFlag::kFP16 and platformHasFastFp16()
+        // (precision builder flags were superseded by strongly-typed
+        // networks); the engine builds with the precision expressed by the
+        // network itself.
+#endif
     }
 
     // CUDA stream used for profiling by the builder.
