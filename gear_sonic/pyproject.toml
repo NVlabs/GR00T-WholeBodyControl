@@ -80,6 +80,9 @@ camera = [
 ]
 # Inference: VLA inference client for running Isaac-GR00T policies
 # Usage: pip install -e "gear_sonic[inference]"
+# NVIDIA/Isaac-GR00T declares [project] name = "gr00t". The PEP 508 name
+# must match that metadata or uv/pip fail with:
+#   Package metadata name `gr00t` does not match given name `Isaac-GR00T`
 inference = [
     "pyzmq",
     "msgpack",
@@ -88,7 +91,7 @@ inference = [
     "tyro",
     "opencv-python",
     "scipy",
-    "Isaac-GR00T @ git+https://github.com/NVIDIA/Isaac-GR00T.git",
+    "gr00t @ git+https://github.com/NVIDIA/Isaac-GR00T.git",
 ]
 # Training: full RL training stack (Isaac Lab must be installed separately)
 # Usage: pip install -e "gear_sonic[training]"
