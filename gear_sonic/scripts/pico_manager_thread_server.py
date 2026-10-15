@@ -489,6 +489,65 @@ def process_smpl_joints(body_pose, global_orient, transl):
     }
 
 
+# --- Optional PICO grip / trigger passthrough --------------------------------
+#
+# The PICO grip axis is read as a float in [0, 1] (`xrt.get_left_grip()`), but
+# `generate_finger_data` below takes it as an argument and never writes it into
+# the fingertip frames, so the value is lost before it reaches the IK solver.
+# The trigger is similarly reduced to a boolean at a 0.5 threshold, even though
+# the solver itself interpolates continuously.
+#
+# The switches below make both axes available.  Every one of them defaults to
+# OFF, and the code paths they guard are additive, so with no environment
+# variable set this file behaves exactly as it did before.
+#
+#   GEAR_SONIC_GRIP_AXIS=1
+#       Carry the grip axis on Dex3 joint 0.  Joint 0 is free here: the only
+#       gesture this producer emits is `middle_close`, whose amp0 is 0.0 (see
+#       g1_gripper_ik_solver.py), so joint 0 is otherwise always zero.  This
+#       gives a downstream consumer a second, independent hand axis without
+#       taking anything away from the existing open/close gesture.
+#
+#   GEAR_SONIC_GRIP_AXIS_GAIN=1.0
+#       Joint-0 value in rad at grip == 1.0.  Dex3 joint 0 spans +-1.05
+#       (dex3_hands.hpp MAX_LIMITS/MIN_LIMITS) and the built-in gestures use
+#       +-0.5, so the default is inside the joint limit and unambiguous
+#       against both.
+#
+#   GEAR_SONIC_TRIGGER_CONTINUOUS=1
+#       Pass the trigger travel through instead of thresholding it at 0.5.
+#       The solver already interpolates (q_open + grip * (q_closed - q_open));
+#       only this function was binary.
+
+
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "0").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def _clip01(value) -> float:
+    value = float(value)
+    if not np.isfinite(value):
+        return 0.0
+    return min(1.0, max(0.0, value))
+
+
+def _set_joint0(joints: np.ndarray, value: float) -> np.ndarray:
+    """Write ``value`` into joint 0, for either a (7,) or a (1, 7) array."""
+    joints = np.asarray(joints)
+    if joints.ndim == 1:
+        joints[0] = value
+    else:
+        joints[..., 0] = value
+    return joints
+
+
 def generate_finger_data(hand: str, trigger: float, grip: float) -> np.ndarray:
     """
     Generate finger position data from Pico controller button states.
@@ -507,7 +566,12 @@ def generate_finger_data(hand: str, trigger: float, grip: float) -> np.ndarray:
     middle = 10
     # Control thumb based on shoulder button state (index 4 is thumb tip)
     fingertips[4 + thumb, 0, 3] = 1.0  # open thumb
-    if trigger > 0.5:
+    if _env_flag("GEAR_SONIC_TRIGGER_CONTINUOUS"):
+        # The solver reads grip amount back out as 1 - |thumb - finger|, and the
+        # thumb sits at 1.0, so writing the trigger travel here reproduces it
+        # exactly: grip_amount == trigger.
+        fingertips[4 + middle, 0, 3] = _clip01(trigger)
+    elif trigger > 0.5:
         fingertips[4 + middle, 0, 3] = 1.0  # close middle
 
     return fingertips
@@ -763,6 +827,14 @@ def compute_hand_joints_from_inputs(
     else:
         left_hand_joints = np.zeros((1, 7), dtype=np.float32)
         right_hand_joints = np.zeros((1, 7), dtype=np.float32)
+    if _env_flag("GEAR_SONIC_GRIP_AXIS"):
+        # Carry the grip axis on joint 0, which the solver leaves at zero for
+        # `middle_close`.  Both hands end up with the same sign there (left does
+        # `q[0] -= amp0`, right does `q[0] += amp0` and then negates the whole
+        # vector), so one expression covers both sides.
+        gain = _env_float("GEAR_SONIC_GRIP_AXIS_GAIN", 1.0)
+        left_hand_joints = _set_joint0(left_hand_joints, gain * _clip01(left_grip))
+        right_hand_joints = _set_joint0(right_hand_joints, gain * _clip01(right_grip))
     return left_hand_joints, right_hand_joints
 
 
