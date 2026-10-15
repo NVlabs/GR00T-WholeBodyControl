@@ -190,7 +190,7 @@ inline std::array<double, 4> quat_mul_d(const std::array<double, 4>& a, const st
   return {w, x, y, z};
 }
 
-// Extract heading angle from quaternion (returns angle in radians) - float version
+// Projected forward-axis heading angle (radians), not world-Z twist - float version
 inline float calc_heading(const std::array<float, 4>& q) {
   // Create reference direction [1, 0, 0]
   std::array<float, 3> ref_dir = {1.0f, 0.0f, 0.0f};
@@ -202,7 +202,7 @@ inline float calc_heading(const std::array<float, 4>& q) {
   return std::atan2(rot_dir[1], rot_dir[0]);
 }
 
-// Extract heading angle from quaternion (returns angle in radians) - double version
+// Projected forward-axis heading angle (radians), not world-Z twist - double version
 inline double calc_heading_d(const std::array<double, 4>& q) {
   // Create reference direction [1, 0, 0]
   std::array<double, 3> ref_dir = {1.0, 0.0, 0.0};
@@ -289,32 +289,28 @@ inline std::array<double, 4> quat_from_angle_axis_d(double angle, const std::arr
   return quat_unit_d(quat); // w, x, y, z
 }
 
-// Calculate heading quaternion from full quaternion (wxyz format) - float version
+// Extract world-Z twist, matching torch_transform.get_heading_q (wxyz format).
+// Training zeros x/y and normalizes with eps=1e-9. The heading is undefined
+// at full inversion (w=z=0); retain training's epsilon-clamped normalization.
 inline std::array<float, 4> calc_heading_quat(const std::array<float, 4>& q) {
-  float heading = calc_heading(q);
-  std::array<float, 3> axis = {0.0f, 0.0f, 1.0f}; // z-axis
-  return quat_from_angle_axis(heading, axis);
+  return quat_unit(std::array<float, 4>{q[0], 0.0f, 0.0f, q[3]}, 1e-9f);
 }
 
-// Calculate heading quaternion from full quaternion (wxyz format) - double version
+// Extract world-Z twist (wxyz format) - double version
 inline std::array<double, 4> calc_heading_quat_d(const std::array<double, 4>& q) {
-  double heading = calc_heading_d(q);
-  std::array<double, 3> axis = {0.0, 0.0, 1.0}; // z-axis
-  return quat_from_angle_axis_d(heading, axis);
+  return quat_unit_d({q[0], 0.0, 0.0, q[3]}, 1e-9);
 }
 
-// Calculate inverse heading quaternion (matches Python implementation) - float version
+// Conjugate the extracted heading quaternion - float version
 inline std::array<float, 4> calc_heading_quat_inv(const std::array<float, 4>& q) {
-  float heading = calc_heading(q);
-  std::array<float, 3> axis = {0.0f, 0.0f, 1.0f}; // z-axis
-  return quat_from_angle_axis(-heading, axis); // Note: negative heading
+  auto heading = calc_heading_quat(q);
+  return {heading[0], 0.0f, 0.0f, -heading[3]};
 }
 
-// Calculate inverse heading quaternion (matches Python implementation) - double version
+// Conjugate the extracted heading quaternion - double version
 inline std::array<double, 4> calc_heading_quat_inv_d(const std::array<double, 4>& q) {
-  double heading = calc_heading_d(q);
-  std::array<double, 3> axis = {0.0, 0.0, 1.0}; // z-axis
-  return quat_from_angle_axis_d(-heading, axis); // Note: negative heading
+  auto heading = calc_heading_quat_d(q);
+  return {heading[0], 0.0, 0.0, -heading[3]};
 }
 
 // Create quaternion from Euler Z rotation (returns wxyz format) - float version

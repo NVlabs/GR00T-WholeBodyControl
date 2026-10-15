@@ -151,6 +151,14 @@ When upper-body control is active (e.g., via ZMQ/ROS2 teleoperation), the upper-
 
 Heading-corrected relative rotation from the robot's current base orientation to the reference motion orientation. Output is the first two columns of the 3×3 rotation matrix (6 values per frame).
 
+The heading quaternion uses the world-Z twist convention from training's
+`torch_transform.get_heading_q`: for a `(w, x, y, z)` quaternion, normalize
+`(w, 0, 0, z)`. This differs from projecting the body's forward axis onto the
+ground when roll and pitch are both nonzero. Deployment uses the same convention
+for heading/refheading observations and reference-motion heading alignment.
+Heading is undefined at full inversion (`w = z = 0`); normalization uses the
+same `1e-9` denominator floor as training.
+
 | Name | Dim | Frames | Step | Description |
 |---|---|---|---|---|
 | `motion_anchor_orientation` | 6 | 1 | — | Current frame anchor orientation (full base quaternion) |
