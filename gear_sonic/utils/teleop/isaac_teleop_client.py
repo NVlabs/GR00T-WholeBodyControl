@@ -67,6 +67,11 @@ def _controller_inputs(snapshot: Any) -> Any | None:
     return snapshot.inputs
 
 
+#: Oldest isaacteleop with the vendor-parameterised tracker API (IsaacTeleop#781).
+#: install_pico.sh pins ~=1.4.0; this is only for the error message when an older
+#: one is somehow installed.
+_MIN_ISAACTELEOP = "1.4"
+
 _WEBXR_BODY_VENDOR = "body.quest-cloudxr"
 _BD_BODY_VENDOR = "body.pico-xr"
 
@@ -90,12 +95,30 @@ def _webxr_body_vendor_available() -> bool:
     effects. Only the factory's "unknown vendor id" ValueError is treated as
     absence; anything else is a real fault and propagates.
     """
-    probe = deviceio.FullBodyTracker()
     try:
-        deviceio.DeviceIOSession.get_required_extensions(
-            [probe],
-            deviceio.VendorConfig([(probe, deviceio.TrackerVendor(_WEBXR_BODY_VENDOR))]),
+        probe = deviceio.FullBodyTracker()
+        config = deviceio.VendorConfig(
+            [(probe, deviceio.TrackerVendor(_WEBXR_BODY_VENDOR))]
         )
+    except AttributeError as exc:
+        # An isaacteleop older than 1.4 has no vendor-parameterised API at all:
+        # FullBodyTracker, TrackerVendor and VendorConfig arrived together in
+        # IsaacTeleop#781. Left alone this surfaces as a bare AttributeError
+        # inside connect()'s broad except, which prints one "failed to start
+        # sessions" line and then waits forever -- indistinguishable from a
+        # network or headset fault. Name the cause and the remedy instead.
+        raise RuntimeError(
+            f"this isaacteleop is too old for body tracking: it provides no "
+            f"{exc.name!r}. The vendor-parameterised tracker API arrived in "
+            f"isaacteleop {_MIN_ISAACTELEOP} (IsaacTeleop#781); 1.3.x has only the "
+            f"deprecated FullBodyTrackerPico.\n"
+            f"  install_scripts/install_pico.sh installs a supported version:\n"
+            f"    uv pip install 'isaacteleop[cloudxr]~={_MIN_ISAACTELEOP}.0' "
+            f"--prerelease=allow --extra-index-url https://pypi.nvidia.com"
+        ) from exc
+
+    try:
+        deviceio.DeviceIOSession.get_required_extensions([probe], config)
     except ValueError as exc:
         if "unknown vendor id" in str(exc):
             return False
