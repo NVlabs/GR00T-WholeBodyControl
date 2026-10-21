@@ -528,6 +528,28 @@ class IsaacTeleopReader:
         except Exception:
             logger.exception("Failed to close IsaacTeleopClient cleanly")
 
+    def _invalidate_latest(self) -> None:
+        """Drop the last accepted sample so a refused frame stops the policy.
+
+        The guards log "Refusing to forward this frame to the robot control
+        policy", but a consumer reads poses by polling :meth:`get_latest`, which
+        hands back whatever was accepted last. Without clearing it, refusing a
+        frame only stops *new* poses arriving -- the policy keeps acting on the
+        previous one, which is the stale pose it was refused to prevent.
+        Consumers already treat None as "nothing to drive from" and wait.
+        """
+        with self._lock:
+            self._latest = None
+
+    def clear_latest(self) -> None:
+        """Public form of :meth:`_invalidate_latest`.
+
+        For callers that invalidate the pose themselves -- after a calibration,
+        say, where a sample captured against the old reference frame is no
+        longer meaningful even though nothing is wrong with the stream.
+        """
+        self._invalidate_latest()
+
     def get_latest(self) -> dict[str, Any] | None:
         # Raised here, not in the reader thread, so it reaches the caller rather
         # than dying silently in a background thread.
@@ -664,6 +686,7 @@ class IsaacTeleopReader:
                                 match.source,
                                 match.scores,
                             )
+                        self._invalidate_latest()
                         time.sleep(self._period)
                         continue
                     # Verified against the resolved source: clear the streak.
@@ -700,6 +723,7 @@ class IsaacTeleopReader:
                                 self.resolved_skeleton_source,
                                 detail,
                             )
+                        self._invalidate_latest()
                         time.sleep(self._period)
                         continue
 
@@ -723,6 +747,7 @@ class IsaacTeleopReader:
                             "appear disconnected (torso/pelvis frozen to a constant pose). "
                             "Refusing to forward this frame to the robot control policy.",
                         )
+                    self._invalidate_latest()
                     time.sleep(self._period)
                     continue
             else:

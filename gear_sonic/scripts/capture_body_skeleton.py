@@ -52,6 +52,8 @@ import sys
 import time
 
 import numpy as np
+from dataclasses import dataclass
+from typing import Any, NamedTuple, Optional
 
 # Repo root on sys.path so `gear_sonic.*` imports work when run directly.
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -68,8 +70,25 @@ from gear_sonic.utils.teleop.body_joints import (  # noqa: E402
 NUM_JOINTS = NUM_BODY_JOINTS
 
 
-def _extract_joints(body_data):
-    """Return ``(pos[24,3], quat[24,4] xyzw, valid[24] bool)`` or None.
+class JointSample(NamedTuple):
+    """One frame of body tracking, as this script needs it.
+
+    A NamedTuple rather than a dataclass so existing positional use keeps
+    working -- ``p, q, v = sample`` and ``sample[2]`` are unchanged -- while the
+    fields acquire names. ``sample[2].any()`` said nothing about what index 2
+    was; ``sample.valid.any()`` does.
+    """
+
+    #: ``(24, 3)`` joint positions, metres.
+    positions: np.ndarray
+    #: ``(24, 4)`` global joint orientations, xyzw.
+    orientations: np.ndarray
+    #: ``(24,)`` per-joint validity, as reported by the tracker.
+    valid: np.ndarray
+
+
+def _extract_joints(body_data: Any) -> Optional[JointSample]:
+    """Return a :class:`JointSample`, or None when there is no body data.
 
     Mirrors the schema handling in ``input_readers._body_data_to_24x7`` but
     keeps ``is_valid`` instead of collapsing it into zeros.
@@ -94,7 +113,7 @@ def _extract_joints(body_data):
             pos[i] = [float(p[0]), float(p[1]), float(p[2])]
             quat[i] = [float(o[0]), float(o[1]), float(o[2]), float(o[3])]
             valid[i] = True  # schema B carries no per-joint validity
-        return (pos, quat, valid) if n else None
+        return JointSample(pos, quat, valid) if n else None
 
     # Schema A: native FullBodyPosePicoT.
     joints_container = getattr(body_data, "joints", None)
@@ -122,7 +141,7 @@ def _extract_joints(body_data):
         if o is not None:
             quat[i] = [float(o.x), float(o.y), float(o.z), float(o.w)]
 
-    return (pos, quat, valid) if any_present else None
+    return JointSample(pos, quat, valid) if any_present else None
 
 
 def _quat_angle_deg(q, ref):
@@ -150,23 +169,51 @@ def _quat_angle_deg(q, ref):
 # configurations, which is what separates a constant rest-pose offset from a
 # pose-dependent one.
 # ---------------------------------------------------------------------------
+@dataclass(frozen=True)
+class PoseSpec:
+    """One pose in a capture battery.
+
+    Frozen, and named, because these are read far from where they are written:
+    the batteries are long literals and an entry used to be an anonymous
+    3-tuple, so a reader at the capture loop had to come back here to learn
+    what the third element meant.
+    """
+
+    #: Short identifier; becomes the capture's filename and label.
+    name: str
+    #: What the operator is told to do, read aloud during capture.
+    instruction: str
+    #: Why the pose is in the battery -- which joints it exercises, and what it
+    #: separates from what. Not shown to the operator; it is the record of the
+    #: design, kept beside the pose rather than in a comment that drifts.
+    rationale: str
+
+
 POSE_BATTERY = [
-    ("tpose", "Arms straight out to the sides at shoulder height, palms DOWN.",
-     "baseline; matches the existing correction table"),
-    ("arms_forward", "Arms straight FORWARD at shoulder height, palms DOWN.",
-     "shoulder flexion 90 deg, elbows straight"),
-    ("arms_forward_palms_up", "Same as before -- arms straight forward -- but palms UP.",
-     "isolates wrist/forearm roll: only the wrists change from the previous pose"),
-    ("goalpost", "Upper arms out to the sides horizontal, forearms straight UP, palms forward.",
-     "elbow 90 deg with shoulder abducted; separates shoulder from elbow"),
-    ("arms_overhead", "Arms straight UP overhead, palms facing each other.",
-     "shoulder flexion ~180 deg, the far end of shoulder range"),
-    ("bend_forward", "Hinge at the hips ~45 deg, back flat, arms hanging straight down.",
-     "spine flexion + hip flexion; never exercised before"),
-    ("lean_right", "Stand straight, lean sideways to your RIGHT, arms relaxed at sides.",
-     "lateral spine bend; breaks the left/right symmetry of the other poses"),
-    ("sitting", "Sit on a chair, feet flat on the floor, hands resting on knees.",
-     "hip and knee flexion ~90 deg -- the only pose that bends the legs"),
+    PoseSpec("tpose",
+             "Arms straight out to the sides at shoulder height, palms DOWN.",
+             "baseline; matches the existing correction table"),
+    PoseSpec("arms_forward",
+             "Arms straight FORWARD at shoulder height, palms DOWN.",
+             "shoulder flexion 90 deg, elbows straight"),
+    PoseSpec("arms_forward_palms_up",
+             "Same as before -- arms straight forward -- but palms UP.",
+             "isolates wrist/forearm roll: only the wrists change from the previous pose"),
+    PoseSpec("goalpost",
+             "Upper arms out to the sides horizontal, forearms straight UP, palms forward.",
+             "elbow 90 deg with shoulder abducted; separates shoulder from elbow"),
+    PoseSpec("arms_overhead",
+             "Arms straight UP overhead, palms facing each other.",
+             "shoulder flexion ~180 deg, the far end of shoulder range"),
+    PoseSpec("bend_forward",
+             "Hinge at the hips ~45 deg, back flat, arms hanging straight down.",
+             "spine flexion + hip flexion; never exercised before"),
+    PoseSpec("lean_right",
+             "Stand straight, lean sideways to your RIGHT, arms relaxed at sides.",
+             "lateral spine bend; breaks the left/right symmetry of the other poses"),
+    PoseSpec("sitting",
+             "Sit on a chair, feet flat on the floor, hands resting on knees.",
+             "hip and knee flexion ~90 deg -- the only pose that bends the legs"),
 ]
 
 
@@ -195,24 +242,27 @@ POSE_BATTERY = [
 # likely place for the SDK's conversion to go wrong.
 # ---------------------------------------------------------------------------
 POSE_BATTERY_SHOULDER = [
-    ("tpose_r2", "Arms straight out to the sides at shoulder height, palms DOWN.",
-     "exact repeat of main battery pose 1 -- tests repeatability"),
-    ("arms_forward_r2", "Arms straight FORWARD at shoulder height, palms DOWN.",
-     "exact repeat of main battery pose 2 -- tests repeatability"),
-    ("goalpost_r2", "Upper arms out to the sides horizontal, forearms straight UP, palms forward.",
-     "exact repeat of main battery pose 4 -- tests repeatability"),
-    ("elbow90_forward",
-     "Upper arms hanging at your SIDES, elbows bent 90 deg, forearms pointing "
+    PoseSpec("tpose_r2",
+             "Arms straight out to the sides at shoulder height, palms DOWN.",
+             "exact repeat of main battery pose 1 -- tests repeatability"),
+    PoseSpec("arms_forward_r2",
+             "Arms straight FORWARD at shoulder height, palms DOWN.",
+             "exact repeat of main battery pose 2 -- tests repeatability"),
+    PoseSpec("goalpost_r2",
+             "Upper arms out to the sides horizontal, forearms straight UP, palms forward.",
+             "exact repeat of main battery pose 4 -- tests repeatability"),
+    PoseSpec("elbow90_forward",
+             "Upper arms hanging at your SIDES, elbows bent 90 deg, forearms pointing "
      "straight FORWARD, palms facing each other.",
-     "shoulder roll neutral; upper arm vertical"),
-    ("elbow90_inward",
-     "Same stance -- upper arms at sides, elbows bent 90 -- but rotate the "
+             "shoulder roll neutral; upper arm vertical"),
+    PoseSpec("elbow90_inward",
+             "Same stance -- upper arms at sides, elbows bent 90 -- but rotate the "
      "forearms INWARD across your belly until the hands nearly touch.",
-     "same upper-arm placement, shoulder rolled inward (internal rotation)"),
-    ("elbow90_outward",
-     "Same stance again, but rotate the forearms OUTWARD as far as is "
+             "same upper-arm placement, shoulder rolled inward (internal rotation)"),
+    PoseSpec("elbow90_outward",
+             "Same stance again, but rotate the forearms OUTWARD as far as is "
      "comfortable, opening the arms wide.",
-     "same upper-arm placement, shoulder rolled outward (external rotation)"),
+             "same upper-arm placement, shoulder rolled outward (external rotation)"),
 ]
 
 # ---------------------------------------------------------------------------
@@ -242,30 +292,42 @@ POSE_BATTERY_SHOULDER = [
 # exist precisely to sample different body headings.
 # ---------------------------------------------------------------------------
 POSE_BATTERY_TORSO = [
-    ("neutral", "Stand upright and relaxed, arms at your sides, facing forward.",
-     "reference for every other pose in this battery"),
-    ("bend_fwd_deep", "Hinge forward at the waist as far as is comfortable, arms hanging.",
-     "spine flexion, large"),
-    ("lean_back", "Lean BACKWARD from the waist, shoulders behind your hips.",
-     "spine extension -- the opposite sign of flexion, never captured before"),
-    ("lean_left_deep", "Bend sideways to your LEFT, right arm reaching down your side.",
-     "lateral spine bend, left"),
-    ("lean_right_deep", "Bend sideways to your RIGHT, left arm reaching down your side.",
-     "lateral bend right; with the previous pose this gives the second spine axis"),
-    ("twist_left", "Feet planted facing forward, twist your SHOULDERS to the left.",
-     "spine axial twist -- the third spine axis, and never captured before"),
-    ("twist_right", "Feet planted facing forward, twist your SHOULDERS to the right.",
-     "spine axial twist, opposite sign"),
-    ("squat", "Squat down, knees bent, back reasonably straight, arms forward for balance.",
-     "hip and knee flexion together, deeper than sitting"),
-    ("face_left_90", "Turn your whole body 90 degrees to the LEFT and stand neutral.",
-     "body heading #2 -- conditions the pelvis, which every earlier battery held fixed"),
-    ("face_right_90", "Turn your whole body 90 degrees to the RIGHT and stand neutral.",
-     "body heading #3"),
-    ("face_back_180", "Turn to face AWAY from your starting direction and stand neutral.",
-     "body heading #4; four headings pin the pelvis world frame"),
-    ("stride", "Stand with one foot a full stride forward, weight even, upright.",
-     "hip flexion/extension with opposite signs left vs right"),
+    PoseSpec("neutral",
+             "Stand upright and relaxed, arms at your sides, facing forward.",
+             "reference for every other pose in this battery"),
+    PoseSpec("bend_fwd_deep",
+             "Hinge forward at the waist as far as is comfortable, arms hanging.",
+             "spine flexion, large"),
+    PoseSpec("lean_back",
+             "Lean BACKWARD from the waist, shoulders behind your hips.",
+             "spine extension -- the opposite sign of flexion, never captured before"),
+    PoseSpec("lean_left_deep",
+             "Bend sideways to your LEFT, right arm reaching down your side.",
+             "lateral spine bend, left"),
+    PoseSpec("lean_right_deep",
+             "Bend sideways to your RIGHT, left arm reaching down your side.",
+             "lateral bend right; with the previous pose this gives the second spine axis"),
+    PoseSpec("twist_left",
+             "Feet planted facing forward, twist your SHOULDERS to the left.",
+             "spine axial twist -- the third spine axis, and never captured before"),
+    PoseSpec("twist_right",
+             "Feet planted facing forward, twist your SHOULDERS to the right.",
+             "spine axial twist, opposite sign"),
+    PoseSpec("squat",
+             "Squat down, knees bent, back reasonably straight, arms forward for balance.",
+             "hip and knee flexion together, deeper than sitting"),
+    PoseSpec("face_left_90",
+             "Turn your whole body 90 degrees to the LEFT and stand neutral.",
+             "body heading #2 -- conditions the pelvis, which every earlier battery held fixed"),
+    PoseSpec("face_right_90",
+             "Turn your whole body 90 degrees to the RIGHT and stand neutral.",
+             "body heading #3"),
+    PoseSpec("face_back_180",
+             "Turn to face AWAY from your starting direction and stand neutral.",
+             "body heading #4; four headings pin the pelvis world frame"),
+    PoseSpec("stride",
+             "Stand with one foot a full stride forward, weight even, upright.",
+             "hip flexion/extension with opposite signs left vs right"),
 ]
 
 # ---------------------------------------------------------------------------
@@ -285,28 +347,28 @@ POSE_BATTERY_TORSO = [
 # folds elbow swing into the wrist channels.
 # ---------------------------------------------------------------------------
 POSE_BATTERY_WRIST = [
-    ("wrist_neutral",
-     "Upper arms at your sides, elbows bent 90, forearms pointing FORWARD, "
+    PoseSpec("wrist_neutral",
+             "Upper arms at your sides, elbows bent 90, forearms pointing FORWARD, "
      "palms facing each other, wrists straight and relaxed.",
-     "the rest pose an operator expects to be neutral; anchors the bias"),
-    ("wrist_flex_max",
-     "Same stance. Bend BOTH wrists forward as far as they go -- palms curling "
+             "the rest pose an operator expects to be neutral; anchors the bias"),
+    PoseSpec("wrist_flex_max",
+             "Same stance. Bend BOTH wrists forward as far as they go -- palms curling "
      "toward the forearms. Keep the forearms still.",
-     "flexion endpoint"),
-    ("wrist_extend_max",
-     "Same stance. Bend BOTH wrists backward as far as they go -- backs of the "
+             "flexion endpoint"),
+    PoseSpec("wrist_extend_max",
+             "Same stance. Bend BOTH wrists backward as far as they go -- backs of the "
      "hands toward the forearms. Keep the forearms still.",
-     "extension endpoint; with the previous pose this gives the full span"),
-    ("wrist_flex_half",
-     "Same stance, wrists bent forward about HALF of maximum.",
-     "midpoint on the flexion side; tests whether the mapping is linear"),
-    ("wrist_extend_half",
-     "Same stance, wrists bent backward about HALF of maximum.",
-     "midpoint on the extension side"),
-    ("wrist_deviate",
-     "Same stance, wrists straight but angled outward (thumbs away from each "
+             "extension endpoint; with the previous pose this gives the full span"),
+    PoseSpec("wrist_flex_half",
+             "Same stance, wrists bent forward about HALF of maximum.",
+             "midpoint on the flexion side; tests whether the mapping is linear"),
+    PoseSpec("wrist_extend_half",
+             "Same stance, wrists bent backward about HALF of maximum.",
+             "midpoint on the extension side"),
+    PoseSpec("wrist_deviate",
+             "Same stance, wrists straight but angled outward (thumbs away from each "
      "other) as far as is comfortable.",
-     "radial/ulnar deviation -- separates the flexion axis from the other two"),
+             "radial/ulnar deviation -- separates the flexion axis from the other two"),
 ]
 
 BATTERIES = {
@@ -390,10 +452,22 @@ def _wait_for_go(client, args):
 
     # Require a release first so a trigger still held from the previous pose
     # does not instantly advance this one.
+    #
+    # This used to give up after 5 seconds and fall through to the pull loop
+    # below, where a still-held trigger reads as an immediate pull -- so holding
+    # the trigger advanced every pose in the battery without a single deliberate
+    # press, which is the exact thing the release check exists to prevent. Wait
+    # for the release instead of timing out past it, and say so once, since a
+    # silent wait looks like a hang. ENTER stays available as the way out.
     t0 = time.monotonic()
+    nagged = False
     while not _triggers_released(client):
-        if time.monotonic() - t0 > 5.0:
-            break
+        if _stdin_ready():
+            sys.stdin.readline()
+            return True
+        if not nagged and time.monotonic() - t0 > 5.0:
+            nagged = True
+            print("    trigger still held -- RELEASE it, then pull again (or press ENTER).")
         time.sleep(0.05)
 
     while True:
@@ -439,7 +513,7 @@ def batch(args):
     t0 = time.monotonic()
     while True:
         got = _extract_joints(client.get_full_body_data())
-        if got is not None and got[2].any():
+        if got is not None and got.valid.any():
             break
         if time.monotonic() - t0 > args.timeout:
             print(f"ERROR: no body data after {args.timeout}s. Is body tracking active?")
@@ -448,7 +522,8 @@ def batch(args):
     print("Body tracking live.\n")
 
     written = []
-    for n, (name, how, why) in enumerate(poses, start=1):
+    for n, pose in enumerate(poses, start=1):
+        name, how, why = pose.name, pose.instruction, pose.rationale
         print("-" * 72)
         print(f"  POSE {n}/{len(poses)}: {name}")
         print(f"  {how}")
@@ -516,7 +591,7 @@ def record(args):
     t_wait = time.monotonic()
     while True:
         got = _extract_joints(client.get_full_body_data())
-        if got is not None and got[2].any():
+        if got is not None and got.valid.any():
             break
         if time.monotonic() - t_wait > args.timeout:
             print(f"ERROR: no body data after {args.timeout}s. Is body tracking active?")

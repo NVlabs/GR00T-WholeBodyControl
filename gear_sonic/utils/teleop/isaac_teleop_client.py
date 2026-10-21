@@ -126,6 +126,36 @@ def _webxr_body_vendor_available() -> bool:
     return True
 
 
+_MISSING = object()
+
+
+def _tracker_payload(result: Any) -> Any:
+    """Return a tracker accessor's payload, or None when the device produced none.
+
+    isaacteleop changed this API's shape between releases, and both shapes are in
+    the field:
+
+    - 1.4.x returns a ``*TrackedT`` wrapper (``ControllerSnapshotTrackedT``,
+      ``FullBodyPoseTrackedT``, ...) whose ``.data`` holds the payload. The
+      wrapper itself is never None -- the stubs type it non-Optional -- and
+      ``.data`` is None when the device reported nothing.
+    - Later versions return the payload directly, or None.
+
+    Normalizing here keeps every consumer working on both, and matters most for
+    the body-source check below, which reads None as "this vendor produced
+    nothing". Against a 1.4 wrapper that check never sees None, so it would call
+    every frame "quest" -- on a Pico that then either demands the #921 correction
+    or has the geometry guard refuse every frame.
+
+    Payload types do not expose ``data``, so presence of the attribute is a safe
+    discriminator between the two shapes.
+    """
+    if result is None:
+        return None
+    payload = getattr(result, "data", _MISSING)
+    return result if payload is _MISSING else payload
+
+
 @dataclass(frozen=True)
 class TrackerSnapshot:
     """One poll of the DeviceIO trackers.
@@ -355,22 +385,29 @@ class IsaacTeleopClient:
         # consumer below already treats None as "not present".
         # _body_tracker_meta is None when this isaacteleop has no WebXR vendor,
         # in which case every frame resolves to BD/Pico.
+        # Normalize before anything reads these: on 1.4.x every accessor hands
+        # back a non-None wrapper, so "is not None" only means "no data" once
+        # _tracker_payload has unwrapped it.
         full_body = (
-            self._body_tracker_meta.get_body_pose(session)
+            _tracker_payload(self._body_tracker_meta.get_body_pose(session))
             if self._body_tracker_meta is not None
             else None
         )
         if full_body is not None:
             full_body_source = "quest"
         else:
-            full_body = self._body_tracker_bd.get_body_pose(session)
+            full_body = _tracker_payload(self._body_tracker_bd.get_body_pose(session))
             full_body_source = "pico" if full_body is not None else None
         return TrackerSnapshot(
-            left_controller=self._controller_tracker.get_left_controller(session),
-            right_controller=self._controller_tracker.get_right_controller(session),
-            head=self._head_tracker.get_head(session),
-            left_hand=self._hand_tracker.get_left_hand(session),
-            right_hand=self._hand_tracker.get_right_hand(session),
+            left_controller=_tracker_payload(
+                self._controller_tracker.get_left_controller(session)
+            ),
+            right_controller=_tracker_payload(
+                self._controller_tracker.get_right_controller(session)
+            ),
+            head=_tracker_payload(self._head_tracker.get_head(session)),
+            left_hand=_tracker_payload(self._hand_tracker.get_left_hand(session)),
+            right_hand=_tracker_payload(self._hand_tracker.get_right_hand(session)),
             full_body=full_body,
             full_body_source=full_body_source,
         )
