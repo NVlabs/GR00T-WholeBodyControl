@@ -1,0 +1,113 @@
+{
+    "type": "HYBRID_WHOLE_BODY_MINK_IK",
+    "composite_controller_specific_configs": {
+        "ref_name": ["gripper0_right_grip_site", "gripper0_left_grip_site"],
+        "interpolation": null,
+        "actuation_part_names": ["torso", "left", "right"],
+        "external_part_names": ["legs"],
+        "max_dq": 4,
+        "ik_pseudo_inverse_damping": 5e-2,
+        "ik_integration_dt": 1e-1,
+        "ik_input_type": "absolute",
+        "ik_input_ref_frame": "base", 
+        "ik_input_rotation_repr": "axis_angle",
+        "verbose": false,
+        "ik_posture_weights": {
+            "robot0_waist_yaw_joint": 100.0,
+            "robot0_waist_roll_joint": 200.0,
+            "robot0_waist_pitch_joint": 400.0,
+            "robot0_left_shoulder_pitch_joint": 4.0,
+            "robot0_left_shoulder_roll_joint": 3.0,
+            "robot0_left_shoulder_yaw_joint": 2.0,
+            "robot0_left_elbow_joint": 1.0,
+            "robot0_right_shoulder_pitch_joint": 4.0,
+            "robot0_right_shoulder_roll_joint": 3.0,
+            "robot0_right_shoulder_yaw_joint": 2.0,
+            "robot0_right_elbow_joint": 1.0
+        },
+        "ik_hand_pos_cost": 10.0,
+        "ik_hand_ori_cost": 5,
+        "use_joint_angle_action_input": false
+    },
+    "body_parts": {
+        "legs": {
+            "type" : "JOINT_POSITION",
+            "input_max": 100,
+            "input_min": -100,
+            "input_type": "absolute",
+            "output_max": 100,
+            "output_min": -100,
+            "kd": [2, 2, 2, 4, 2, 2, 2, 2, 2, 4, 2, 2],
+            "kv": 0,
+            "kp": [150, 150, 150, 300, 40, 40, 150, 150, 150, 200, 40, 40],
+            "velocity_limits": [-1,1],
+            "kp_limits": [0, 1000],
+            "interpolation": null,
+            "ramp_ratio": 0.2,
+            "use_torque_compensation": false,
+            "desired_torque_as_acceleration": false
+        },
+        "arms": {
+            "left": {
+                "type" : "JOINT_POSITION",
+                "input_max": 100,
+                "input_min": -100,
+                "input_type": "absolute",
+                "output_max": 100,
+                "output_min": -100,
+                "kd": [5.0, 5.0, 2.0, 2.0, 2.0, 2.0, 2.0],
+                "kp": [100, 100, 40, 40, 20, 20, 20],
+                "velocity_limits": [-1,1],
+                "kp_limits": [0, 1000],
+                "interpolation": null,
+                "ramp_ratio": 0.2,
+                "gripper": {
+                    "type": "GRIP",
+                    "use_action_scaling": false
+                },
+                "use_torque_compensation": false,
+                "desired_torque_as_acceleration": false
+            },
+            "right": {
+                "type" : "JOINT_POSITION",
+                "input_max": 100,
+                "input_min": -100,
+                "input_type": "absolute",
+                "output_max": 100,
+                "output_min": -100,
+                "kd": [5.0, 5.0, 2.0, 2.0, 2.0, 2.0, 2.0],
+                "kp": [100, 100, 40, 40, 20, 20, 20],
+                "velocity_limits": [-1,1],
+                "kp_limits": [0, 1000],
+                "interpolation": null,
+                "ramp_ratio": 0.2,
+                "gripper": {
+                    "type": "GRIP",
+                    "use_action_scaling": false
+                },
+                "use_torque_compensation": false,
+                "desired_torque_as_acceleration": false
+            }
+        },
+        "torso": {
+            "type" : "JOINT_POSITION",
+            "input_max": 100,
+            "input_min": -100,
+            "input_type": "absolute",
+            "output_max": 100,
+            "output_min": -100,
+            "kd": 5.0,
+            "kp": 250.0,
+            "velocity_limits": [-1,1],
+            "kp_limits": [0, 1000],
+            "interpolation": null,
+            "ramp_ratio": 0.2,
+            "use_torque_compensation": false,
+            "desired_torque_as_acceleration": false
+        },
+        "base": {
+            "type": "JOINT_VELOCITY_AND_POSITION",
+            "interpolation": "null"
+        }
+    }
+}

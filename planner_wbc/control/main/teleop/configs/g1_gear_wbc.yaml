@@ -1,0 +1,45 @@
+
+# Simulation parameters
+simulation_duration: 60.0
+simulation_dt: 0.002
+control_decimation: 10
+
+# PD gains
+kps: [
+    150, 150, 150, 300, 40, 40,
+    150, 150, 150, 300, 40, 40, 
+    250, 250, 250,
+    100, 100, 40, 40, 20, 20, 20,
+    100, 100, 40, 40, 20, 20, 20
+]
+kds: [
+    2, 2, 2, 4, 2, 2,
+    2, 2, 2, 4, 2, 2,
+    5, 5, 5,
+    5, 5, 2, 2, 2, 2, 2,
+    5, 5, 2, 2, 2, 2, 2
+]
+
+# Default joint angles for legs
+default_angles: [-0.1, 0.0, 0.0, 0.3, -0.2, 0.0,
+                 -0.1, 0.0, 0.0, 0.3, -0.2, 0.0,
+                 0.0, 0.0, 0.0]
+# Scaling factors
+ang_vel_scale: 0.25
+dof_pos_scale: 1.0
+dof_vel_scale: 0.05
+action_scale: 0.25
+cmd_scale: [2.0, 2.0, 0.25]
+
+# Number of actions and observations
+num_actions: 15
+num_obs: 570  # 76 * 6 (observation dimension * history length)
+obs_history_len: 6
+
+# Initial commands
+cmd_init: [0.0, 0.0, 0.0]
+height_cmd: 0.74
+freq_cmd: 1.50
+roll_cmd: 0.0
+pitch_cmd: 0.0
+yaw_cmd: 0.0
