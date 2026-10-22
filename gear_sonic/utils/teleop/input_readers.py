@@ -30,6 +30,10 @@ except ImportError:
     IsaacTeleopClient = None
 
 if TYPE_CHECKING:  # import cycle at runtime; only needed for annotations
+    from collections.abc import Mapping
+
+    from isaacteleop.schema import FullBodyPoseT
+
     from gear_sonic.utils.teleop.isaac_teleop_client import TrackerSnapshot
 
 # Minimum time between repeated "degenerate skeleton" log lines. Every degenerate
@@ -232,7 +236,9 @@ def _log_unrecognised_schema_once(body_data: Any) -> None:
     )
 
 
-def _body_data_to_24x7(body_data: Any) -> np.ndarray | None:
+def _body_data_to_24x7(
+    body_data: "FullBodyPoseT | Mapping[str, Any] | None",
+) -> np.ndarray | None:
     """Convert ``FullBodyTracker.get_body_pose()`` to a (24, 7) array.
 
     Returns ``None`` while no joint is valid (typical when the headset isn't
@@ -463,6 +469,9 @@ class IsaacTeleopReader:
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._lock = threading.Lock()
         self._ctrl_lock = threading.Lock()
+        # Bumped on every invalidation so a frame already in flight when the
+        # cache is cleared is dropped instead of published after the clear.
+        self._epoch = 0
         self._latest: dict[str, Any] | None = None
         self._latest_controller: dict[str, Any] | None = None
         self._fps_ema = 0.0
@@ -540,6 +549,7 @@ class IsaacTeleopReader:
         """
         with self._lock:
             self._latest = None
+            self._epoch += 1
 
     def clear_latest(self) -> None:
         """Public form of :meth:`_invalidate_latest`.
@@ -547,6 +557,13 @@ class IsaacTeleopReader:
         For callers that invalidate the pose themselves -- after a calibration,
         say, where a sample captured against the old reference frame is no
         longer meaningful even though nothing is wrong with the stream.
+
+        Clearing the cache is not enough on its own: the reader may already be
+        midway through a frame it acquired *before* this call, and publishing
+        that frame afterwards would restore exactly the pre-calibration pose
+        this was meant to discard. The epoch bump closes that window -- any
+        frame whose read began before this call is dropped at its publish site
+        instead of being stored.
         """
         self._invalidate_latest()
 
@@ -580,6 +597,13 @@ class IsaacTeleopReader:
     def _run(self) -> None:
         last_report = time.time()
         while not self._stop.is_set():
+            # Read before the frame is acquired, compared before it is
+            # published: a clear_latest() landing anywhere in between bumps the
+            # epoch, and this frame -- which describes the pose from before the
+            # clear -- is dropped rather than refilling the cache the caller
+            # just emptied.
+            with self._lock:
+                frame_epoch = self._epoch
             try:
                 raw = self._client._get_tracker_data()  # noqa: SLF001 — internal API by design
             except Exception:
@@ -787,7 +811,12 @@ class IsaacTeleopReader:
                 "fps": self._fps_ema,
             }
             with self._lock:
-                self._latest = sample
+                if self._epoch == frame_epoch:
+                    self._latest = sample
+                else:
+                    # Invalidated while this frame was being read or converted.
+                    # Dropping it leaves the cache empty, as the caller left it.
+                    logger.debug("[IsaacTeleopReader] Dropped a frame that predates a cache clear")
 
             now = time.time()
             if now - last_report >= 5.0:
