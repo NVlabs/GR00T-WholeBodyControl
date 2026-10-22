@@ -559,7 +559,7 @@ class YawAccumulator:
 
 
 def compute_from_body_poses(
-    parent_indices: list, device, body_poses_np: np.ndarray
+    parent_indices: list[int], device: torch.device, body_poses_np: np.ndarray
 ):
     """
     Compute local joints and body orientation from provided body_poses_np.
@@ -1249,7 +1249,7 @@ class PoseStreamer:
 
     def __init__(
         self,
-        socket,
+        socket: "zmq.Socket",
         reader: "PicoReader | input_readers.IsaacTeleopReader",
         three_point: ThreePointPose,
         num_frames_to_send: int,

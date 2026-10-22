@@ -19,13 +19,41 @@ import time
 from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 
 import isaacteleop.deviceio as deviceio
 import isaacteleop.oxr as oxr
 from isaacteleop.cloudxr import CloudXRLauncher
+
+if TYPE_CHECKING:  # annotations only -- never imported at runtime
+    from isaacteleop.schema import (
+        ControllerSnapshot,
+        ControllerSnapshotTrackedT,
+        FullBodyPoseT,
+        FullBodyPoseTrackedT,
+        HandPoseT,
+        HandPoseTrackedT,
+        HeadPoseT,
+        HeadPoseTrackedT,
+    )
+
+    #: What one of the tracker accessors hands back for a device that produced
+    #: data this frame.
+    TrackerPayload = ControllerSnapshot | FullBodyPoseT | HandPoseT | HeadPoseT
+
+    #: What a tracker accessor returns, over both API shapes in the field: a
+    #: ``*TrackedT`` wrapper on 1.4.x (never None; its ``.data`` may be), or the
+    #: payload itself -- or None -- on later versions. See _tracker_payload().
+    TrackerResult = (
+        ControllerSnapshotTrackedT
+        | FullBodyPoseTrackedT
+        | HandPoseTrackedT
+        | HeadPoseTrackedT
+        | TrackerPayload
+        | None
+    )
 
 
 def _default_pose_vec() -> np.ndarray:
@@ -129,7 +157,7 @@ def _webxr_body_vendor_available() -> bool:
 _MISSING = object()
 
 
-def _tracker_payload(result: Any) -> Any:
+def _tracker_payload(result: "TrackerResult") -> "TrackerPayload | None":
     """Return a tracker accessor's payload, or None when the device produced none.
 
     isaacteleop changed this API's shape between releases, and both shapes are in
@@ -171,12 +199,12 @@ class TrackerSnapshot:
     all treat ``None`` as "not present".
     """
 
-    left_controller: Any = None
-    right_controller: Any = None
-    head: Any = None
-    left_hand: Any = None
-    right_hand: Any = None
-    full_body: Any = None
+    left_controller: "ControllerSnapshot | None" = None
+    right_controller: "ControllerSnapshot | None" = None
+    head: "HeadPoseT | None" = None
+    left_hand: "HandPoseT | None" = None
+    right_hand: "HandPoseT | None" = None
+    full_body: "FullBodyPoseT | None" = None
     #: Which vendor extension delivered :attr:`full_body` -- ``"pico"``,
     #: ``"quest"``, or ``None`` when no body data arrived. This is the OpenXR
     #: Extension Method result: a fact the runtime states, not an inference.
@@ -428,7 +456,9 @@ class IsaacTeleopClient:
             f"Invalid name: {name}. Valid names: 'left_controller', 'right_controller', 'headset'."
         )
 
-    def _snapshot_side(self, raw: "TrackerSnapshot | None", side: str) -> Any:
+    def _snapshot_side(
+        self, raw: "TrackerSnapshot | None", side: str
+    ) -> "ControllerSnapshot | None":
         if raw is None:
             return None
         return raw.left_controller if side == "left" else raw.right_controller

@@ -52,8 +52,18 @@ import sys
 import time
 
 import numpy as np
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, NamedTuple, Optional
+from typing import TYPE_CHECKING, Any, NamedTuple, Optional
+
+if TYPE_CHECKING:  # import-time cost avoided; these names are annotations only
+    # The native body-tracking payload, as isaacteleop itself annotates it (see
+    # retargeting_engine/deviceio_source_nodes/full_body_source.py, which types
+    # FullBodyPoseTrackedT.data as "FullBodyPoseT | None").
+    from isaacteleop.schema import FullBodyPoseT
+    from scipy.spatial.transform import Rotation
+
+    from gear_sonic.utils.teleop.isaac_teleop_client import IsaacTeleopClient
 
 # Repo root on sys.path so `gear_sonic.*` imports work when run directly.
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -87,7 +97,9 @@ class JointSample(NamedTuple):
     valid: np.ndarray
 
 
-def _extract_joints(body_data: Any) -> Optional[JointSample]:
+def _extract_joints(
+    body_data: "FullBodyPoseT | Mapping[str, Any] | None",
+) -> Optional[JointSample]:
     """Return a :class:`JointSample`, or None when there is no body data.
 
     Mirrors the schema handling in ``input_readers._body_data_to_24x7`` but
@@ -144,7 +156,7 @@ def _extract_joints(body_data: Any) -> Optional[JointSample]:
     return JointSample(pos, quat, valid) if any_present else None
 
 
-def _quat_angle_deg(q, ref):
+def _quat_angle_deg(q: np.ndarray, ref: np.ndarray) -> np.ndarray:
     """Angle in degrees between quaternion ``q`` and reference ``ref`` (xyzw)."""
     nq = np.linalg.norm(q, axis=-1, keepdims=True)
     nr = np.linalg.norm(ref)
@@ -379,21 +391,21 @@ BATTERIES = {
 }
 
 
-def _beep():
+def _beep() -> None:
     """Terminal bell. Audible cue matters because the operator is wearing a
     headset and cannot read the terminal."""
     sys.stdout.write("\a")
     sys.stdout.flush()
 
 
-def _countdown(seconds):
+def _countdown(seconds: float) -> None:
     for k in range(int(seconds), 0, -1):
         print(f"    capturing in {k}...   ", end="\r", flush=True)
         _beep()
         time.sleep(1.0)
 
 
-def _trigger_pulled(client, thresh=0.7):
+def _trigger_pulled(client: "IsaacTeleopClient", thresh: float = 0.7) -> bool:
     """True if either trigger is past ``thresh``. Never raises."""
     try:
         return (client.get_key_value_by_name("right_trigger") > thresh
@@ -402,7 +414,7 @@ def _trigger_pulled(client, thresh=0.7):
         return False
 
 
-def _triggers_released(client, thresh=0.3):
+def _triggers_released(client: "IsaacTeleopClient", thresh: float = 0.3) -> bool:
     try:
         return (client.get_key_value_by_name("right_trigger") < thresh
                 and client.get_key_value_by_name("left_trigger") < thresh)
@@ -410,7 +422,7 @@ def _triggers_released(client, thresh=0.3):
         return True
 
 
-def _stdin_ready():
+def _stdin_ready() -> bool:
     """Non-blocking check for a pending line on stdin (POSIX only).
 
     Requires a tty: a closed or redirected stdin selects as readable
@@ -425,7 +437,7 @@ def _stdin_ready():
         return False
 
 
-def _wait_for_go(client, args):
+def _wait_for_go(client: "IsaacTeleopClient", args: argparse.Namespace) -> bool:
     """Block until the operator signals ready. Returns False to abort.
 
     Accepts whichever comes first: a controller trigger pull, or ENTER. The
@@ -480,7 +492,7 @@ def _wait_for_go(client, args):
         time.sleep(0.05)
 
 
-def batch(args):
+def batch(args: argparse.Namespace) -> int:
     """Walk through POSE_BATTERY in one session, saving one file per pose."""
     from gear_sonic.utils.teleop.isaac_teleop_client import IsaacTeleopClient
 
@@ -580,7 +592,7 @@ def batch(args):
     return 0
 
 
-def record(args):
+def record(args: argparse.Namespace) -> int:
     from gear_sonic.utils.teleop.isaac_teleop_client import IsaacTeleopClient
 
     client = IsaacTeleopClient()
@@ -629,7 +641,13 @@ def record(args):
     return 0
 
 
-def report(P, Q, V, label):
+def report(P: np.ndarray, Q: np.ndarray, V: np.ndarray, label: str) -> None:
+    """Print the per-joint report for one recording.
+
+    ``P`` ``(N, 24, 3)`` positions, ``Q`` ``(N, 24, 4)`` orientations xyzw and
+    ``V`` ``(N, 24)`` validity are the three arrays of a recording, stacked
+    over its ``N`` samples -- i.e. a run of :class:`JointSample` fields.
+    """
     print(f"\n{'=' * 78}\n  PER-JOINT REPORT — {label}   ({len(P)} samples)\n{'=' * 78}")
     print(f"{'idx':>3} {'joint':<16} {'valid%':>7} {'pos_sd(mm)':>11} "
           f"{'rot_sd(deg)':>12} {'d_pelvis':>9}")
@@ -670,7 +688,7 @@ def report(P, Q, V, label):
         print("\nNo joints flagged as static-but-valid.")
 
 
-def compare(path_a, path_b):
+def compare(path_a: str, path_b: str) -> None:
     a, b = np.load(path_a, allow_pickle=True), np.load(path_b, allow_pickle=True)
     la = str(a["label"]) if "label" in a else os.path.basename(path_a)
     lb = str(b["label"]) if "label" in b else os.path.basename(path_b)
@@ -696,7 +714,7 @@ def compare(path_a, path_b):
     print("i.e. B is likely synthesising a joint that A measures.")
 
 
-def main():
+def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--label", default="unknown", help="headset label, e.g. pico / quest")
@@ -747,7 +765,7 @@ LEFT_LIMB = LEFT_LIMB_JOINTS
 RIGHT_LIMB = RIGHT_LIMB_JOINTS
 
 
-def _mean_rot(q):
+def _mean_rot(q: np.ndarray) -> "Rotation":
     """Mean of unit quaternions in ``q`` ``(N, 4)`` xyzw, as a ``Rotation``.
 
     A quaternion and its negation are the same rotation, so the samples must be
@@ -781,14 +799,14 @@ def _mean_rot(q):
     return R.from_quat(m / n)
 
 
-def _fit_group(offsets, idxs):
+def _fit_group(offsets: Mapping[int, "Rotation"], idxs: Sequence[int]) -> "Rotation":
     from scipy.spatial.transform import Rotation as R
     M = np.mean([offsets[j].as_matrix() for j in idxs], axis=0)
     U, _, Vt = np.linalg.svd(M)                  # nearest proper rotation
     return R.from_matrix(U @ Vt)
 
 
-def rest_pose(path_a, path_b):
+def rest_pose(path_a: str, path_b: str) -> dict[int, "Rotation"]:
     a, b = np.load(path_a, allow_pickle=True), np.load(path_b, allow_pickle=True)
     la = str(a["label"]) if "label" in a else "A"
     lb = str(b["label"]) if "label" in b else "B"
