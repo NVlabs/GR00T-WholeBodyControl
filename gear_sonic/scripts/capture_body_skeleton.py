@@ -34,13 +34,16 @@ Interpreting the report
 ``valid%``    fraction of samples where the runtime marked the joint valid.
 ``pos_sd``    std-dev of joint position (mm) about its own mean, summed over
               XYZ. A joint that never moves relative to the body is suspect.
-``rot_sd``    std-dev of orientation (degrees) about the mean rotation.
+``rot_spr``   mean angular distance (degrees) of orientation about the mean
+              rotation. Not a std-dev: the distance is non-negative, so its
+              std-dev reads 0 for a joint oscillating steadily about its mean
+              and would call that joint frozen.
 ``d_pelvis``  correlation of this joint's motion with the pelvis. A value very
               close to 1.0 means the joint is rigidly following the root rather
               than being independently measured -- the signature of a
               synthesised joint.
 
-A joint that is reported 100% valid but has near-zero ``rot_sd`` and
+A joint that is reported 100% valid but has near-zero ``rot_spr`` and
 ``d_pelvis`` ~ 1.0 is almost certainly fabricated.
 """
 
@@ -166,6 +169,38 @@ def _quat_angle_deg(q: np.ndarray, ref: np.ndarray) -> np.ndarray:
     ref = ref / nr
     dot = np.abs(np.clip(q @ ref, -1.0, 1.0))
     return np.degrees(2.0 * np.arccos(dot))
+
+
+def _rot_spread_deg(quat: np.ndarray) -> float:
+    """Mean angular distance (degrees) of ``quat`` ``(N, 4)`` xyzw about its own
+    mean rotation.
+
+    The *mean* distance, not its standard deviation, which is what this used to
+    measure and which is blind to exactly the motion it exists to catch.
+    ``_quat_angle_deg`` returns a distance, so a joint oscillating a steady
+    +/-10 degrees about its mean gives 10 for every sample: the std is 0 and the
+    joint is reported frozen, while it is in fact moving 20 degrees peak to
+    peak. The mean distance reports the 10 degrees that is actually there.
+
+    (The same correction was made to ``skeleton_guards.signature()`` in 4b9932a;
+    this is the other half of it.)
+
+    The reference is hemisphere-aligned before averaging, for the reason spelled
+    out in :func:`_mean_rot`: a componentwise mean over quaternions straddling
+    w = 0 collapses toward zero and the reference stops meaning anything.
+
+    Returns NaN when no mean rotation exists (samples spread over the whole
+    sphere), which the callers' thresholds read as "not a held pose".
+    """
+    quat = np.asarray(quat, dtype=np.float64)
+    norms = np.linalg.norm(quat, axis=-1, keepdims=True)
+    unit = quat / np.where(norms < 1e-9, 1.0, norms)
+    aligned = unit * np.where(unit @ unit[0] < 0.0, -1.0, 1.0)[:, None]
+    mean_q = aligned.mean(axis=0)
+    n = np.linalg.norm(mean_q)
+    if n < 1e-9:
+        return float("nan")
+    return float(np.mean(_quat_angle_deg(aligned, mean_q / n)))
 
 
 # ---------------------------------------------------------------------------
@@ -573,8 +608,7 @@ def batch(args: argparse.Namespace) -> int:
         np.savez_compressed(out, pos=P, quat=Q, valid=V, t=np.array(T), label=label)
 
         # immediate staticness feedback so a bad take can be redone on the spot
-        sd = np.array([np.std(_quat_angle_deg(Q[:, j, :], Q[:, j, :].mean(axis=0)))
-                       for j in range(NUM_JOINTS)])
+        sd = np.array([_rot_spread_deg(Q[:, j, :]) for j in range(NUM_JOINTS)])
         verdict = "OK" if sd.max() < 5.0 else "TOO MUCH MOTION — consider redoing this pose"
         print(f"    saved {len(P)} samples -> {out}")
         print(f"    staticness: median {np.median(sd):.2f} deg, max {sd.max():.2f} deg   {verdict}\n")
@@ -650,7 +684,7 @@ def report(P: np.ndarray, Q: np.ndarray, V: np.ndarray, label: str) -> None:
     """
     print(f"\n{'=' * 78}\n  PER-JOINT REPORT — {label}   ({len(P)} samples)\n{'=' * 78}")
     print(f"{'idx':>3} {'joint':<16} {'valid%':>7} {'pos_sd(mm)':>11} "
-          f"{'rot_sd(deg)':>12} {'d_pelvis':>9}")
+          f"{'rot_spr(deg)':>12} {'d_pelvis':>9}")
     print("-" * 78)
 
     pelvis = P[:, 0, :]
@@ -662,16 +696,15 @@ def report(P: np.ndarray, Q: np.ndarray, V: np.ndarray, label: str) -> None:
         # position spread relative to pelvis (cancels whole-body translation)
         rel = P[:, j, :] - pelvis
         pos_sd = np.linalg.norm(rel.std(axis=0)) * 1000.0
-        mean_q = Q[:, j, :].mean(axis=0)
-        rot_sd = float(np.std(_quat_angle_deg(Q[:, j, :], mean_q)))
+        rot_spread = _rot_spread_deg(Q[:, j, :])
         jd = np.linalg.norm(np.diff(P[:, j, :], axis=0), axis=-1)
         if jd.std() > 1e-9 and pelvis_d.std() > 1e-9:
             corr = float(np.corrcoef(jd, pelvis_d)[0, 1])
         else:
             corr = float("nan")
         print(f"{j:>3} {BodyJoint(j).name:<16} {vpct:>6.1f}% {pos_sd:>11.1f} "
-              f"{rot_sd:>12.2f} {corr:>9.3f}")
-        if vpct > 99.0 and rot_sd < 0.5:
+              f"{rot_spread:>12.2f} {corr:>9.3f}")
+        if vpct > 99.0 and rot_spread < 0.5:
             flags.append((j, "valid but orientation never changes"))
         elif vpct > 99.0 and pos_sd < 5.0 and j != 0:
             flags.append((j, "valid but no motion relative to pelvis"))
@@ -698,13 +731,13 @@ def compare(path_a: str, path_b: str) -> None:
 
     print(f"\n{'=' * 78}\n  SIDE-BY-SIDE — {la} vs {lb}\n{'=' * 78}")
     print(f"{'idx':>3} {'joint':<16} {'valid% A':>9} {'valid% B':>9} "
-          f"{'rot_sd A':>9} {'rot_sd B':>9} {'ratio':>7}")
+          f"{'rot_spr A':>9} {'rot_spr B':>9} {'ratio':>7}")
     print("-" * 78)
     for j in range(NUM_JOINTS):
         va = 100.0 * a["valid"][:, j].mean()
         vb = 100.0 * b["valid"][:, j].mean()
-        ra = float(np.std(_quat_angle_deg(a["quat"][:, j, :], a["quat"][:, j, :].mean(axis=0))))
-        rb = float(np.std(_quat_angle_deg(b["quat"][:, j, :], b["quat"][:, j, :].mean(axis=0))))
+        ra = _rot_spread_deg(a["quat"][:, j, :])
+        rb = _rot_spread_deg(b["quat"][:, j, :])
         ratio = (rb / ra) if ra > 1e-6 else float("nan")
         mark = "  <--" if (ra > 1.0 and rb < 0.2 * ra) else ""
         print(f"{j:>3} {BodyJoint(j).name:<16} {va:>8.1f}% {vb:>8.1f}% "
@@ -802,8 +835,16 @@ def _mean_rot(q: np.ndarray) -> "Rotation":
 def _fit_group(offsets: Mapping[int, "Rotation"], idxs: Sequence[int]) -> "Rotation":
     from scipy.spatial.transform import Rotation as R
     M = np.mean([offsets[j].as_matrix() for j in idxs], axis=0)
-    U, _, Vt = np.linalg.svd(M)                  # nearest proper rotation
-    return R.from_matrix(U @ Vt)
+    U, _, Vt = np.linalg.svd(M)
+    # U @ Vt is the nearest *orthogonal* matrix to M, which is not necessarily a
+    # rotation: when det is -1 it is a reflection, and a reflection is not a
+    # pose any body can hold. Flipping the sign of the least significant
+    # singular direction gives the nearest matrix with det +1 -- the Kabsch
+    # correction. Without it a group of offsets that averages toward a
+    # degenerate mean can yield a mirrored "fit" that then reports small
+    # residuals, i.e. a confident answer that is not a rotation at all.
+    d = 1.0 if np.linalg.det(U @ Vt) >= 0.0 else -1.0
+    return R.from_matrix(U @ np.diag([1.0, 1.0, d]) @ Vt)
 
 
 def rest_pose(path_a: str, path_b: str) -> dict[int, "Rotation"]:
@@ -814,9 +855,7 @@ def rest_pose(path_a: str, path_b: str) -> dict[int, "Rotation"]:
     print("STATICNESS CHECK (this analysis is only valid for held poses)")
     ok = True
     for tag, d in ((la, a), (lb, b)):
-        sd = np.array([np.std(_quat_angle_deg(d["quat"][:, j, :],
-                                              d["quat"][:, j, :].mean(axis=0)))
-                       for j in range(NUM_JOINTS)])
+        sd = np.array([_rot_spread_deg(d["quat"][:, j, :]) for j in range(NUM_JOINTS)])
         flag = "OK" if sd.max() < 5.0 else "TOO MUCH MOTION"
         if sd.max() >= 5.0:
             ok = False
