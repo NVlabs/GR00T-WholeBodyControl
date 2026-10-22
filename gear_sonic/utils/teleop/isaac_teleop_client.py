@@ -19,7 +19,7 @@ import time
 from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 import numpy as np
 
@@ -28,32 +28,36 @@ import isaacteleop.oxr as oxr
 from isaacteleop.cloudxr import CloudXRLauncher
 
 if TYPE_CHECKING:  # annotations only -- never imported at runtime
+    # Only the payload types. The ``*TrackedT`` wrappers are matched
+    # structurally by _Tracked below rather than by name -- which also keeps
+    # this import working on 1.7+, where those wrapper types no longer exist.
     from isaacteleop.schema import (
         ControllerSnapshot,
-        ControllerSnapshotTrackedT,
         FullBodyPoseT,
-        FullBodyPoseTrackedT,
         HandPoseT,
-        HandPoseTrackedT,
         HeadPoseT,
-        HeadPoseTrackedT,
     )
 
-    #: What one of the tracker accessors hands back for a device that produced
-    #: data this frame.
-    TrackerPayload = ControllerSnapshot | FullBodyPoseT | HandPoseT | HeadPoseT
+    from typing import Protocol, TypeVar
 
-    #: What a tracker accessor returns, over both API shapes in the field: a
-    #: ``*TrackedT`` wrapper on 1.4.x (never None; its ``.data`` may be), or the
-    #: payload itself -- or None -- on later versions. See _tracker_payload().
-    TrackerResult = (
-        ControllerSnapshotTrackedT
-        | FullBodyPoseTrackedT
-        | HandPoseTrackedT
-        | HeadPoseTrackedT
-        | TrackerPayload
-        | None
-    )
+    #: The payload a tracker accessor is carrying, as a type variable, so
+    #: _tracker_payload() hands each caller back the one type it asked for.
+    #: Spelling the four payloads as a flat union instead would type every
+    #: result as "any of the four", which no field of TrackerSnapshot accepts.
+    _PayloadT = TypeVar("_PayloadT")
+    _PayloadT_co = TypeVar("_PayloadT_co", covariant=True)
+
+    class _Tracked(Protocol[_PayloadT_co]):
+        """The ``*TrackedT`` wrapper shape of 1.4.x.
+
+        ``ControllerSnapshotTrackedT``, ``FullBodyPoseTrackedT`` and the rest
+        share no base class, so what identifies a wrapper is structural: it
+        carries the payload on ``.data``. Matching on that structure types all
+        four without naming them.
+        """
+
+        @property
+        def data(self) -> "_PayloadT_co | None": ...
 
 
 def _default_pose_vec() -> np.ndarray:
@@ -157,7 +161,9 @@ def _webxr_body_vendor_available() -> bool:
 _MISSING = object()
 
 
-def _tracker_payload(result: "TrackerResult") -> "TrackerPayload | None":
+def _tracker_payload(
+    result: "_Tracked[_PayloadT] | _PayloadT | None",
+) -> "_PayloadT | None":
     """Return a tracker accessor's payload, or None when the device produced none.
 
     isaacteleop changed this API's shape between releases, and both shapes are in
@@ -181,7 +187,9 @@ def _tracker_payload(result: "TrackerResult") -> "TrackerPayload | None":
     if result is None:
         return None
     payload = getattr(result, "data", _MISSING)
-    return result if payload is _MISSING else payload
+    if payload is _MISSING:
+        return cast("_PayloadT", result)  # already a payload (1.7+)
+    return cast("Optional[_PayloadT]", payload)
 
 
 @dataclass(frozen=True)
