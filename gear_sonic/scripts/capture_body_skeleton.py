@@ -609,9 +609,12 @@ def batch(args: argparse.Namespace) -> int:
 
         # immediate staticness feedback so a bad take can be redone on the spot
         sd = np.array([_rot_spread_deg(Q[:, j, :]) for j in range(NUM_JOINTS)])
-        verdict = "OK" if sd.max() < 5.0 else "TOO MUCH MOTION — consider redoing this pose"
+        # np.all, not sd.max(), for the NaN reason given in rest_pose().
+        verdict = ("OK" if np.all(sd < 5.0)
+                   else "TOO MUCH MOTION — consider redoing this pose")
         print(f"    saved {len(P)} samples -> {out}")
-        print(f"    staticness: median {np.median(sd):.2f} deg, max {sd.max():.2f} deg   {verdict}\n")
+        print(f"    staticness: median {np.nanmedian(sd):.2f} deg, "
+              f"max {np.nanmax(sd):.2f} deg   {verdict}\n")
         written.append(out)
 
     client.close()
@@ -856,10 +859,24 @@ def rest_pose(path_a: str, path_b: str) -> dict[int, "Rotation"]:
     ok = True
     for tag, d in ((la, a), (lb, b)):
         sd = np.array([_rot_spread_deg(d["quat"][:, j, :]) for j in range(NUM_JOINTS)])
-        flag = "OK" if sd.max() < 5.0 else "TOO MUCH MOTION"
-        if sd.max() >= 5.0:
+        # Test "every joint is below the threshold" rather than comparing the
+        # max, because _rot_spread_deg returns NaN for a joint whose samples
+        # span the sphere, and every comparison against NaN is False: the old
+        # `sd.max() < 5.0` read False and printed TOO MUCH MOTION, while
+        # `sd.max() >= 5.0` also read False and left ok True, suppressing the
+        # warning below. One condition now drives both, and NaN -- which is not
+        # a held pose either -- fails it.
+        static = bool(np.all(sd < 5.0))
+        undefined = int(np.isnan(sd).sum())
+        flag = "OK" if static else "TOO MUCH MOTION"
+        if undefined:
+            flag += f" ({undefined} joint(s) with no mean rotation)"
+        if not static:
             ok = False
-        print(f"  {tag:<14} median {np.median(sd):5.2f} deg  max {sd.max():5.2f} deg   {flag}")
+        # nan-aware, so one undefined joint does not blank out the figures for
+        # the rest; the count above says how many were left out.
+        print(f"  {tag:<14} median {np.nanmedian(sd):5.2f} deg  "
+              f"max {np.nanmax(sd):5.2f} deg   {flag}")
     if not ok:
         print("\nWARNING: a capture is not static. Mean orientations reflect the motion\n"
               "performed, not the rest pose, and the offsets below are not meaningful.")
