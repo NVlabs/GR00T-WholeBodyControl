@@ -31,7 +31,7 @@ On your **workstation** (where you run the C++ deployment, teleop, and data expo
 bash install_scripts/install_data_collection.sh
 ```
 
-This creates `.venv_data_collection` using Python 3.10 via `uv`. It installs `gear_sonic[data_collection]` which includes `lerobot`, `av`, `opencv-python`, and other required packages. It also installs `espeak` (system package) for voice feedback during recording.
+This creates `.venv_data_collection` using Python 3.11 via `uv`. It installs `gear_sonic[data_collection]` which includes `lerobot`, `av`, `opencv-python`, and other required packages. It also installs `espeak` (system package) for voice feedback during recording.
 
 ```{tip}
 This environment is separate from `.venv_teleop` and `.venv_sim` — the data exporter has heavier ML dependencies that are not needed for teleop or simulation.

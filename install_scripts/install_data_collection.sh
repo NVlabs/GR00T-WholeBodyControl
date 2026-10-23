@@ -46,10 +46,10 @@ if ! command -v uv &>/dev/null; then
 fi
 echo "[OK] uv $(uv --version)"
 
-# ── 2. Install a uv-managed Python 3.10 (includes dev headers / Python.h) ────
-echo "[INFO] Installing uv-managed Python 3.10 (includes development headers) …"
-uv python install 3.10
-MANAGED_PY="$(uv python find --no-project 3.10)"
+# ── 2. Install a uv-managed Python 3.11 (includes dev headers / Python.h) ────
+echo "[INFO] Installing uv-managed Python 3.11 (includes development headers) …"
+uv python install 3.11
+MANAGED_PY="$(uv python find --no-project 3.11)"
 echo "[OK] Using Python: $MANAGED_PY"
 
 # ── 3. Clean previous venv (if any) ──────────────────────────────────────────
@@ -58,7 +58,7 @@ echo "[INFO] Removing old .venv_data_collection (if present) …"
 rm -rf .venv_data_collection
 
 # ── 4. Create venv & install data_collection extra ───────────────────────────
-echo "[INFO] Creating .venv_data_collection with uv-managed Python 3.10 …"
+echo "[INFO] Creating .venv_data_collection with uv-managed Python 3.11 …"
 uv venv .venv_data_collection --python "$MANAGED_PY" --prompt gear_sonic_data_collection
 # shellcheck disable=SC1091
 source .venv_data_collection/bin/activate

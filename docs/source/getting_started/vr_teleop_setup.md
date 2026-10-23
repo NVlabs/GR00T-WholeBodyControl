@@ -52,7 +52,7 @@ From the **repo root**:
 bash install_scripts/install_pico.sh
 ```
 
-This creates a `.venv_teleop` virtual environment (Python 3.10) that includes:
+This creates a `.venv_teleop` virtual environment (Python 3.11) that includes:
 - `teleop` extra (ZMQ, Pinocchio, PyVista)
 - `sim` extra (MuJoCo, tyro)
 - XRoboToolkit SDK
