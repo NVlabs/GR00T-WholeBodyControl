@@ -130,6 +130,7 @@ class IsaacTeleopClient:
                 install_dir=self._cloudxr_install_dir,
                 env_config=self._cloudxr_env_config,
                 accept_eula=True,
+                run_embedded=True,
                 setup_oob=self._use_adb,
                 usb_local=self._use_adb,
             )
@@ -175,7 +176,7 @@ class IsaacTeleopClient:
         Returns:
             Dict with keys ``left_controller``, ``right_controller``, ``head``,
             ``left_hand``, ``right_hand``, ``full_body``. Each value is the
-            corresponding tracker's ``.data`` payload (raw DeviceIO type).
+            corresponding tracker's snapshot, or None if inactive.
         """
         if self._deviceio_session is None:
             return None
@@ -188,12 +189,12 @@ class IsaacTeleopClient:
 
         session = self._deviceio_session
         return {
-            "left_controller": self._controller_tracker.get_left_controller(session).data,
-            "right_controller": self._controller_tracker.get_right_controller(session).data,
-            "head": self._head_tracker.get_head(session).data,
-            "left_hand": self._hand_tracker.get_left_hand(session).data,
-            "right_hand": self._hand_tracker.get_right_hand(session).data,
-            "full_body": self._body_tracker.get_body_pose(session).data,
+            "left_controller": self._controller_tracker.get_left_controller(session),
+            "right_controller": self._controller_tracker.get_right_controller(session),
+            "head": self._head_tracker.get_head(session),
+            "left_hand": self._hand_tracker.get_left_hand(session),
+            "right_hand": self._hand_tracker.get_right_hand(session),
+            "full_body": self._body_tracker.get_body_pose(session),
         }
 
     def get_pose_by_name(self, name: str) -> np.ndarray:

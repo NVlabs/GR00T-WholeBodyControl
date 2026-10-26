@@ -12,10 +12,10 @@ The streamer can run on an x86_64 workstation with an NVIDIA GPU, Jetson AGX Ori
 1. **Completed the [Quick Start](../getting_started/quickstart.md) on the deployment host** — you can run the Sim2Sim loop (includes [installing the deployment](../getting_started/installation_deploy.md) and [downloading model checkpoints](../getting_started/download_models.md)).
 2. **Completed the motion tracker and teleop environment steps in [VR Teleop Setup](../getting_started/vr_teleop_setup.md) on the streamer host** — `.venv_teleop` is ready and `install_pico.sh` has been run.
 
-This page is a condensed, repo-specific version of the upstream [Isaac Teleop](https://nvidia.github.io/IsaacCapture/release/1.4.x/) docs:
+This page is a condensed, repo-specific version of the upstream [Isaac Teleop](https://nvidia.github.io/IsaacCapture/release/1.5.x/) docs:
 
-- [Quick Start](https://nvidia.github.io/IsaacCapture/release/1.4.x/getting_started/quick_start.html)
-- [`isaacteleop[cloudxr]` Python API](https://nvidia.github.io/IsaacCapture/release/1.4.x/)
+- [Quick Start](https://nvidia.github.io/IsaacCapture/release/1.5.x/getting_started/quick_start.html)
+- [`isaacteleop[cloudxr]` Python API](https://nvidia.github.io/IsaacCapture/release/1.5.x/)
 
 ## Step 1: Prepare the Host
 
@@ -48,7 +48,7 @@ source .venv_teleop/bin/activate
 python -c 'from importlib.metadata import version; print(version("isaacteleop"))'
 ```
 
-The command should print a version beginning with `1.4`. If the package is not found, complete [VR Teleop Setup](../getting_started/vr_teleop_setup.md) Step 2 before continuing.
+The command should print a version beginning with `1.5`. If the package is not found, complete [VR Teleop Setup](../getting_started/vr_teleop_setup.md) Step 2 before continuing.
 
 `install_pico.sh` also seeds `~/cloudxr.env` with `NV_DEVICE_PROFILE=Quest3` (override by editing the file). `CloudXRLauncher` reads this on startup.
 
@@ -103,7 +103,7 @@ Once connected, stand in the {ref}`calibration pose <calibration-pose>` and pres
 
 For quick validation, the same client URL can also be opened in a desktop browser.
 
-If you prefer to run the WebXR client from source instead of the hosted client, follow the CloudXR/WebXR build instructions linked from the [Isaac Teleop Quick Start](https://nvidia.github.io/IsaacCapture/release/1.4.x/getting_started/quick_start.html).
+If you prefer to run the WebXR client from source instead of the hosted client, follow the CloudXR/WebXR build instructions linked from the [Isaac Teleop Quick Start](https://nvidia.github.io/IsaacCapture/release/1.5.x/getting_started/quick_start.html).
 
 ## Step 6: Optional Camera Visualization
 
@@ -112,7 +112,7 @@ To add camera streaming to the headset, keep the teleop streamer from Step 4 run
 If you don't have the IsaacTeleop repo yet, clone it first:
 
 ```bash
-git clone --branch release/1.4.x --recurse-submodules https://github.com/NVIDIA/IsaacTeleop.git
+git clone --branch release/1.5.x --recurse-submodules https://github.com/NVIDIA/IsaacTeleop.git
 ```
 
 Then create the environment for the camera visualization streamer:
@@ -156,7 +156,7 @@ Once you are certain you have valid yaml configured, shut down any preview windo
 ```
 `--no-launch-cloudxr-runtime` reuses the runtime started in Step 4. Omit this flag only when running camera visualization on its own without the teleop streamer.
 
-This should also be consistent with the [instructions found at IsaacTeleop](https://nvidia.github.io/IsaacCapture/release/1.4.x/references/camera_streaming.html).
+This should also be consistent with the [instructions found at IsaacTeleop](https://nvidia.github.io/IsaacCapture/release/1.5.x/references/camera_streaming.html).
 
 ## Troubleshooting
 
@@ -174,7 +174,7 @@ Set the client's **Video Codec** to **H.264** and reconnect.
 
 ### Camera plane is black on AGX Orin
 
-The experimental CloudXR runtime on Orin may require the Televiz compositor for camera quads. Under the camera's `display.placements` entry, set `compositor: televiz` as described in the upstream [Isaac Teleop 1.4 camera troubleshooting](https://nvidia.github.io/IsaacCapture/release/1.4.x/references/camera_streaming.html#troubleshooting).
+The experimental CloudXR runtime on Orin may require the Televiz compositor for camera quads. Under the camera's `display.placements` entry, set `compositor: televiz` as described in the upstream [Isaac Teleop 1.5 camera troubleshooting](https://nvidia.github.io/IsaacCapture/release/1.5.x/references/camera_streaming.html#troubleshooting).
 
 ### `gear_sonic_deploy` build error
 
@@ -187,7 +187,7 @@ just build
 
 ### `isaacteleop` import error
 
-Re-run `install_pico.sh` to reinstall `isaacteleop[cloudxr]~=1.4.0` into `.venv_teleop`. If `pypi.nvidia.com` is unreachable, check your network and the `--extra-index-url` flag.
+Re-run `install_pico.sh` to reinstall `isaacteleop[cloudxr]~=1.5.0` into `.venv_teleop`. If `pypi.nvidia.com` is unreachable, check your network and the `--extra-index-url` flag.
 
 ### Body data not arriving
 
@@ -195,4 +195,4 @@ The streamer logs `[IsaacTeleopReader] No DeviceIO data for 5.0s, flagging disco
 
 1. The headset is still connected to CloudXR (Step 5).
 2. The Pico body trackers are paired and calibrated (see {ref}`VR Teleop Setup → Motion Tracker Setup <motion-tracker-setup>`).
-3. The first time the schema runs, watch for `[IsaacTeleopReader] Unrecognised body_data schema: type=...` — if you see it, the upstream `FullBodyTracker.get_body_pose().data` shape changed and `_body_data_to_24x7()` in `gear_sonic/utils/teleop/input_readers.py` needs an extra branch for the new layout.
+3. The first time the schema runs, watch for `[IsaacTeleopReader] Unrecognised body_data schema: type=...` — if you see it, the upstream `FullBodyTracker.get_body_pose()` shape changed and `_body_data_to_24x7()` in `gear_sonic/utils/teleop/input_readers.py` needs an extra branch for the new layout.

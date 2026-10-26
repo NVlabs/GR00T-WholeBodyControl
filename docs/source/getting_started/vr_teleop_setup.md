@@ -56,7 +56,7 @@ This creates a `.venv_teleop` virtual environment (Python 3.11) that includes:
 - `teleop` extra (ZMQ, Pinocchio, PyVista)
 - `sim` extra (MuJoCo, tyro)
 - XRoboToolkit SDK
-- IsaacTeleop 1.4 with the CloudXR runtime
+- IsaacTeleop 1.5 with the CloudXR runtime
 - Unitree SDK2 Python bindings
 
 Activate it with:
