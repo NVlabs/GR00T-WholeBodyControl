@@ -607,7 +607,7 @@ def init_hand_ik_solvers():
     return None, None
 
 
-# Readers that expose `get_controller_data()` returning the IsaacTeleop
+# Readers that expose `get_controller_data()` returning the IsaacCapture
 # controller_data dict schema (left/right trigger/squeeze, thumbstick, clicks).
 # Tuple form keeps the dispatch sites uniform if/when a second reader speaks
 # the same schema.
@@ -615,7 +615,7 @@ _ISAAC_TELEOP_READERS = (input_readers.IsaacTeleopReader,)
 
 
 def get_controller_inputs(reader=None):
-    """Fetch controller button/trigger states from XRoboToolkit or IsaacTeleop."""
+    """Fetch controller button/trigger states from XRoboToolkit or IsaacCapture."""
     if isinstance(reader, _ISAAC_TELEOP_READERS):
         ctrl = reader.get_controller_data()
         if ctrl is None:
@@ -1573,9 +1573,9 @@ def _init_input_source(
     if input_source == "isaac-teleop":
         reader = input_readers.IsaacTeleopReader(max_queue_size=buffer_size)
         reader.start()
-        print("Using Isaac Teleop (in-process CloudXR / DeviceIO), waiting for data...")
+        print("Using Isaac Capture (in-process CloudXR / DeviceIO), waiting for data...")
         while reader.get_latest() is None:
-            print("waiting for Isaac Teleop body data (connect the headset to CloudXR)...")
+            print("waiting for Isaac Capture body data (connect the headset to CloudXR)...")
             time.sleep(1)
         return reader
 
@@ -2248,7 +2248,7 @@ if __name__ == "__main__":
         choices=["xrt", "isaac-teleop"],
         help=(
             "Input source: 'xrt' for XRoboToolkit SDK (default), "
-            "'isaac-teleop' for in-process IsaacTeleop / CloudXR DeviceIO"
+            "'isaac-teleop' for in-process IsaacCapture / CloudXR DeviceIO"
         ),
     )
     args = parser.parse_args()

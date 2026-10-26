@@ -1,4 +1,4 @@
-"""Isaac Teleop client wrapping CloudXR + DeviceIO + OpenXR for the host.
+"""Isaac Capture client wrapping CloudXR + DeviceIO + OpenXR for the host.
 
 Launches the CloudXR runtime in-process (via ``CloudXRLauncher``), opens an
 OpenXR session, and starts the DeviceIO trackers (head, hands, controllers,
@@ -154,7 +154,7 @@ class IsaacTeleopClient:
                 deviceio.DeviceIOSession.run(trackers, handles)
             )
             self._exit_stack = stack
-            print("Isaac Teleop session initialized.")
+            print("Isaac Capture session initialized.")
 
         except RuntimeError as e:
             stack.close()

@@ -215,7 +215,7 @@ SONIC supports real-time whole-body teleoperation via PICO VR headset, enabling 
 
 <p align="center"><em><strong>SONIC Low Latency:</strong> Whole-body teleoperation mode with a successful ground pickup.</em></p>
 
-For PICO teleoperation, follow the [`VR Teleop Setup`](docs/source/getting_started/vr_teleop_setup.md). To use IsaacTeleop 1.5, follow the [`Isaac Teleop Setup`](docs/source/tutorials/isaac_teleop_publisher_setup.md) and launch the streamer with `--input-source isaac-teleop`.
+For PICO teleoperation, follow the [`VR Teleop Setup`](docs/source/getting_started/vr_teleop_setup.md). To use IsaacCapture 1.5, follow the [`Isaac Capture Setup`](docs/source/tutorials/isaac_teleop_publisher_setup.md) and launch the streamer with `--input-source isaac-teleop`.
 
 <div align="center">
 <table>

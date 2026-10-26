@@ -1,7 +1,7 @@
 #!/bin/bash
 # install_ros.sh
 # Sets up the `teleop_ros` conda env with RoboStack ROS 2 Humble for the
-# Isaac Teleop / CloudXR ROS bridge. Pinned to Python 3.11 to compose with
+# Isaac Capture / CloudXR ROS bridge. Pinned to Python 3.11 to compose with
 # .venv_teleop (created by install_pico.sh).
 #
 # Usage:  bash install_scripts/install_ros.sh   (run from repo root)
@@ -60,6 +60,6 @@ cat <<EOF
       source .venv_teleop/bin/activate          # gear_sonic deps on top
       export ROS_LOCALHOST_ONLY=1               # match the publisher container
 
-    See docs/source/tutorials/vr_wholebody_teleop.md (Isaac Teleop / CloudXR
+    See docs/source/tutorials/vr_wholebody_teleop.md (Isaac Capture / CloudXR
     alternative section) for the full env-composition rationale.
 EOF

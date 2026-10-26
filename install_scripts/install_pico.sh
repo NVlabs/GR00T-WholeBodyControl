@@ -8,7 +8,7 @@
 #   SKIP_SIM_AND_UNITREE=1 bash install_scripts/install_pico.sh
 #                                                    # publisher-only profile
 #                                                    # (Thor/Orin used as a
-#                                                    # headless Isaac Teleop /
+#                                                    # headless Isaac Capture /
 #                                                    # CloudXR ROS publisher
 #                                                    # — neither sim nor the
 #                                                    # unitree DDS bindings
@@ -134,7 +134,7 @@ fi
 #     already ships CycloneDDS, sim has no display, and the on-robot deploy
 #     uses the C++ stack directly. Applies to both Orin and Thor onboards.
 #   • SKIP_SIM_AND_UNITREE=1 is set explicitly: e.g. a Thor or Orin used as a
-#     headless Isaac Teleop / CloudXR streamer — neither mujoco nor the
+#     headless Isaac Capture / CloudXR streamer — neither mujoco nor the
 #     unitree DDS bindings are on that path.
 if { [ "$ARCH" = "aarch64" ] && [ "$(whoami)" = "unitree" ]; } \
    || [ "${SKIP_SIM_AND_UNITREE:-0}" = "1" ]; then
