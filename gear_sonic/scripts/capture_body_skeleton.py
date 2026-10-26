@@ -189,18 +189,49 @@ def _rot_spread_deg(quat: np.ndarray) -> float:
     out in :func:`_mean_rot`: a componentwise mean over quaternions straddling
     w = 0 collapses toward zero and the reference stops meaning anything.
 
-    Returns NaN when no mean rotation exists (samples spread over the whole
-    sphere), which the callers' thresholds read as "not a held pose".
+    Samples with no orientation are dropped first. A joint the tracker did not
+    report is left as an all-zero quaternion (see :func:`_extract_joints`), and
+    kept in, each such sample reads as 180 degrees from the mean: a joint held
+    perfectly still but reported every other frame measured ~90 degrees.
+
+    Returns NaN when the joint has no orientation data at all -- e.g. legs with
+    the Pico motion trackers off. That is absent data, not motion; callers must
+    treat it separately (see :func:`_staticness`).
     """
     quat = np.asarray(quat, dtype=np.float64)
-    norms = np.linalg.norm(quat, axis=-1, keepdims=True)
-    unit = quat / np.where(norms < 1e-9, 1.0, norms)
+    norms = np.linalg.norm(quat, axis=-1)
+    present = norms > 1e-9
+    if not present.any():
+        return float("nan")
+    unit = quat[present] / norms[present, None]
     aligned = unit * np.where(unit @ unit[0] < 0.0, -1.0, 1.0)[:, None]
     mean_q = aligned.mean(axis=0)
     n = np.linalg.norm(mean_q)
     if n < 1e-9:
         return float("nan")
     return float(np.mean(_quat_angle_deg(aligned, mean_q / n)))
+
+
+def _staticness(spreads: np.ndarray, limit_deg: float = 5.0) -> tuple[bool, str]:
+    """Judge whether a capture was held still, from per-joint ``spreads``.
+
+    Returns ``(static, summary)``. Only joints with orientation data are
+    judged. A NaN spread means the joint was never reported, which says nothing
+    about whether the operator moved, so it is excluded and counted rather than
+    called motion -- otherwise any capture with untracked joints (Pico legs with
+    the motion trackers off, say) reads TOO MUCH MOTION while perfectly still.
+    A capture with no orientation data at all is not static: there is nothing
+    to measure a rest pose from.
+    """
+    measured = spreads[~np.isnan(spreads)]
+    if measured.size == 0:
+        return False, "NO ORIENTATION DATA for any joint"
+    static = bool(np.all(measured < limit_deg))
+    summary = (f"median {np.median(measured):5.2f} deg  max {measured.max():5.2f} deg   "
+               f"{'OK' if static else 'TOO MUCH MOTION'}")
+    if measured.size < spreads.size:
+        summary += f"  ({spreads.size - measured.size} untracked joint(s) excluded)"
+    return static, summary
 
 
 # ---------------------------------------------------------------------------
@@ -609,12 +640,10 @@ def batch(args: argparse.Namespace) -> int:
 
         # immediate staticness feedback so a bad take can be redone on the spot
         sd = np.array([_rot_spread_deg(Q[:, j, :]) for j in range(NUM_JOINTS)])
-        # np.all, not sd.max(), for the NaN reason given in rest_pose().
-        verdict = ("OK" if np.all(sd < 5.0)
-                   else "TOO MUCH MOTION — consider redoing this pose")
+        static, summary = _staticness(sd)
         print(f"    saved {len(P)} samples -> {out}")
-        print(f"    staticness: median {np.nanmedian(sd):.2f} deg, "
-              f"max {np.nanmax(sd):.2f} deg   {verdict}\n")
+        print(f"    staticness: {summary}"
+              f"{'' if static else ' — consider redoing this pose'}\n")
         written.append(out)
 
     client.close()
@@ -821,7 +850,11 @@ def _mean_rot(q: np.ndarray) -> "Rotation":
     """
     from scipy.spatial.transform import Rotation as R
     q = np.asarray(q, dtype=np.float64)
-    q = q / np.linalg.norm(q, axis=-1, keepdims=True)
+    norms = np.linalg.norm(q, axis=-1)
+    present = norms > 1e-9           # untracked samples, as in _rot_spread_deg
+    if not present.any():
+        raise ValueError("no orientation data: this joint was never tracked")
+    q = q[present] / norms[present, None]
     q = q * np.where(q @ q[0] < 0.0, -1.0, 1.0)[:, None]
     m = q.mean(axis=0)
     n = np.linalg.norm(m)
@@ -833,6 +866,11 @@ def _mean_rot(q: np.ndarray) -> "Rotation":
             "capture is not a held pose"
         )
     return R.from_quat(m / n)
+
+
+def _has_orientation(q: np.ndarray) -> bool:
+    """True if any sample in ``q`` ``(N, 4)`` carries an orientation."""
+    return bool((np.linalg.norm(q, axis=-1) > 1e-9).any())
 
 
 def _fit_group(offsets: Mapping[int, "Rotation"], idxs: Sequence[int]) -> "Rotation":
@@ -859,24 +897,10 @@ def rest_pose(path_a: str, path_b: str) -> dict[int, "Rotation"]:
     ok = True
     for tag, d in ((la, a), (lb, b)):
         sd = np.array([_rot_spread_deg(d["quat"][:, j, :]) for j in range(NUM_JOINTS)])
-        # Test "every joint is below the threshold" rather than comparing the
-        # max, because _rot_spread_deg returns NaN for a joint whose samples
-        # span the sphere, and every comparison against NaN is False: the old
-        # `sd.max() < 5.0` read False and printed TOO MUCH MOTION, while
-        # `sd.max() >= 5.0` also read False and left ok True, suppressing the
-        # warning below. One condition now drives both, and NaN -- which is not
-        # a held pose either -- fails it.
-        static = bool(np.all(sd < 5.0))
-        undefined = int(np.isnan(sd).sum())
-        flag = "OK" if static else "TOO MUCH MOTION"
-        if undefined:
-            flag += f" ({undefined} joint(s) with no mean rotation)"
+        static, summary = _staticness(sd)
         if not static:
             ok = False
-        # nan-aware, so one undefined joint does not blank out the figures for
-        # the rest; the count above says how many were left out.
-        print(f"  {tag:<14} median {np.nanmedian(sd):5.2f} deg  "
-              f"max {np.nanmax(sd):5.2f} deg   {flag}")
+        print(f"  {tag:<14} {summary}")
     if not ok:
         print("\nWARNING: a capture is not static. Mean orientations reflect the motion\n"
               "performed, not the rest pose, and the offsets below are not meaningful.")
@@ -887,6 +911,11 @@ def rest_pose(path_a: str, path_b: str) -> dict[int, "Rotation"]:
     print(f"{'idx':>3} {'joint':<16} {'angle':>7}  axis(x,y,z)")
     print("-" * 56)
     for j in range(NUM_JOINTS):
+        # An offset needs an orientation from both captures; a joint either
+        # tracker never reported has none to compare.
+        if not (_has_orientation(a["quat"][:, j, :]) and _has_orientation(b["quat"][:, j, :])):
+            print(f"{j:>3} {BodyJoint(j).name:<16} {'--':>6}   untracked in a capture")
+            continue
         off = _mean_rot(b["quat"][:, j, :]) * _mean_rot(a["quat"][:, j, :]).inv()
         offsets[j] = off
         rv = off.as_rotvec()
@@ -899,6 +928,10 @@ def rest_pose(path_a: str, path_b: str) -> dict[int, "Rotation"]:
     print("\nGROUP FIT — can ONE rotation explain each anatomical group?")
     for name, idxs in (("axial/spine", AXIAL), ("left limbs", LEFT_LIMB),
                        ("right limbs", RIGHT_LIMB)):
+        idxs = [j for j in idxs if j in offsets]
+        if not idxs:
+            print(f"  {name:<12} no tracked joints in this group")
+            continue
         Rg = _fit_group(offsets, idxs)
         res = [np.degrees(np.linalg.norm((Rg.inv() * offsets[j]).as_rotvec())) for j in idxs]
         verdict = "consistent" if np.median(res) < 15 else "NOT a shared rotation"
