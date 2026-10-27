@@ -1,3 +1,4 @@
+#include <csignal>
 /**
  * @file g1_deploy_onnx_ref.cpp
  * @brief Main application: deploys an RL locomotion policy on the Unitree G1 robot.
@@ -282,7 +283,7 @@ class G1Deploy {
     std::unique_ptr<unitree::robot::b2::MotionSwitcherClient> msc_;
     
     // Dex3 hands manager
-    Dex3Hands dex3_hands_;
+    std::unique_ptr<Dex3Hands> dex3_hands_;
 
     // Motor error monitor (tracks fault state transitions)
     ErrorMonitor error_monitor_;
@@ -2180,7 +2181,8 @@ class G1Deploy {
       bool enable_motion_recording = false,
       std::array<double, 3> initial_compliance = {0.05, 0.05, 0.0},
       double initial_max_close_ratio = 1.0,
-      MotorGainScaleConfig motor_gain_scales = {})
+      MotorGainScaleConfig motor_gain_scales = {},
+      const std::string& hand_type = "dex3")
       : time_(0.0),
         publish_dt_(0.002),
         control_dt_(0.02),
@@ -2218,7 +2220,14 @@ class G1Deploy {
       ChannelFactory::Instance()->Init(0, networkInterface);
 
       // Initialize Dex3 hands (ChannelFactory already initialized above)
-      dex3_hands_.initialize("");
+      if (hand_type == "dex3") {
+        dex3_hands_ = std::make_unique<Dex3Hands>();
+        dex3_hands_->initialize("");
+      } else if (hand_type == "inspire") {
+        std::cout << "[INFO] Inspire native6 uses its independent gateway; Dex3 is disabled." << std::endl;
+      } else {
+        throw std::invalid_argument("--hand must be dex3 or inspire");
+      }
 
       audio_thread_ = std::make_unique<AudioThread>();
 
@@ -2551,7 +2560,7 @@ class G1Deploy {
         input_interface_->SetVR3PointCompliance(initial_vr_3point_compliance_);
         // Set initial max close ratio for hands (keyboard-controlled: X/C keys)
         input_interface_->SetMaxCloseRatio(initial_max_close_ratio_);
-        dex3_hands_.SetMaxCloseRatio(initial_max_close_ratio_);
+        if (dex3_hands_) dex3_hands_->SetMaxCloseRatio(initial_max_close_ratio_);
         std::cout << "[INFO] Initial VR 3-point compliance: ["
                   << initial_vr_3point_compliance_[0] << ", "
                   << initial_vr_3point_compliance_[1] << ", "
@@ -2712,7 +2721,7 @@ class G1Deploy {
       }
 
       // Publish Dex3 hand commands at the same publish cadence
-      dex3_hands_.writeOnce();
+      if (dex3_hands_) dex3_hands_->writeOnce();
     }
 
     /// Gracefully stop all threads and send a damping-only command.
@@ -2781,12 +2790,12 @@ class G1Deploy {
           motor_command_tmp.q_target.at(i) =
               static_cast<float>(current_pos * (1.0 - ratio) + default_angles[i] * ratio);
         }
-        dex3_hands_.close(true);
-        dex3_hands_.close(false);
+        if (dex3_hands_) dex3_hands_->close(true);
+        if (dex3_hands_) dex3_hands_->close(false);
       } else {
         program_state_ = ProgramState::WAIT_FOR_CONTROL;
-        dex3_hands_.open(true);
-        dex3_hands_.open(false);
+        if (dex3_hands_) dex3_hands_->open(true);
+        if (dex3_hands_) dex3_hands_->open(false);
         std::cout << "Init Done" << std::endl;
       }
       motor_command_buffer_.SetData(motor_command_tmp);
@@ -2939,7 +2948,7 @@ class G1Deploy {
       std::array<double, 7> right_hand_q = {0.0};
       std::array<double, 7> right_hand_dq = {0.0};
       
-      auto left_hand_state_ptr = dex3_hands_.getState(true);
+      auto left_hand_state_ptr = dex3_hands_ ? dex3_hands_->getState(true) : nullptr;
       if (left_hand_state_ptr) {
         for (int i = 0; i < 7; ++i) {
           left_hand_q[i] = left_hand_state_ptr->motor_state()[i].q();
@@ -2947,7 +2956,7 @@ class G1Deploy {
         }
       }
       
-      auto right_hand_state_ptr = dex3_hands_.getState(false);
+      auto right_hand_state_ptr = dex3_hands_ ? dex3_hands_->getState(false) : nullptr;
       if (right_hand_state_ptr) {
         for (int i = 0; i < 7; ++i) {
           right_hand_q[i] = right_hand_state_ptr->motor_state()[i].q();
@@ -2966,12 +2975,12 @@ class G1Deploy {
                                     std::span(motor_temperature),
                                     std::span(motor_error),
                                     std::span(motor_torque),
-                                    std::span(left_hand_q),
-                                    std::span(left_hand_dq),
-                                    std::span(right_hand_q),
-                                    std::span(right_hand_dq),
-                                    std::span(last_left_hand_action),
-                                    std::span(last_right_hand_action),
+                                    std::span(left_hand_q).first(dex3_hands_ ? 7 : 0),
+                                    std::span(left_hand_dq).first(dex3_hands_ ? 7 : 0),
+                                    std::span(right_hand_q).first(dex3_hands_ ? 7 : 0),
+                                    std::span(right_hand_dq).first(dex3_hands_ ? 7 : 0),
+                                    std::span(last_left_hand_action).first(dex3_hands_ ? 7 : 0),
+                                    std::span(last_right_hand_action).first(dex3_hands_ ? 7 : 0),
                                     ros_timestamp);
       }
       return true;
@@ -3002,8 +3011,10 @@ class G1Deploy {
       vr_3point_compliance_buffer_ = input_interface_->GetVR3PointCompliance();
       std::tie(has_vr_5point_data_, vr_5point_position_buffer_) = input_interface_->GetVR5PointPosition();
       std::tie(std::ignore, vr_5point_orientation_buffer_) = input_interface_->GetVR5PointOrientation();
-      std::tie(has_left_hand_data_, left_hand_joint_buffer_) = input_interface_->GetHandPose(true);
-      std::tie(has_right_hand_data_, right_hand_joint_buffer_) = input_interface_->GetHandPose(false);
+      if (dex3_hands_) {
+        std::tie(has_left_hand_data_, left_hand_joint_buffer_) = input_interface_->GetHandPose(true);
+        std::tie(has_right_hand_data_, right_hand_joint_buffer_) = input_interface_->GetHandPose(false);
+      }
       std::tie(has_upper_body_data_, upper_body_joint_positions_buffer_) = input_interface_->GetUpperBodyJointPositions();
       std::tie(std::ignore, upper_body_joint_velocities_buffer_) = input_interface_->GetUpperBodyJointVelocities();
 
@@ -3984,19 +3995,21 @@ class G1Deploy {
           }
           auto motor_command_end_time = std::chrono::steady_clock::now();
 
-          // Update Dex3 hands max close ratio from keyboard-controlled value (X/C keys)
-          dex3_hands_.SetMaxCloseRatio(input_interface_->GetMaxCloseRatio());
+          if (dex3_hands_) {
+            // Update Dex3 hands max close ratio from keyboard-controlled value (X/C keys)
+            dex3_hands_->SetMaxCloseRatio(input_interface_->GetMaxCloseRatio());
           
-          // set hand poses (use buffered data for consistency)
-          dex3_hands_.setAllJointsCommand(true, left_hand_joint_buffer_);
-          dex3_hands_.setAllJointsCommand(false, right_hand_joint_buffer_);
+            // set hand poses (use buffered data for consistency)
+            dex3_hands_->setAllJointsCommand(true, left_hand_joint_buffer_);
+            dex3_hands_->setAllJointsCommand(false, right_hand_joint_buffer_);
           
-          // Update last hand actions for logging (use buffered data)
-          for (int i = 0; i < 7; ++i) {
-            last_left_hand_action[i] = left_hand_joint_buffer_[i];
-            last_right_hand_action[i] = right_hand_joint_buffer_[i];
+            // Update last hand actions for logging (use buffered data)
+            for (int i = 0; i < 7; ++i) {
+              last_left_hand_action[i] = left_hand_joint_buffer_[i];
+              last_right_hand_action[i] = right_hand_joint_buffer_[i];
+            }
+          
           }
-          
           auto hand_joint_end_time = std::chrono::steady_clock::now();
 
           // Publish output data (state logger data, robot config, command/motion data) to all output interfaces
@@ -4106,7 +4119,7 @@ class G1Deploy {
             }
             
             // Print hand max close ratio (keyboard-controlled via X/C keys)
-            std::cout << " | HandCloseRatio: " << dex3_hands_.GetMaxCloseRatio();
+            if (dex3_hands_) std::cout << " | HandCloseRatio: " << dex3_hands_->GetMaxCloseRatio();
             
             std::cout << std::endl;
           }
@@ -4144,6 +4157,11 @@ static bool parse_motor_gain_scale_flag(
  * All other arguments are optional flags (see --help for full list).
  * The main loop sleeps until the operator issues a stop signal or ROS2 shuts down.
  */
+namespace {
+volatile std::sig_atomic_t inspire_deploy_stop = 0;
+void RequestInspireDeployStop(int) { inspire_deploy_stop = 1; }
+}  // namespace
+
 int main(int argc, char const* argv[]) {
   std::cout << "[DEBUG] Program starting..." << std::endl;
   if (argc < 4) {
@@ -4172,6 +4190,7 @@ int main(int argc, char const* argv[]) {
     std::cout << "  --encoder-file <path>: specify encoder ONNX file (optional)" << std::endl;
     std::cout << "  --planner-precision <16|32>: specify precision to run the planner model at (default: 16)" << std::endl;
     std::cout << "  --policy-precision <16|32>: specify precision to run the policy model at (default: 32)" << std::endl;
+    std::cout << "  --hand dex3|inspire: select hand transport (default: dex3)" << std::endl;
     std::cout << "  --motor-kp-scale <motors>=<factor>: scale Kp for hardware motor indices/ranges" << std::endl;
     std::cout << "  --motor-kd-scale <motors>=<factor>: scale Kd for hardware motor indices/ranges" << std::endl;
     std::cout << "  --zmq-host <host>: ZMQ server host (default: localhost)" << std::endl;
@@ -4234,6 +4253,7 @@ int main(int argc, char const* argv[]) {
   std::array<double, 3> initial_compliance = {0.5, 0.5, 0.0}; // initial compliance is 0.5 for both hands (keyboard controllable)
   double initial_max_close_ratio = 1.0; // default allows full closure, use --max-close-ratio to limit
   MotorGainScaleConfig motor_gain_scales;
+  std::string hand_type = "dex3";
   for (int i = 4; i < argc; i++) {
     if (std::string(argv[i]) == "--disable-crc-check") {
       disableCrcCheck = true;
@@ -4388,6 +4408,12 @@ int main(int argc, char const* argv[]) {
       else{
         std::cerr << "old and weak" << std::endl;
       }
+    } else if (std::string(argv[i]) == "--hand") {
+      if (i + 1 >= argc || (std::string(argv[i + 1]) != "dex3" && std::string(argv[i + 1]) != "inspire")) {
+        std::cerr << "--hand requires dex3 or inspire" << std::endl;
+        return 1;
+      }
+      hand_type = argv[++i];
     } else if (std::string(argv[i]) == "--motor-kp-scale") {
       if (!parse_motor_gain_scale_flag(argc, argv, i, motor_gain_scales.kp)) {
         return 1;
@@ -4506,24 +4532,30 @@ int main(int argc, char const* argv[]) {
     enableMotionRecording,
     initial_compliance,
     initial_max_close_ratio,
-    motor_gain_scales
+    motor_gain_scales,
+    hand_type
   );
+  if (hand_type == "inspire") {
+    std::signal(SIGINT, RequestInspireDeployStop);
+    std::signal(SIGTERM, RequestInspireDeployStop);
+  }
+
   std::cout << "[DEBUG] G1Deploy object created successfully!" << std::endl;
   
   // Main application loop - check both operator_state.stop and ROS2 status if using ROS2
 #if HAS_ROS2
   if (inputType == "ros2") {
-    while (!custom.operator_state.stop && rclcpp::ok()) { 
+    while (!inspire_deploy_stop && !custom.operator_state.stop && rclcpp::ok()) {
       sleep(0.02); 
     }
     if (!rclcpp::ok()) {
       std::cout << "[INFO] ROS2 shutdown detected (Ctrl+C)" << std::endl;
     }
   } else {
-    while (!custom.operator_state.stop) { sleep(0.02); }
+    while (!inspire_deploy_stop && !custom.operator_state.stop) { sleep(0.02); }
   }
 #else
-  while (!custom.operator_state.stop) { sleep(0.02); }
+  while (!inspire_deploy_stop && !custom.operator_state.stop) { sleep(0.02); }
 #endif
   
   std::cout << "[DEBUG] Stopping G1Deploy..." << std::endl;

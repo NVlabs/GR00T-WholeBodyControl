@@ -1,0 +1,831 @@
+{
+  "schema_version": 1,
+  "verified_on": "2026-10-04",
+  "scope": "Content matches identify a public distribution source, not the original CAD author or the historical download route.",
+  "repositories": {
+    "unitree_mujoco": {
+      "commit": "1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d",
+      "license_url": "https://github.com/unitreerobotics/unitree_mujoco/blob/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d/LICENSE",
+      "license_copy": "legal/LICENSE-unitree_mujoco.txt"
+    },
+    "unitree_ros": {
+      "commit": "5994d4faef0a9cadd3287f8de0199a67eeb2a259",
+      "license_url": "https://github.com/unitreerobotics/unitree_ros/blob/5994d4faef0a9cadd3287f8de0199a67eeb2a259/LICENSE",
+      "license_copy": "legal/LICENSE-unitree_ros.txt"
+    }
+  },
+  "meshes": [
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/L_hand_base_link.STL",
+      "sha256": "33ab4e97801bd5421903a78f5977a44e477ae8653eaf32358d35633e465411e0",
+      "attribution": "Unitree-published hand mesh; exact SHA256 match",
+      "upstream_url": "https://github.com/unitreerobotics/unitree_mujoco/blob/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d/unitree_robots/h1/assets/L_hand_base_link.STL",
+      "license_copy": "legal/LICENSE-unitree_mujoco.txt"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/Link11_L.STL",
+      "sha256": "d87cb704d80de840555d0a393117d32f9bd5e91425e0458363e0a799aa4e5339",
+      "attribution": "Unitree-published hand mesh; exact SHA256 match",
+      "upstream_url": "https://github.com/unitreerobotics/unitree_mujoco/blob/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d/unitree_robots/h1/assets/Link11_L.STL",
+      "license_copy": "legal/LICENSE-unitree_mujoco.txt"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/Link11_R.STL",
+      "sha256": "b49b6463f801f0402bac9c65bb989c4097f6d2c1fa1597ba560aedd640561778",
+      "attribution": "Unitree-published hand mesh; exact SHA256 match",
+      "upstream_url": "https://github.com/unitreerobotics/unitree_mujoco/blob/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d/unitree_robots/h1/assets/Link11_R.STL",
+      "license_copy": "legal/LICENSE-unitree_mujoco.txt"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/Link12_L.STL",
+      "sha256": "9f35b78a9cab1007ac8b73023a5862ed055d33951b5742f9a783997d38e99551",
+      "attribution": "Unitree-published hand mesh; exact SHA256 match",
+      "upstream_url": "https://github.com/unitreerobotics/unitree_mujoco/blob/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d/unitree_robots/h1/assets/Link12_L.STL",
+      "license_copy": "legal/LICENSE-unitree_mujoco.txt"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/Link12_R.STL",
+      "sha256": "347212bdb22d80fb364dd889de934d6fbb935e38d1f24c682caed84f7b6ea8cb",
+      "attribution": "Unitree-published hand mesh; exact SHA256 match",
+      "upstream_url": "https://github.com/unitreerobotics/unitree_mujoco/blob/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d/unitree_robots/h1/assets/Link12_R.STL",
+      "license_copy": "legal/LICENSE-unitree_mujoco.txt"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/Link13_L.STL",
+      "sha256": "7e93b55f2ae73fe0f62cd27e81d8a4620211068cb1c9b25e6414e802a37541ee",
+      "attribution": "Unitree-published hand mesh; exact SHA256 match",
+      "upstream_url": "https://github.com/unitreerobotics/unitree_mujoco/blob/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d/unitree_robots/h1/assets/Link13_L.STL",
+      "license_copy": "legal/LICENSE-unitree_mujoco.txt"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/Link13_R.STL",
+      "sha256": "c157dfe5b666efb1c3d51342e56f5caad2fc350930ac21ee1e02d956c1034ca3",
+      "attribution": "Unitree-published hand mesh; exact SHA256 match",
+      "upstream_url": "https://github.com/unitreerobotics/unitree_mujoco/blob/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d/unitree_robots/h1/assets/Link13_R.STL",
+      "license_copy": "legal/LICENSE-unitree_mujoco.txt"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/Link14_L.STL",
+      "sha256": "b677bcdcddcd90ff4b005f83daa9e50eb4003d5e67ea4eeefbf857718716c164",
+      "attribution": "Unitree-published hand mesh; exact SHA256 match",
+      "upstream_url": "https://github.com/unitreerobotics/unitree_mujoco/blob/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d/unitree_robots/h1/assets/Link14_L.STL",
+      "license_copy": "legal/LICENSE-unitree_mujoco.txt"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/Link14_R.STL",
+      "sha256": "564aa8c3d2ff0e51b75736a8b01b4c309c7098582a424ea1391ccb75125519d8",
+      "attribution": "Unitree-published hand mesh; exact SHA256 match",
+      "upstream_url": "https://github.com/unitreerobotics/unitree_mujoco/blob/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d/unitree_robots/h1/assets/Link14_R.STL",
+      "license_copy": "legal/LICENSE-unitree_mujoco.txt"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/Link15_L.STL",
+      "sha256": "8c601e7aa8e1c91310a75190dfb6b95a8dc981b707e5f104f9ca9ecbea118b34",
+      "attribution": "Unitree-published hand mesh; exact SHA256 match",
+      "upstream_url": "https://github.com/unitreerobotics/unitree_mujoco/blob/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d/unitree_robots/h1/assets/Link15_L.STL",
+      "license_copy": "legal/LICENSE-unitree_mujoco.txt"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/Link15_R.STL",
+      "sha256": "09c120f7fb7761aa97d89240cd8cb8e30c40ee60093cbb8b1c2e13a68a8e3845",
+      "attribution": "Unitree-published hand mesh; exact SHA256 match",
+      "upstream_url": "https://github.com/unitreerobotics/unitree_mujoco/blob/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d/unitree_robots/h1/assets/Link15_R.STL",
+      "license_copy": "legal/LICENSE-unitree_mujoco.txt"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/Link16_L.STL",
+      "sha256": "7d8508c65db44e2349f37e8ab4c057d204a40093d4733897ae5b51075b00f5e9",
+      "attribution": "Unitree-published hand mesh; exact SHA256 match",
+      "upstream_url": "https://github.com/unitreerobotics/unitree_mujoco/blob/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d/unitree_robots/h1/assets/Link16_L.STL",
+      "license_copy": "legal/LICENSE-unitree_mujoco.txt"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/Link16_R.STL",
+      "sha256": "6942ada1189cdf442124c6b8935f3e3a3ae310092a3a1414fdeb0bd6d23578bb",
+      "attribution": "Unitree-published hand mesh; exact SHA256 match",
+      "upstream_url": "https://github.com/unitreerobotics/unitree_mujoco/blob/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d/unitree_robots/h1/assets/Link16_R.STL",
+      "license_copy": "legal/LICENSE-unitree_mujoco.txt"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/Link17_L.STL",
+      "sha256": "ca2a68fed635eca290b234fbdc649779036ba5bac753addcb7ce6a086ad95949",
+      "attribution": "Unitree-published hand mesh; exact SHA256 match",
+      "upstream_url": "https://github.com/unitreerobotics/unitree_mujoco/blob/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d/unitree_robots/h1/assets/Link17_L.STL",
+      "license_copy": "legal/LICENSE-unitree_mujoco.txt"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/Link17_R.STL",
+      "sha256": "36fc62c609800ce6d4521ae6f3c4c9b8a732be28654f32f04893696c17e6930c",
+      "attribution": "Unitree-published hand mesh; exact SHA256 match",
+      "upstream_url": "https://github.com/unitreerobotics/unitree_mujoco/blob/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d/unitree_robots/h1/assets/Link17_R.STL",
+      "license_copy": "legal/LICENSE-unitree_mujoco.txt"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/Link18_L.STL",
+      "sha256": "9425aea7ebbf6d1dfb2eb0714fb44dfaea6b6a81c71d6e96c8d3950f636dfa62",
+      "attribution": "Unitree-published hand mesh; exact SHA256 match",
+      "upstream_url": "https://github.com/unitreerobotics/unitree_mujoco/blob/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d/unitree_robots/h1/assets/Link18_L.STL",
+      "license_copy": "legal/LICENSE-unitree_mujoco.txt"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/Link18_R.STL",
+      "sha256": "9711fac7df0c09a372e1529f74b9d506d37abf3ebc3241d976ad45e5ee7e2d69",
+      "attribution": "Unitree-published hand mesh; exact SHA256 match",
+      "upstream_url": "https://github.com/unitreerobotics/unitree_mujoco/blob/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d/unitree_robots/h1/assets/Link18_R.STL",
+      "license_copy": "legal/LICENSE-unitree_mujoco.txt"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/Link19_L.STL",
+      "sha256": "cbb256a70c17e21c995df66807f0755dc136d0312df245112d6d4bfcd29c43a4",
+      "attribution": "Unitree-published hand mesh; exact SHA256 match",
+      "upstream_url": "https://github.com/unitreerobotics/unitree_mujoco/blob/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d/unitree_robots/h1/assets/Link19_L.STL",
+      "license_copy": "legal/LICENSE-unitree_mujoco.txt"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/Link19_R.STL",
+      "sha256": "46619bd6a887615d7dfe850d39a6f5d8f8c5ecfa9429c567338f3a659a5d4d75",
+      "attribution": "Unitree-published hand mesh; exact SHA256 match",
+      "upstream_url": "https://github.com/unitreerobotics/unitree_mujoco/blob/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d/unitree_robots/h1/assets/Link19_R.STL",
+      "license_copy": "legal/LICENSE-unitree_mujoco.txt"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/Link20_L.STL",
+      "sha256": "e9145af7a515bce4c1c06d16b5be8900ec3f8375fc8e34d371315ce76f600877",
+      "attribution": "Unitree-published hand mesh; exact SHA256 match",
+      "upstream_url": "https://github.com/unitreerobotics/unitree_mujoco/blob/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d/unitree_robots/h1/assets/Link20_L.STL",
+      "license_copy": "legal/LICENSE-unitree_mujoco.txt"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/Link20_R.STL",
+      "sha256": "a517debff6b924c22ae0f87dbb6aac199a1f130c7fef353a7d659e365f30b1f4",
+      "attribution": "Unitree-published hand mesh; exact SHA256 match",
+      "upstream_url": "https://github.com/unitreerobotics/unitree_mujoco/blob/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d/unitree_robots/h1/assets/Link20_R.STL",
+      "license_copy": "legal/LICENSE-unitree_mujoco.txt"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/Link21_L.STL",
+      "sha256": "180ab4ac01dab60407d0b33819883eb0ec869e4d4f349f786972135c7114fc0d",
+      "attribution": "Unitree-published hand mesh; exact SHA256 match",
+      "upstream_url": "https://github.com/unitreerobotics/unitree_mujoco/blob/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d/unitree_robots/h1/assets/Link21_L.STL",
+      "license_copy": "legal/LICENSE-unitree_mujoco.txt"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/Link21_R.STL",
+      "sha256": "ed0a29d2376e8874f724bc2c20384eeec93d8268e59bb8c45628335f7ab6742e",
+      "attribution": "Unitree-published hand mesh; exact SHA256 match",
+      "upstream_url": "https://github.com/unitreerobotics/unitree_mujoco/blob/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d/unitree_robots/h1/assets/Link21_R.STL",
+      "license_copy": "legal/LICENSE-unitree_mujoco.txt"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/Link22_L.STL",
+      "sha256": "5e64ea976ecf08c46e8cb80a5dd56ee3e8c5f36a0573ab3c69160d9337f941e1",
+      "attribution": "Unitree-published hand mesh; exact SHA256 match",
+      "upstream_url": "https://github.com/unitreerobotics/unitree_mujoco/blob/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d/unitree_robots/h1/assets/Link22_L.STL",
+      "license_copy": "legal/LICENSE-unitree_mujoco.txt"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/Link22_R.STL",
+      "sha256": "1aa3fb46f689251ee38f5262b71364c680f70d1ad1dd9c6f1cae8c098b0e8422",
+      "attribution": "Unitree-published hand mesh; exact SHA256 match",
+      "upstream_url": "https://github.com/unitreerobotics/unitree_mujoco/blob/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d/unitree_robots/h1/assets/Link22_R.STL",
+      "license_copy": "legal/LICENSE-unitree_mujoco.txt"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/R_hand_base_link.STL",
+      "sha256": "b4d84504242a99fa915c4ed5195ce4724c67cb94d9217cd4c254cfb5937ecf5c",
+      "attribution": "Unitree-published hand mesh; exact SHA256 match",
+      "upstream_url": "https://github.com/unitreerobotics/unitree_mujoco/blob/1eb6642e3f3fdfb7fb13a9794fd6a2dd93ea0e7d/unitree_robots/h1/assets/R_hand_base_link.STL",
+      "license_copy": "legal/LICENSE-unitree_mujoco.txt"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/head_link.STL",
+      "sha256": "005fb67fbd3eff94aa8bf4a6e83238174e9f91b6721f7111594322f223724411",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/head_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/left_ankle_pitch_link.STL",
+      "sha256": "d49e3abc6f5b12e532062cd575b87b5ef40cd2a3fc18f54a1ca5bba4f773d51d",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/left_ankle_pitch_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/left_ankle_roll_link.STL",
+      "sha256": "c4092af943141d4d9f74232f3cfa345afc6565f46a077793b8ae0e68b39dc33f",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/left_ankle_roll_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/left_elbow_link.STL",
+      "sha256": "fa752198accd104d5c4c3a01382e45165b944fbbc5acce085059223324e5bed3",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/left_elbow_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/left_hip_pitch_link.STL",
+      "sha256": "4725168105ee768ee31638ef22b53f6be2d7641bfd7cfefe803488d884776fa4",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/left_hip_pitch_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/left_hip_roll_link.STL",
+      "sha256": "91f25922ee8a7c3152790051bebad17b4d9cd243569c38fe340285ff93a97acf",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/left_hip_roll_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/left_hip_yaw_link.STL",
+      "sha256": "a16d88aa6ddac8083aa7ad55ed317bea44b1fa003d314fba88965b7ed0f3b55b",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/left_hip_yaw_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/left_knee_link.STL",
+      "sha256": "8d92b9e3d3a636761150bb8025e32514c4602b91c7028d523ee42b3e632de477",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/left_knee_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/left_shoulder_pitch_link.STL",
+      "sha256": "f0d1cfd02fcf0d42f95e678eeca33da3afbcc366ffba5c052847773ec4f31d52",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/left_shoulder_pitch_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/left_shoulder_roll_link.STL",
+      "sha256": "fb9df21687773522598dc384f1a2945c7519f11cbc8bd372a49170316d6eee88",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/left_shoulder_roll_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/left_shoulder_yaw_link.STL",
+      "sha256": "1aa97e9748e924336567992181f78c7cd0652fd52a4afcca3df6b2ef6f9e712e",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/left_shoulder_yaw_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/left_wrist_pitch_link.STL",
+      "sha256": "b251d8e05047f695d0f536cd78c11973cfa4e78d08cfe82759336cc3471de3a9",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/left_wrist_pitch_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/left_wrist_roll_link.STL",
+      "sha256": "edc387c9a0ba8c2237e9b296d32531426fabeb6f53e58df45c76106bca74148c",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/left_wrist_roll_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/left_wrist_yaw_link.STL",
+      "sha256": "83f8fb3a726bf9613d65dd14f0f447cb918c3c95b3938042a0c9c09749267d3b",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/left_wrist_yaw_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/logo_link.STL",
+      "sha256": "8571a0a19bc4916fa55f91449f51d5fdefd751000054865a842449429d5f155b",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/logo_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/pelvis.STL",
+      "sha256": "5ba6bbc888e630550140d3c26763f10206da8c8bd30ed886b8ede41c61f57a31",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/pelvis.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/pelvis_contour_link.STL",
+      "sha256": "5cc5c2c7a312329e3feeb2b03d3fc09fc29705bd01864f6767e51be959662420",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/pelvis_contour_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/right_ankle_pitch_link.STL",
+      "sha256": "15be426539ec1be70246d4d82a168806db64a41301af8b35c197a33348c787a9",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/right_ankle_pitch_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/right_ankle_roll_link.STL",
+      "sha256": "4b66222ea56653e627711b56d0a8949b4920da5df091da0ceb343f54e884e3a5",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/right_ankle_roll_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/right_elbow_link.STL",
+      "sha256": "1be925d7aa268bb8fddf5362b9173066890c7d32092c05638608126e59d1e2ab",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/right_elbow_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/right_hip_pitch_link.STL",
+      "sha256": "e4f3c99d7f4a7d34eadbef9461fc66e3486cb5442db1ec50c86317d459f1a9c6",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/right_hip_pitch_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/right_hip_roll_link.STL",
+      "sha256": "4c254ef66a356f492947f360dd931965477b631e3fcc841f91ccc46d945d54f6",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/right_hip_roll_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/right_hip_yaw_link.STL",
+      "sha256": "e479c2936ca2057e9eb2f7dff6c189b7419d7b8484dea0b298cbb36a2a6aa668",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/right_hip_yaw_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/right_knee_link.STL",
+      "sha256": "63c4008449c9bbe701a6e2b557b7a252e90cf3a5abcf54cee46862b9a69f8ec8",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/right_knee_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/right_shoulder_pitch_link.STL",
+      "sha256": "24cdb387e0128dfe602770a81c56cdce3a0181d34d039a11d1aaf8819b7b8c02",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/right_shoulder_pitch_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/right_shoulder_roll_link.STL",
+      "sha256": "962b97c48f9ce9e8399f45dd9522e0865d19aa9fd299406b2d475a8fc4a53e81",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/right_shoulder_roll_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/right_shoulder_yaw_link.STL",
+      "sha256": "a0b76489271da0c72461a344c9ffb0f0c6e64f019ea5014c1624886c442a2fe5",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/right_shoulder_yaw_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/right_wrist_pitch_link.STL",
+      "sha256": "d22f8f3b3127f15a63e5be1ee273cd5075786c3142f1c3d9f76cbf43d2a26477",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/right_wrist_pitch_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/right_wrist_roll_link.STL",
+      "sha256": "a7ee9212ff5b94d6cb7f52bb1bbf3f352194d5b598acff74f4c77d340c5b344f",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/right_wrist_roll_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/right_wrist_yaw_link.STL",
+      "sha256": "bc9dece2d12509707e0057ba2e48df8f3d56db0c79410212963a25e8a50f61a6",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/right_wrist_yaw_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/torso_link.STL",
+      "sha256": "e96d023f0368a4e3450b86ca5d4f10227d8141156a373e7da8cb3c93266523e0",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/torso_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/waist_roll_link.STL",
+      "sha256": "34f0aa73f41131230be4d25876c944fdf6c24d62553f199ff8b980c15e8913df",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/waist_roll_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/waist_support_link.STL",
+      "sha256": "1fae9e1bb609848a1667d32eed8d6083ae443538a306843056a2a660f1b2926a",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/waist_support_link.STL"
+    },
+    {
+      "path": "gear_sonic/data/robots/g1/meshes/waist_yaw_link.STL",
+      "sha256": "2883f20e03f09b669b5b4ce10677ee6b5191c0934b584d7cbaef2d0662856ffb",
+      "attribution": "Existing NVIDIA upstream G1 mesh; direct Unitree source not individually verified",
+      "upstream_url": "https://github.com/NVlabs/GR00T-WholeBodyControl/blob/a0732b642c0333077e127a2f56ab0014c196bca4/gear_sonic/data/robots/g1/meshes/waist_yaw_link.STL"
+    }
+  ],
+  "finger_inertials": [
+    {
+      "local_body": "left_inspire_thumb_proximal_base",
+      "upstream_body": "L_thumb_proximal_base",
+      "attributes": {
+        "pos": "0.0048817 0.00038782 -0.00722",
+        "quat": "0.445981 0.352284 0.495833 0.656617",
+        "mass": "0.0018869",
+        "diaginertia": "8.66031e-08 6.87331e-08 4.94199e-08"
+      }
+    },
+    {
+      "local_body": "left_inspire_thumb_proximal",
+      "upstream_body": "L_thumb_proximal",
+      "attributes": {
+        "pos": "0.021936 -0.01279 -0.0080386",
+        "quat": "0.25452 0.660687 -0.251949 0.659723",
+        "mass": "0.0066101",
+        "diaginertia": "2.78701e-06 2.44024e-06 8.6466e-07"
+      }
+    },
+    {
+      "local_body": "left_inspire_thumb_intermediate",
+      "upstream_body": "L_thumb_intermediate",
+      "attributes": {
+        "pos": "0.0095531 0.0016282 -0.0072002",
+        "quat": "0.30738 0.636732 -0.307526 0.636803",
+        "mass": "0.0037844",
+        "diaginertia": "4.6532e-07 4.48114e-07 2.45646e-07"
+      }
+    },
+    {
+      "local_body": "left_inspire_thumb_distal",
+      "upstream_body": "L_thumb_distal",
+      "attributes": {
+        "pos": "0.0092888 -0.004953 -0.0060033",
+        "quat": "0.266264 0.65596 -0.262836 0.655544",
+        "mass": "0.003344",
+        "diaginertia": "2.0026e-07 1.95246e-07 8.1594e-08"
+      }
+    },
+    {
+      "local_body": "left_inspire_index_proximal",
+      "upstream_body": "L_index_proximal",
+      "attributes": {
+        "pos": "0.0012971 -0.011934 -0.0059998",
+        "quat": "0.489677 0.510115 -0.489692 0.510099",
+        "mass": "0.0042405",
+        "diaginertia": "6.9402e-07 6.62904e-07 2.10916e-07"
+      }
+    },
+    {
+      "local_body": "left_inspire_index_intermediate",
+      "upstream_body": "L_index_intermediate",
+      "attributes": {
+        "pos": "0.0021753 -0.019567 -0.005",
+        "quat": "0.528694 0.469555 -0.528694 0.469555",
+        "mass": "0.0045682",
+        "diaginertia": "7.8176e-07 7.72427e-07 8.47209e-08"
+      }
+    },
+    {
+      "local_body": "left_inspire_middle_proximal",
+      "upstream_body": "L_middle_proximal",
+      "attributes": {
+        "pos": "0.0012971 -0.011934 -0.0059999",
+        "quat": "0.489677 0.510115 -0.489692 0.510099",
+        "mass": "0.0042405",
+        "diaginertia": "6.9402e-07 6.62904e-07 2.10916e-07"
+      }
+    },
+    {
+      "local_body": "left_inspire_middle_intermediate",
+      "upstream_body": "L_middle_intermediate",
+      "attributes": {
+        "pos": "0.001921 -0.020796 -0.0049999",
+        "quat": "0.531603 0.466115 -0.531728 0.466262",
+        "mass": "0.0050397",
+        "diaginertia": "9.8385e-07 9.73288e-07 9.14016e-08"
+      }
+    },
+    {
+      "local_body": "left_inspire_ring_proximal",
+      "upstream_body": "L_ring_proximal",
+      "attributes": {
+        "pos": "0.0012971 -0.011934 -0.0059999",
+        "quat": "0.489677 0.510114 -0.489692 0.510099",
+        "mass": "0.0042405",
+        "diaginertia": "6.9402e-07 6.62904e-07 2.10916e-07"
+      }
+    },
+    {
+      "local_body": "left_inspire_ring_intermediate",
+      "upstream_body": "L_ring_intermediate",
+      "attributes": {
+        "pos": "0.0021753 -0.019567 -0.005",
+        "quat": "0.528694 0.469556 -0.528694 0.469556",
+        "mass": "0.0045682",
+        "diaginertia": "7.8176e-07 7.72437e-07 8.47208e-08"
+      }
+    },
+    {
+      "local_body": "left_inspire_pinky_proximal",
+      "upstream_body": "L_pinky_proximal",
+      "attributes": {
+        "pos": "0.0012971 -0.011934 -0.0059999",
+        "quat": "0.489677 0.510114 -0.489692 0.510099",
+        "mass": "0.0042405",
+        "diaginertia": "6.9402e-07 6.62904e-07 2.10916e-07"
+      }
+    },
+    {
+      "local_body": "left_inspire_pinky_intermediate",
+      "upstream_body": "L_pinky_intermediate",
+      "attributes": {
+        "pos": "0.0024788 -0.016208 -0.0050001",
+        "quat": "0.526797 0.471683 -0.526793 0.471687",
+        "mass": "0.0036036",
+        "diaginertia": "4.4881e-07 4.43809e-07 6.5736e-08"
+      }
+    },
+    {
+      "local_body": "right_inspire_thumb_proximal_base",
+      "upstream_body": "R_thumb_proximal_base",
+      "attributes": {
+        "pos": "-0.0048064 0.0009382 -0.00757",
+        "quat": "0.515015 0.680854 0.408023 0.323596",
+        "mass": "0.0018869",
+        "diaginertia": "8.66026e-08 6.8732e-08 4.94194e-08"
+      }
+    },
+    {
+      "local_body": "right_inspire_thumb_proximal",
+      "upstream_body": "R_thumb_proximal",
+      "attributes": {
+        "pos": "0.021932 0.012785 -0.0080386",
+        "quat": "-0.254474 0.660716 0.251893 0.659733",
+        "mass": "0.0066075",
+        "diaginertia": "2.78601e-06 2.43933e-06 8.64566e-07"
+      }
+    },
+    {
+      "local_body": "right_inspire_thumb_intermediate",
+      "upstream_body": "R_thumb_intermediate",
+      "attributes": {
+        "pos": "0.0095544 -0.0016282 -0.0071997",
+        "quat": "0.636718 0.307389 -0.636802 0.307548",
+        "mass": "0.0037847",
+        "diaginertia": "4.6531e-07 4.48089e-07 2.45661e-07"
+      }
+    },
+    {
+      "local_body": "right_inspire_thumb_distal",
+      "upstream_body": "R_thumb_distal",
+      "attributes": {
+        "pos": "0.0092888 0.0049529 -0.0060033",
+        "quat": "-0.266294 0.655967 0.262806 0.655537",
+        "mass": "0.0033441",
+        "diaginertia": "2.0026e-07 1.95247e-07 8.1593e-08"
+      }
+    },
+    {
+      "local_body": "right_inspire_index_proximal",
+      "upstream_body": "R_index_proximal",
+      "attributes": {
+        "pos": "0.0012259 0.011942 -0.0060001",
+        "quat": "0.50867 0.49121 -0.508643 0.491172",
+        "mass": "0.0042403",
+        "diaginertia": "6.9398e-07 6.62871e-07 2.10909e-07"
+      }
+    },
+    {
+      "local_body": "right_inspire_index_intermediate",
+      "upstream_body": "R_index_intermediate",
+      "attributes": {
+        "pos": "0.0019697 0.019589 -0.005",
+        "quat": "0.466773 0.531152 -0.466773 0.531153",
+        "mass": "0.0045683",
+        "diaginertia": "7.8179e-07 7.72465e-07 8.47212e-08"
+      }
+    },
+    {
+      "local_body": "right_inspire_middle_proximal",
+      "upstream_body": "R_middle_proximal",
+      "attributes": {
+        "pos": "0.001297 0.011934 -0.0060001",
+        "quat": "0.510131 0.489693 -0.510105 0.489653",
+        "mass": "0.0042403",
+        "diaginertia": "6.9397e-07 6.62865e-07 2.10915e-07"
+      }
+    },
+    {
+      "local_body": "right_inspire_middle_intermediate",
+      "upstream_body": "R_middle_intermediate",
+      "attributes": {
+        "pos": "0.001921 0.020796 -0.005",
+        "quat": "0.466148 0.531627 -0.466229 0.531705",
+        "mass": "0.0050396",
+        "diaginertia": "9.8384e-07 9.73279e-07 9.14014e-08"
+      }
+    },
+    {
+      "local_body": "right_inspire_ring_proximal",
+      "upstream_body": "R_ring_proximal",
+      "attributes": {
+        "pos": "0.001297 0.011934 -0.0060002",
+        "quat": "0.510129 0.489691 -0.510107 0.489654",
+        "mass": "0.0042403",
+        "diaginertia": "6.9397e-07 6.62865e-07 2.10915e-07"
+      }
+    },
+    {
+      "local_body": "right_inspire_ring_intermediate",
+      "upstream_body": "R_ring_intermediate",
+      "attributes": {
+        "pos": "0.0021753 0.019567 -0.005",
+        "quat": "0.469554 0.528695 -0.469554 0.528695",
+        "mass": "0.0045683",
+        "diaginertia": "7.8177e-07 7.72448e-07 8.4722e-08"
+      }
+    },
+    {
+      "local_body": "right_inspire_pinky_proximal",
+      "upstream_body": "R_pinky_proximal",
+      "attributes": {
+        "pos": "0.001297 0.011934 -0.0060001",
+        "quat": "0.51013 0.489693 -0.510106 0.489653",
+        "mass": "0.0042403",
+        "diaginertia": "6.9397e-07 6.62865e-07 2.10915e-07"
+      }
+    },
+    {
+      "local_body": "right_inspire_pinky_intermediate",
+      "upstream_body": "R_pinky_intermediate",
+      "attributes": {
+        "pos": "0.0024748 0.016203 -0.0050031",
+        "quat": "0.47398 0.528862 -0.469291 0.524799",
+        "mass": "0.0035996",
+        "diaginertia": "4.4867e-07 4.43723e-07 6.56538e-08"
+      }
+    }
+  ],
+  "finger_inertial_source": {
+    "local_file": "gear_sonic/data/robots/g1/inspire/g1_29dof_rh56dfx.xml",
+    "upstream_url": "https://github.com/unitreerobotics/unitree_ros/blob/5994d4faef0a9cadd3287f8de0199a67eeb2a259/robots/h1_2_description/h1_2.xml",
+    "upstream_file_sha256": "46af694a659384dfc7bfdd96145a3d4eb84a6a2aba703db40feb4048ae8ab7ba",
+    "license_copy": "legal/LICENSE-unitree_ros.txt",
+    "scope": "Only the 24 listed finger inertial elements (pos, quat, mass, diaginertia); excludes the two hand bases and other model parameters."
+  },
+  "model_files": {
+    "g1_29dof_rh56dfx.xml": {
+      "mesh_paths": [
+        "gear_sonic/data/robots/g1/meshes/L_hand_base_link.STL",
+        "gear_sonic/data/robots/g1/meshes/Link11_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link11_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link12_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link12_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link13_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link13_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link14_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link14_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link15_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link15_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link16_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link16_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link17_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link17_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link18_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link18_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link19_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link19_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link20_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link20_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link21_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link21_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link22_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link22_R.STL",
+        "gear_sonic/data/robots/g1/meshes/R_hand_base_link.STL",
+        "gear_sonic/data/robots/g1/meshes/head_link.STL",
+        "gear_sonic/data/robots/g1/meshes/left_ankle_pitch_link.STL",
+        "gear_sonic/data/robots/g1/meshes/left_ankle_roll_link.STL",
+        "gear_sonic/data/robots/g1/meshes/left_elbow_link.STL",
+        "gear_sonic/data/robots/g1/meshes/left_hip_pitch_link.STL",
+        "gear_sonic/data/robots/g1/meshes/left_hip_roll_link.STL",
+        "gear_sonic/data/robots/g1/meshes/left_hip_yaw_link.STL",
+        "gear_sonic/data/robots/g1/meshes/left_knee_link.STL",
+        "gear_sonic/data/robots/g1/meshes/left_shoulder_pitch_link.STL",
+        "gear_sonic/data/robots/g1/meshes/left_shoulder_roll_link.STL",
+        "gear_sonic/data/robots/g1/meshes/left_shoulder_yaw_link.STL",
+        "gear_sonic/data/robots/g1/meshes/left_wrist_pitch_link.STL",
+        "gear_sonic/data/robots/g1/meshes/left_wrist_roll_link.STL",
+        "gear_sonic/data/robots/g1/meshes/left_wrist_yaw_link.STL",
+        "gear_sonic/data/robots/g1/meshes/logo_link.STL",
+        "gear_sonic/data/robots/g1/meshes/pelvis.STL",
+        "gear_sonic/data/robots/g1/meshes/pelvis_contour_link.STL",
+        "gear_sonic/data/robots/g1/meshes/right_ankle_pitch_link.STL",
+        "gear_sonic/data/robots/g1/meshes/right_ankle_roll_link.STL",
+        "gear_sonic/data/robots/g1/meshes/right_elbow_link.STL",
+        "gear_sonic/data/robots/g1/meshes/right_hip_pitch_link.STL",
+        "gear_sonic/data/robots/g1/meshes/right_hip_roll_link.STL",
+        "gear_sonic/data/robots/g1/meshes/right_hip_yaw_link.STL",
+        "gear_sonic/data/robots/g1/meshes/right_knee_link.STL",
+        "gear_sonic/data/robots/g1/meshes/right_shoulder_pitch_link.STL",
+        "gear_sonic/data/robots/g1/meshes/right_shoulder_roll_link.STL",
+        "gear_sonic/data/robots/g1/meshes/right_shoulder_yaw_link.STL",
+        "gear_sonic/data/robots/g1/meshes/right_wrist_pitch_link.STL",
+        "gear_sonic/data/robots/g1/meshes/right_wrist_roll_link.STL",
+        "gear_sonic/data/robots/g1/meshes/right_wrist_yaw_link.STL",
+        "gear_sonic/data/robots/g1/meshes/torso_link.STL",
+        "gear_sonic/data/robots/g1/meshes/waist_roll_link.STL",
+        "gear_sonic/data/robots/g1/meshes/waist_support_link.STL",
+        "gear_sonic/data/robots/g1/meshes/waist_yaw_link.STL"
+      ],
+      "unitree_published_hand_mesh_paths": [
+        "gear_sonic/data/robots/g1/meshes/L_hand_base_link.STL",
+        "gear_sonic/data/robots/g1/meshes/Link11_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link11_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link12_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link12_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link13_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link13_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link14_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link14_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link15_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link15_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link16_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link16_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link17_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link17_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link18_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link18_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link19_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link19_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link20_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link20_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link21_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link21_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link22_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link22_R.STL",
+        "gear_sonic/data/robots/g1/meshes/R_hand_base_link.STL"
+      ],
+      "remaining_mesh_scope": "Unchanged NVIDIA upstream G1 LFS assets; direct Unitree origin not individually verified.",
+      "physics_scope": "24 listed finger inertial elements match Unitree h1_2.xml; hand bases and other parameters excluded.",
+      "role": "Project integrated MuJoCo model"
+    },
+    "g1_29dof_rh56dfx.urdf": {
+      "mesh_paths": [
+        "gear_sonic/data/robots/g1/meshes/L_hand_base_link.STL",
+        "gear_sonic/data/robots/g1/meshes/Link11_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link11_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link12_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link12_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link15_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link15_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link17_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link17_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link19_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link19_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link21_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link21_R.STL",
+        "gear_sonic/data/robots/g1/meshes/R_hand_base_link.STL",
+        "gear_sonic/data/robots/g1/meshes/head_link.STL",
+        "gear_sonic/data/robots/g1/meshes/left_ankle_pitch_link.STL",
+        "gear_sonic/data/robots/g1/meshes/left_ankle_roll_link.STL",
+        "gear_sonic/data/robots/g1/meshes/left_elbow_link.STL",
+        "gear_sonic/data/robots/g1/meshes/left_hip_pitch_link.STL",
+        "gear_sonic/data/robots/g1/meshes/left_hip_roll_link.STL",
+        "gear_sonic/data/robots/g1/meshes/left_hip_yaw_link.STL",
+        "gear_sonic/data/robots/g1/meshes/left_knee_link.STL",
+        "gear_sonic/data/robots/g1/meshes/left_shoulder_pitch_link.STL",
+        "gear_sonic/data/robots/g1/meshes/left_shoulder_roll_link.STL",
+        "gear_sonic/data/robots/g1/meshes/left_shoulder_yaw_link.STL",
+        "gear_sonic/data/robots/g1/meshes/left_wrist_pitch_link.STL",
+        "gear_sonic/data/robots/g1/meshes/left_wrist_roll_link.STL",
+        "gear_sonic/data/robots/g1/meshes/left_wrist_yaw_link.STL",
+        "gear_sonic/data/robots/g1/meshes/logo_link.STL",
+        "gear_sonic/data/robots/g1/meshes/pelvis.STL",
+        "gear_sonic/data/robots/g1/meshes/pelvis_contour_link.STL",
+        "gear_sonic/data/robots/g1/meshes/right_ankle_pitch_link.STL",
+        "gear_sonic/data/robots/g1/meshes/right_ankle_roll_link.STL",
+        "gear_sonic/data/robots/g1/meshes/right_elbow_link.STL",
+        "gear_sonic/data/robots/g1/meshes/right_hip_pitch_link.STL",
+        "gear_sonic/data/robots/g1/meshes/right_hip_roll_link.STL",
+        "gear_sonic/data/robots/g1/meshes/right_hip_yaw_link.STL",
+        "gear_sonic/data/robots/g1/meshes/right_knee_link.STL",
+        "gear_sonic/data/robots/g1/meshes/right_shoulder_pitch_link.STL",
+        "gear_sonic/data/robots/g1/meshes/right_shoulder_roll_link.STL",
+        "gear_sonic/data/robots/g1/meshes/right_shoulder_yaw_link.STL",
+        "gear_sonic/data/robots/g1/meshes/right_wrist_pitch_link.STL",
+        "gear_sonic/data/robots/g1/meshes/right_wrist_roll_link.STL",
+        "gear_sonic/data/robots/g1/meshes/right_wrist_yaw_link.STL",
+        "gear_sonic/data/robots/g1/meshes/torso_link.STL",
+        "gear_sonic/data/robots/g1/meshes/waist_roll_link.STL",
+        "gear_sonic/data/robots/g1/meshes/waist_support_link.STL",
+        "gear_sonic/data/robots/g1/meshes/waist_yaw_link.STL"
+      ],
+      "unitree_published_hand_mesh_paths": [
+        "gear_sonic/data/robots/g1/meshes/L_hand_base_link.STL",
+        "gear_sonic/data/robots/g1/meshes/Link11_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link11_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link12_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link12_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link15_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link15_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link17_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link17_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link19_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link19_R.STL",
+        "gear_sonic/data/robots/g1/meshes/Link21_L.STL",
+        "gear_sonic/data/robots/g1/meshes/Link21_R.STL",
+        "gear_sonic/data/robots/g1/meshes/R_hand_base_link.STL"
+      ],
+      "remaining_mesh_scope": "Unchanged NVIDIA upstream G1 LFS assets; direct Unitree origin not individually verified.",
+      "physics_scope": "Simplified project hand inertials (mass 0.005 kg, diagonal inertia 1e-6 kg*m^2), not attributed to vendor dynamics.",
+      "role": "Project simplified data/FK model"
+    },
+    "scene_41dof_rh56dfx.xml": {
+      "included_model": "g1_29dof_rh56dfx.xml",
+      "role": "Project scene with indirect use of the included model assets; no separately attributed Unitree hand physical parameters."
+    }
+  },
+  "mesh_distribution": {
+    "repository": "https://github.com/NVlabs/GR00T-WholeBodyControl",
+    "commit": "a0732b642c0333077e127a2f56ab0014c196bca4",
+    "path": "gear_sonic/data/robots/g1/meshes"
+  }
+}

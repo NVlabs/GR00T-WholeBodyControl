@@ -219,3 +219,13 @@ models/
 # Downloaded from HuggingFace (hf download)
 sample_data/
 sonic_release/
+
+# Track the G1/Inspire asset directory while keeping other local data ignored.
+!/gear_sonic/data/
+/gear_sonic/data/*
+!/gear_sonic/data/robot_model/
+!/gear_sonic/data/robots/
+/gear_sonic/data/robots/*
+!/gear_sonic/data/robots/g1/
+/gear_sonic/data/robots/g1/*
+!/gear_sonic/data/robots/g1/inspire/

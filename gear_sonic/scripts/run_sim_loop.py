@@ -8,12 +8,12 @@ from typing import Dict
 
 import tyro
 
-from gear_sonic.utils.mujoco_sim.simulator_factory import SimulatorFactory, init_channel
-from gear_sonic.utils.mujoco_sim.configs import SimLoopConfig
 from gear_sonic.data.robot_model.instantiation.g1 import (
     instantiate_g1_robot_model,
 )
 from gear_sonic.data.robot_model.robot_model import RobotModel
+from gear_sonic.utils.mujoco_sim.configs import SimLoopConfig
+from gear_sonic.utils.mujoco_sim.simulator_factory import SimulatorFactory, init_channel
 
 ArgsConfig = SimLoopConfig
 
@@ -23,7 +23,11 @@ class SimWrapper:
         self.robot_model = robot_model
         self.config = config
 
-        init_channel(config=self.config)
+        # BaseSimulator owns DDS initialization for Inspire, as in its direct
+        # launch path. Initializing here too creates the same domain twice.
+        # Keep the existing Dex3 launch path unchanged.
+        if self.config.get("HAND_TYPE", "dex3") != "inspire":
+            init_channel(config=self.config)
 
         # Create simulator using factory
         self.sim = SimulatorFactory.create_simulator(
@@ -39,11 +43,27 @@ def main(config: ArgsConfig):
     wbc_config["ENV_NAME"] = config.env_name
 
     if config.enable_image_publish:
-        assert (
-            config.enable_offscreen
-        ), "enable_offscreen must be True when enable_image_publish is True"
+        assert config.enable_offscreen, (
+            "enable_offscreen must be True when enable_image_publish is True"
+        )
 
-    robot_model = instantiate_g1_robot_model()
+    hand_options = {}
+    if config.hand == "inspire":
+        from gear_sonic.data.robot_model.instantiation.g1_inspire import (
+            instantiate_g1_rh56dfx_robot_model,
+        )
+        from gear_sonic.utils.hand_control.inspire.config import DEFAULT_MAPPING_PATH
+        from gear_sonic.utils.mujoco_sim.inspire.environment import configure_simulation
+        from gear_sonic.utils.mujoco_sim.inspire.gateway import InspireSimGateway
+
+        hand_config = config.hand_config or DEFAULT_MAPPING_PATH
+        wbc_config = configure_simulation(wbc_config, hand_config)
+        robot_model = instantiate_g1_rh56dfx_robot_model(config_path=hand_config)
+        hand_options["hand_controller_factory"] = lambda model, data: InspireSimGateway(
+            model, data, hand_config
+        )
+    else:
+        robot_model = instantiate_g1_robot_model()
 
     sim_wrapper = SimWrapper(
         robot_model=robot_model,
@@ -52,6 +72,7 @@ def main(config: ArgsConfig):
         onscreen=wbc_config.get("ENABLE_ONSCREEN", True),
         offscreen=wbc_config.get("ENABLE_OFFSCREEN", False),
         enable_image_publish=config.enable_image_publish,
+        **hand_options,
     )
     # Start simulator as independent process
     SimulatorFactory.start_simulator(

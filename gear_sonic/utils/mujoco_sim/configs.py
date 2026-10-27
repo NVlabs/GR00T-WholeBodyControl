@@ -333,6 +333,12 @@ class BaseConfig(ArgsConfigTemplate):
 class SimLoopConfig(BaseConfig):
     """Config for running the simulation loop."""
 
+    hand: Literal["dex3", "inspire"] = "dex3"
+    """Hand model and transport used by the full-body simulator."""
+
+    hand_config: Optional[Path] = None
+    """Inspire mapping/endpoint configuration; defaults to its packaged config."""
+
     mp_start_method: str = "spawn"
     """Multiprocessing start method"""
 

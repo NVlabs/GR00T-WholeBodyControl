@@ -1,0 +1,43 @@
+# Joint mapping for the standalone simulation and direct-serial backends.
+schema: inspire.rh56dfx.mapping.v1
+joint_order: [pinky, ring, middle, index, thumb_bend, thumb_rotation]
+joints:
+  left:
+    pinky: &lp {domain_index: 0, mujoco_joint: left_inspire_pinky_joint, mujoco_actuator: left_inspire_pinky, urdf_joint: left_inspire_pinky_joint, direction: 1, scale: 1, offset: 0, position_limit: [0.0, 1.7], velocity_limit: 2.0}
+    ring: &lr {domain_index: 1, mujoco_joint: left_inspire_ring_joint, mujoco_actuator: left_inspire_ring, urdf_joint: left_inspire_ring_joint, direction: 1, scale: 1, offset: 0, position_limit: [0.0, 1.7], velocity_limit: 2.0}
+    middle: &lm {domain_index: 2, mujoco_joint: left_inspire_middle_joint, mujoco_actuator: left_inspire_middle, urdf_joint: left_inspire_middle_joint, direction: 1, scale: 1, offset: 0, position_limit: [0.0, 1.7], velocity_limit: 2.0}
+    index: &li {domain_index: 3, mujoco_joint: left_inspire_index_joint, mujoco_actuator: left_inspire_index, urdf_joint: left_inspire_index_joint, direction: 1, scale: 1, offset: 0, position_limit: [0.0, 1.7], velocity_limit: 2.0}
+    thumb_bend: &ltb {domain_index: 4, mujoco_joint: left_inspire_thumb_bend_joint, mujoco_actuator: left_inspire_thumb_bend, urdf_joint: left_inspire_thumb_bend_joint, direction: 1, scale: 1, offset: 0, position_limit: [0.0, 0.6], velocity_limit: 1.0}
+    thumb_rotation: &ltr {domain_index: 5, mujoco_joint: left_inspire_thumb_rotation_joint, mujoco_actuator: left_inspire_thumb_rotation, urdf_joint: left_inspire_thumb_rotation_joint, direction: 1, scale: 1, offset: 0, position_limit: [0.0, 1.3], velocity_limit: 1.0}
+  right:
+    pinky: {domain_index: 0, mujoco_joint: right_inspire_pinky_joint, mujoco_actuator: right_inspire_pinky, urdf_joint: right_inspire_pinky_joint, direction: 1, scale: 1, offset: 0, position_limit: [0.0, 1.7], velocity_limit: 2.0}
+    ring: {domain_index: 1, mujoco_joint: right_inspire_ring_joint, mujoco_actuator: right_inspire_ring, urdf_joint: right_inspire_ring_joint, direction: 1, scale: 1, offset: 0, position_limit: [0.0, 1.7], velocity_limit: 2.0}
+    middle: {domain_index: 2, mujoco_joint: right_inspire_middle_joint, mujoco_actuator: right_inspire_middle, urdf_joint: right_inspire_middle_joint, direction: 1, scale: 1, offset: 0, position_limit: [0.0, 1.7], velocity_limit: 2.0}
+    index: {domain_index: 3, mujoco_joint: right_inspire_index_joint, mujoco_actuator: right_inspire_index, urdf_joint: right_inspire_index_joint, direction: 1, scale: 1, offset: 0, position_limit: [0.0, 1.7], velocity_limit: 2.0}
+    thumb_bend: {domain_index: 4, mujoco_joint: right_inspire_thumb_bend_joint, mujoco_actuator: right_inspire_thumb_bend, urdf_joint: right_inspire_thumb_bend_joint, direction: 1, scale: 1, offset: 0, position_limit: [0.0, 0.6], velocity_limit: 1.0}
+    thumb_rotation: {domain_index: 5, mujoco_joint: right_inspire_thumb_rotation_joint, mujoco_actuator: right_inspire_thumb_rotation, urdf_joint: right_inspire_thumb_rotation_joint, direction: 1, scale: 1, offset: 0, position_limit: [0.0, 1.3], velocity_limit: 1.0}
+
+# File paths below are relative to the repository root.
+model: inspire_rh56dfx
+position_unit: rad
+simulation:
+  model_path: gear_sonic/data/robots/g1/inspire/g1_29dof_rh56dfx.xml
+  scene_path: gear_sonic/data/robots/g1/inspire/scene_41dof_rh56dfx.xml
+  urdf_path: gear_sonic/data/robots/g1/inspire/g1_29dof_rh56dfx.urdf
+
+# Direct-serial gateway settings. Device paths must be filled for that robot.
+hardware:
+  left_device: null
+  right_device: null
+  baudrate: 57600
+  left_id: 1
+  right_id: 1
+  # Requested deployment rate: one hand-command update every 20 ms.
+  # The explicit native launcher passes this to each C++ serial worker.
+  command_rate_hz: 50
+  runtime_speed: 1000
+  command_endpoint: tcp://127.0.0.1:5561
+  state_endpoint: tcp://127.0.0.1:5562
+  state_timeout_s: 0.3
+  operation_timeout_s: 3.0
+  lock_path: /tmp/inspire-direct-serial-hand-gateway.writer.lock
