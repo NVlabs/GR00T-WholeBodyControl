@@ -1,0 +1,60 @@
+# @package _global_
+# X2 Ultra actor-critic: 2 encoders (motion tracking + teleop), no SMPL encoder.
+
+defaults:
+  - critics/mlp@algo.config.critic
+  - quantizers/fsq@algo.config.actor.backbone.quantizer
+  # encoders
+  - encoders/g1_mf_mlp@algo.config.actor.backbone.encoders
+  - encoders/teleop_mlp@algo.config.actor.backbone.encoders
+  # decoders
+  - decoders/g1_dyn_mlp@algo.config.actor.backbone.decoders
+  - decoders/g1_kin_mf_mlp@algo.config.actor.backbone.decoders
+
+manager_env:
+  commands:
+    motion:
+      encoder_sample_probs:
+        g1: 1.0
+        teleop: 1.0
+
+algo:
+  config:
+    actor:
+      _target_: gear_sonic.trl.modules.actor_critic_modules.Actor
+      running_mean_std: false
+      input_obs_dict: true
+      has_aux_loss: true
+      backbone:
+        _target_: gear_sonic.trl.modules.universal_token_modules.UniversalTokenModule
+        num_future_frames: ${manager_env.commands.motion.num_future_frames}
+        proprioception_features: ["actor_obs"]
+        encoder_sample_probs: ${manager_env.commands.motion.encoder_sample_probs}
+        num_fsq_levels: 32
+        fsq_level_list: 32
+        max_num_tokens: 2
+        encoders:
+          g1:
+            inputs:
+              [
+                "command_multi_future_nonflat",
+                "motion_anchor_ori_b_mf_nonflat",
+                "command_z_multi_future_nonflat",
+              ]
+          teleop:
+            inputs:
+              [
+                "command_multi_future_lower_body",
+                "vr_3point_local_target",
+                "vr_3point_local_orn_target",
+                "motion_anchor_ori_b",
+                "command_z",
+              ]
+        decoders:
+          g1_kin:
+            outputs:
+              [
+                "command_multi_future_nonflat",
+                "motion_anchor_ori_b_mf_nonflat",
+                "command_z_multi_future_nonflat",
+              ]

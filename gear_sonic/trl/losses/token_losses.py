@@ -48,7 +48,7 @@ def decoder_output_to_egocentric_transforms(
     decoder_output: dict,
     decoder_cfg: dict,
     humanoid: torch_humanoid_batch.Humanoid_Batch,
-    dof_converter: order_converter.G1Converter = None,
+    dof_converter: order_converter.IsaacLabMuJoCoConverter = None,
     include_extended: bool = False,
 ):
     """Convert decoder output to joint positions and 6D rotations (ortho6d).
@@ -156,7 +156,7 @@ def decoder_output_to_world_transforms(
     decoder_output: dict,
     decoder_cfg: dict,
     humanoid: torch_humanoid_batch.Humanoid_Batch,
-    dof_converter: order_converter.G1Converter = None,
+    dof_converter: order_converter.IsaacLabMuJoCoConverter = None,
     include_extended: bool = False,
 ):
     """Convert decoder output to joint positions and rotation matrices in a consistent
@@ -297,7 +297,7 @@ def _extract_dof_pos(
     decoder_output: dict,
     decoder_cfg: dict,
     humanoid: torch_humanoid_batch.Humanoid_Batch,
-    dof_converter: order_converter.G1Converter = None,
+    dof_converter: order_converter.IsaacLabMuJoCoConverter = None,
     egocentric_pos: torch.Tensor = None,
     egocentric_rot_6d: torch.Tensor = None,
 ):
@@ -1128,7 +1128,7 @@ class G1JointPositionLoss(nn.Module):
         ), f"coordinate_frame must be 'egocentric' or 'world', got '{coordinate_frame}'"
         self.coordinate_frame = coordinate_frame
         self._humanoid = create_humanoid(self._skeleton_name)
-        self._dof_converter = order_converter.G1Converter()
+        self._dof_converter = order_converter.get_converter_for_skeleton(self._skeleton_name)
         if normalize:
             num_b = (
                 self._humanoid.num_bodies_augment
@@ -1227,7 +1227,7 @@ class G1JointRotationLoss(nn.Module):
         )
         self._include_extended = include_extended
         self._humanoid = create_humanoid(self._skeleton_name)
-        self._dof_converter = order_converter.G1Converter()
+        self._dof_converter = order_converter.get_converter_for_skeleton(self._skeleton_name)
         # Normalization only makes sense for frobenius (element-wise); geodesic operates on SO(3)
         if normalize and loss_type == "frobenius":
             num_b = (
@@ -1563,7 +1563,7 @@ class G1FootContactLoss(nn.Module):
         self.contact_height_threshold = contact_height_threshold
         self.vel_threshold = vel_threshold
         self._humanoid = create_humanoid(self._skeleton_name)
-        self._dof_converter = order_converter.G1Converter()
+        self._dof_converter = order_converter.get_converter_for_skeleton(self._skeleton_name)
         self._foot_indices = [
             self._humanoid.body_names_augment.index(name) for name in self.foot_joint_names
         ]
