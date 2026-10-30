@@ -3,7 +3,7 @@
 This page covers the one-time hardware and software setup for PICO VR whole-body teleoperation. After completing these steps, proceed to the [ZMQ Manager tutorial](../tutorials/vr_wholebody_teleop.md) to run teleop in sim or on real hardware.
 
 ```{note}
-The steps below use XRoboToolkit. To use IsaacTeleop, complete Steps 1 and 2, then continue with the [Isaac Teleop Setup](../tutorials/isaac_teleop_publisher_setup.md).
+The steps below use XRoboToolkit. To use IsaacCapture, complete Steps 1 and 2, then continue with the [Isaac Capture Setup](../tutorials/isaac_teleop_publisher_setup.md).
 ```
 
 ---
@@ -52,11 +52,11 @@ From the **repo root**:
 bash install_scripts/install_pico.sh
 ```
 
-This creates a `.venv_teleop` virtual environment (Python 3.10) that includes:
+This creates a `.venv_teleop` virtual environment (Python 3.11) that includes:
 - `teleop` extra (ZMQ, Pinocchio, PyVista)
 - `sim` extra (MuJoCo, tyro)
 - XRoboToolkit SDK
-- IsaacTeleop 1.4 with the CloudXR runtime
+- IsaacCapture 1.5 with the CloudXR runtime
 - Unitree SDK2 Python bindings
 
 Activate it with:

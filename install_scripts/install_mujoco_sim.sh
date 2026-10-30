@@ -5,6 +5,7 @@
 # Based on install_pico.sh — see that script for the full teleop setup.
 #
 # Usage:  bash install_scripts/install_mujoco_sim.sh   (run from repo root)
+# Optional: CYCLONEDDS_HOME=<path> overrides .venv_sim/cyclonedds.
 
 set -euo pipefail
 
@@ -40,10 +41,10 @@ if ! command -v uv &>/dev/null; then
 fi
 echo "[OK] uv $(uv --version)"
 
-# ── 2. Install a uv-managed Python 3.10 (includes dev headers / Python.h) ────
-echo "[INFO] Installing uv-managed Python 3.10 (includes development headers) …"
-uv python install 3.10
-MANAGED_PY="$(uv python find --no-project 3.10)"
+# ── 2. Install a uv-managed Python 3.11 (includes dev headers / Python.h) ────
+echo "[INFO] Installing uv-managed Python 3.11 (includes development headers) …"
+uv python install 3.11
+MANAGED_PY="$(uv python find --no-project 3.11)"
 echo "[OK] Using Python: $MANAGED_PY"
 
 # ── 3. Clean previous venv (if any) ──────────────────────────────────────────
@@ -52,7 +53,7 @@ echo "[INFO] Removing old .venv_sim (if present) …"
 rm -rf .venv_sim
 
 # ── 4. Create venv & install sim extra ────────────────────────────────────────
-echo "[INFO] Creating .venv_sim with uv-managed Python 3.10 …"
+echo "[INFO] Creating .venv_sim with uv-managed Python 3.11 …"
 uv venv .venv_sim --python "$MANAGED_PY" --prompt gear_sonic_sim
 # shellcheck disable=SC1091
 source .venv_sim/bin/activate
@@ -60,8 +61,11 @@ echo "[INFO] Installing gear_sonic[sim] …"
 uv pip install -e "gear_sonic[sim]"
 
 # ── 5. Install unitree_sdk2_python (needed by the sim ↔ WBC bridge) ──────────
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/setup_cyclonedds.sh"
 echo "[INFO] Installing unitree_sdk2_python …"
-uv pip install -e external_dependencies/unitree_sdk2_python
+# CycloneDDS wheels embed the build-time library path.
+uv pip install --no-cache -e external_dependencies/unitree_sdk2_python
 
 echo ""
 echo "══════════════════════════════════════════════════════════════"

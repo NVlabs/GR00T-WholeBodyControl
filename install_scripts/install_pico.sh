@@ -8,7 +8,7 @@
 #   SKIP_SIM_AND_UNITREE=1 bash install_scripts/install_pico.sh
 #                                                    # publisher-only profile
 #                                                    # (Thor/Orin used as a
-#                                                    # headless Isaac Teleop /
+#                                                    # headless Isaac Capture /
 #                                                    # CloudXR ROS publisher
 #                                                    # — neither sim nor the
 #                                                    # unitree DDS bindings
@@ -16,10 +16,9 @@
 #
 # Optional env vars:
 #   SKIP_SIM_AND_UNITREE=1   Skip the mujoco sim extra and unitree_sdk2_python.
-#                            On aarch64 also skips the CycloneDDS C-lib build.
-#   CYCLONEDDS_HOME=<path>   Override the CycloneDDS install prefix on aarch64
-#                            (default: ~/cyclonedds/install). Not used on
-#                            x86_64 because prebuilt cyclonedds wheels exist.
+#                            Also skips the CycloneDDS C-lib build.
+#   CYCLONEDDS_HOME=<path>   Override the CycloneDDS install prefix
+#                            (default: .venv_teleop/cyclonedds).
 #
 # Run from the repo root.
 
@@ -57,10 +56,10 @@ if ! command -v uv &>/dev/null; then
 fi
 echo "[OK] uv $(uv --version)"
 
-# ── 2. Install a uv-managed Python 3.10 (includes dev headers / Python.h) ────
-echo "[INFO] Installing uv-managed Python 3.10 (includes development headers) …"
-uv python install 3.10
-MANAGED_PY="$(uv python find --no-project 3.10)"
+# ── 2. Install a uv-managed Python 3.11 (includes dev headers / Python.h) ────
+echo "[INFO] Installing uv-managed Python 3.11 (includes development headers) …"
+uv python install 3.11
+MANAGED_PY="$(uv python find --no-project 3.11)"
 echo "[OK] Using Python: $MANAGED_PY"
 
 # ── 3. Clean previous venv (if any) ──────────────────────────────────────────
@@ -69,7 +68,7 @@ echo "[INFO] Removing old .venv_teleop (if present) …"
 rm -rf .venv_teleop
 
 # ── 4. Create venv & install teleop extra ─────────────────────────────────────
-echo "[INFO] Creating .venv_teleop with uv-managed Python 3.10 …"
+echo "[INFO] Creating .venv_teleop with uv-managed Python 3.11 …"
 uv venv .venv_teleop --python "$MANAGED_PY" --prompt gear_sonic_teleop
 # shellcheck disable=SC1091
 source .venv_teleop/bin/activate
@@ -116,8 +115,8 @@ uv pip install --no-build-isolation -e external_dependencies/XRoboToolkit-PC-Ser
 #       (--input-source isaac-teleop in pico_manager_thread_server.py).
 # Hosted on pypi.nvidia.com (public index, no auth). Replaces the legacy
 # multi-container path (./scripts/run_cloudxr_via_docker.sh + teleop_ros2_ref).
-echo "[INFO] Installing isaacteleop[cloudxr]~=1.4.0 from pypi.nvidia.com …"
-uv pip install 'isaacteleop[cloudxr]~=1.4.0' --prerelease=allow \
+echo "[INFO] Installing isaacteleop[cloudxr]~=1.5.0 from pypi.nvidia.com …"
+uv pip install -e "gear_sonic[teleop]" 'isaacteleop[cloudxr]~=1.5.0' --prerelease=allow \
     --extra-index-url https://pypi.nvidia.com
 
 # Seed ~/cloudxr.env with the device profile CloudXRLauncher negotiates against.
@@ -129,48 +128,21 @@ else
     echo "[OK] $HOME/cloudxr.env already exists (leaving as-is)"
 fi
 
-# ── 5b, 6, 7: CycloneDDS C lib (aarch64) + sim extra + unitree_sdk2_python ────
+# ── 5b, 6, 7: CycloneDDS C lib + sim extra + unitree_sdk2_python ─────────────
 # Skip when:
 #   • onboard unitree-provisioned image (aarch64 + user==unitree): the image
 #     already ships CycloneDDS, sim has no display, and the on-robot deploy
 #     uses the C++ stack directly. Applies to both Orin and Thor onboards.
 #   • SKIP_SIM_AND_UNITREE=1 is set explicitly: e.g. a Thor or Orin used as a
-#     headless Isaac Teleop / CloudXR streamer — neither mujoco nor the
+#     headless Isaac Capture / CloudXR streamer — neither mujoco nor the
 #     unitree DDS bindings are on that path.
 if { [ "$ARCH" = "aarch64" ] && [ "$(whoami)" = "unitree" ]; } \
    || [ "${SKIP_SIM_AND_UNITREE:-0}" = "1" ]; then
     echo "[SKIP] Skipping CycloneDDS build, sim extra & unitree_sdk2_python"
 else
-    # ── 5b. Build CycloneDDS C library on aarch64 (needed by the cyclonedds
-    #       Python binding which unitree_sdk2_python depends on).
-    # x86_64 hosts get prebuilt cyclonedds wheels and skip this entirely.
-    # Pattern follows Unitree's own README for this exact error
-    # (https://github.com/unitreerobotics/unitree_sdk2_python#faq):
-    # per-user source checkout in $HOME, sibling install/ dir, no sudo.
-    if [ "$ARCH" = "aarch64" ]; then
-        CDDS_DIR="$HOME/cyclonedds"
-        CDDS_PREFIX="${CYCLONEDDS_HOME:-$CDDS_DIR/install}"
-        if [ ! -f "$CDDS_PREFIX/lib/libddsc.so" ]; then
-            echo "[INFO] Building CycloneDDS releases/0.10.x → $CDDS_PREFIX …"
-            # Track the releases/0.10.x maintenance branch (per Unitree's FAQ).
-            # The 0.10.2 tag is unpatched 2022 code and trips glibc FORTIFY_SOURCE
-            # in dds_create_domain on modern Ubuntu / glibc; the branch has fixes.
-            if [ ! -d "$CDDS_DIR/.git" ]; then
-                git clone -b releases/0.10.x --depth 1 \
-                    https://github.com/eclipse-cyclonedds/cyclonedds.git "$CDDS_DIR"
-            fi
-            cmake -S "$CDDS_DIR" -B "$CDDS_DIR/build" \
-                -DCMAKE_INSTALL_PREFIX="$CDDS_PREFIX" \
-                -DBUILD_EXAMPLES=OFF \
-                -DBUILD_TESTING=OFF
-            cmake --build "$CDDS_DIR/build" -j"$(nproc)"
-            cmake --install "$CDDS_DIR/build"
-            echo "[OK] CycloneDDS installed at $CDDS_PREFIX"
-        else
-            echo "[OK] CycloneDDS already present at $CDDS_PREFIX (libddsc.so found)"
-        fi
-        export CYCLONEDDS_HOME="$CDDS_PREFIX"
-    fi
+    # ── 5b. Prepare the C library for Unitree's CycloneDDS Python binding.
+    # shellcheck disable=SC1091
+    source "$SCRIPT_DIR/setup_cyclonedds.sh"
 
     # ── 6. Install sim extra (for run_sim_loop.py / sim2sim testing)
     echo "[INFO] Installing sim extra …"
@@ -178,7 +150,8 @@ else
 
     # ── 7. Install unitree_sdk2_python (needed by the sim2sim bridge)
     echo "[INFO] Installing unitree_sdk2_python …"
-    uv pip install -e external_dependencies/unitree_sdk2_python
+    # CycloneDDS wheels embed the build-time library path.
+    uv pip install --no-cache -e external_dependencies/unitree_sdk2_python
 fi
 
 echo ""
