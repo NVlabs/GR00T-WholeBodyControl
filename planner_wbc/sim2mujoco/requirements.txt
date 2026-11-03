@@ -1,0 +1,8 @@
+mujoco==3.3.4
+matplotlib==3.10.3
+numpy==2.2.6
+trimesh
+ipdb
+open3d
+onnxruntime
+keyboard
