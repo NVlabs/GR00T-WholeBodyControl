@@ -65,6 +65,10 @@ class ManagerEnvWrapper:
         self._action_ylim = float(self.config.get("action_plot_ylim", 10.0))
         self._plot_window = int(self.config.get("action_plot_window", 200))
         self._step_counter = 0
+        self._store_env_actions = bool(self.config.get("store_env_actions", True))
+        self._collect_adaptive_sampling_diagnostics = bool(
+            self.config.get("collect_adaptive_sampling_diagnostics", True)
+        )
         self._action_fig = None
         self._action_lines = None
         self._action_hist = None
@@ -865,7 +869,7 @@ class ManagerEnvWrapper:
         # This prevents a false large rate penalty on the first step of a new episode
         # Only applies when action_transform_module is used (buffers created in reset())
         reset_mask = dones.bool()
-        if reset_mask.any() and hasattr(self.env, "_prev_meta_action"):
+        if hasattr(self.env, "_prev_meta_action") and reset_mask.any():
             self.env._prev_meta_action[reset_mask] = 0.0  # noqa: SLF001
             self.env._last_meta_action[reset_mask] = 0.0  # noqa: SLF001
             self.env._prev_full_latent[reset_mask] = 0.0  # noqa: SLF001
@@ -924,7 +928,11 @@ class ManagerEnvWrapper:
                 extras["to_log"][k] = v
             else:
                 extras["to_log"][k] = torch.tensor(v, dtype=torch.float)
-        if self._motion_lib is not None and self._motion_lib.use_adaptive_sampling:
+        if (
+            self._collect_adaptive_sampling_diagnostics
+            and self._motion_lib is not None
+            and self._motion_lib.use_adaptive_sampling
+        ):
             extras["to_log"][
                 "adp_samp/num_episodes_min"
             ] = self._motion_lib.adp_samp_num_episodes.min()
@@ -976,8 +984,9 @@ class ManagerEnvWrapper:
         # Store obs for action_transform_module when obs_dict is not provided in next step()
         self._last_obs_dict = new_obs
         self.extras = extras
-        # Store env_actions for callbacks (e.g., MultiLatentSaveCallback)
-        extras["env_actions"] = env_actions.detach().cpu()
+        # Store env_actions for callbacks (e.g., MultiLatentSaveCallback) only when requested.
+        if self._store_env_actions:
+            extras["env_actions"] = env_actions.detach().cpu()
         return new_obs, rew, dones, extras
 
     def get_env_data(self, key):

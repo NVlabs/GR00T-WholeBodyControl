@@ -11,6 +11,9 @@ defaults:
 
 num_gpus: 1
 max_retries: 1
+sonic_shared_observation_cache: true  # Set to false to restore the original behavior.
+sonic_fast_circular_buffer: true  # Set to false to restore the original behavior.
+sonic_fast_command_reset: true  # Set to false to restore the original behavior.
 
 # These are global variables that all levels of the config can access.
 ## Experiment setup

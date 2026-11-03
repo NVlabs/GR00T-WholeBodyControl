@@ -733,6 +733,9 @@ class TRLPPOTrainer(PPOTrainer):  # noqa: F405
         self.use_padding_mask = self.config.get("use_padding_mask", False)
         self.ppo_shuffle_every_epoch = self.config.get("ppo_shuffle_every_epoch", True)
         self.empty_cache_every_n_ppo_epoch = self.config.get("empty_cache_every_n_ppo_epoch", -1)
+        self.defer_episode_buffer_updates = self.config.get("defer_episode_buffer_updates", False)
+        self.fast_gradient_finite_check = self.config.get("fast_gradient_finite_check", False)
+        self.value_evaluate_chunk_size = self.config.get("value_evaluate_chunk_size", 1024)
 
         self.entropy_coef = self.config.entropy_coef
         self.desired_kl = self.config.desired_kl
@@ -849,7 +852,7 @@ class TRLPPOTrainer(PPOTrainer):  # noqa: F405
 
         return policy_state_dict
 
-    def _chunked_value_evaluate(self, value_model, obs_dict, episode_attnmask, chunk_size=1024):
+    def _chunked_value_evaluate(self, value_model, obs_dict, episode_attnmask, chunk_size=None):
         """Evaluate the value model in chunks to limit peak GPU memory.
 
         Args:
@@ -861,6 +864,8 @@ class TRLPPOTrainer(PPOTrainer):  # noqa: F405
         Returns:
             Value predictions ``(batch, seq, num_critics)``.
         """
+        if chunk_size is None:
+            chunk_size = self.value_evaluate_chunk_size
         batch_size = list(obs_dict.values())[0].shape[0]  # noqa: RUF015
         if batch_size <= chunk_size:
             return value_model.evaluate(obs_dict=obs_dict, episode_attnmask=episode_attnmask)
@@ -906,6 +911,7 @@ class TRLPPOTrainer(PPOTrainer):  # noqa: F405
         self.storage.clear()
 
         dones = torch.zeros(self.env.num_envs, device=device)
+        deferred_rewards, deferred_lengths = [], []
         with torch.no_grad():
             for i in range(self.num_steps_per_env):  # noqa: B007
                 # Compute the actions and values
@@ -964,11 +970,30 @@ class TRLPPOTrainer(PPOTrainer):  # noqa: F405
                 self._process_env_step(rewards, dones, infos)
                 self.cur_reward_sum += rewards_stored
                 self.cur_episode_length += 1
-                new_ids = (dones > 0).nonzero(as_tuple=False)
-                self.state.rewbuffer.extend(self.cur_reward_sum[new_ids].cpu().numpy().tolist())
-                self.state.lenbuffer.extend(self.cur_episode_length[new_ids].cpu().numpy().tolist())
-                self.cur_reward_sum[new_ids] = 0
-                self.cur_episode_length[new_ids] = 0
+                if self.defer_episode_buffer_updates:
+                    done_mask = dones > 0
+                    deferred_rewards.append(self.cur_reward_sum[done_mask])
+                    deferred_lengths.append(self.cur_episode_length[done_mask])
+                    self.cur_reward_sum.masked_fill_(done_mask.unsqueeze(-1), 0)
+                    self.cur_episode_length.masked_fill_(done_mask, 0)
+                else:
+                    new_ids = (dones > 0).nonzero(as_tuple=False)
+                    self.state.rewbuffer.extend(
+                        self.cur_reward_sum[new_ids].cpu().numpy().tolist()
+                    )
+                    self.state.lenbuffer.extend(
+                        self.cur_episode_length[new_ids].cpu().numpy().tolist()
+                    )
+                    self.cur_reward_sum[new_ids] = 0
+                    self.cur_episode_length[new_ids] = 0
+
+            if self.defer_episode_buffer_updates:
+                self.state.rewbuffer.extend(
+                    torch.cat(deferred_rewards).unsqueeze(1).cpu().numpy().tolist()
+                )
+                self.state.lenbuffer.extend(
+                    torch.cat(deferred_lengths).unsqueeze(1).cpu().numpy().tolist()
+                )
 
             policy_model.clear_rollout()
             # gc.collect()
@@ -2052,16 +2077,16 @@ class TRLPPOTrainer(PPOTrainer):  # noqa: F405
         args = self.args
         model = self.model
 
-        # Check for NaN/Inf in gradients
-        for name, param in model.named_parameters():
-            if param.grad is not None and (
-                torch.isnan(param.grad).any() or torch.isinf(param.grad).any()
-            ):
-                print(  # noqa: T201
-                    f"[Rank {self.accelerator.process_index}] NaN/Inf grad in {name}, norm={param.grad.norm():.3e}"
-                )
-                self.optimizer.zero_grad()
-                return None
+        if not self.fast_gradient_finite_check:
+            for name, param in model.named_parameters():
+                if param.grad is not None and (
+                    torch.isnan(param.grad).any() or torch.isinf(param.grad).any()
+                ):
+                    print(  # noqa: T201
+                        f"[Rank {self.accelerator.process_index}] NaN/Inf grad in {name}, norm={param.grad.norm():.3e}"
+                    )
+                    self.optimizer.zero_grad()
+                    return None
         grad_norm = None
         if args.max_grad_norm is not None and args.max_grad_norm > 0:
             # deepspeed does its own clipping
@@ -2090,6 +2115,18 @@ class TRLPPOTrainer(PPOTrainer):  # noqa: F405
                     grad_norm = grad_norm.item()
             else:
                 grad_norm = _grad_norm
+
+        if self.fast_gradient_finite_check and grad_norm is not None:
+            is_finite = (
+                torch.isfinite(grad_norm) if torch.is_tensor(grad_norm) else math.isfinite(grad_norm)
+            )
+            if not bool(is_finite):
+                print(
+                    f"[Rank {self.accelerator.process_index}] NaN/Inf gradient norm",
+                    flush=True,
+                )
+                self.optimizer.zero_grad()
+                return None
 
         return grad_norm
 
