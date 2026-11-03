@@ -1,7 +1,7 @@
 #!/bin/bash
 # install_ros.sh
 # Sets up the `teleop_ros` conda env with RoboStack ROS 2 Humble for the
-# Isaac Teleop / CloudXR ROS bridge. Pinned to Python 3.10 to compose with
+# Isaac Capture / CloudXR ROS bridge. Pinned to Python 3.11 to compose with
 # .venv_teleop (created by install_pico.sh).
 #
 # Usage:  bash install_scripts/install_ros.sh   (run from repo root)
@@ -9,7 +9,7 @@
 set -e
 
 ENV_NAME="${1:-teleop_ros}"
-PY_VERSION="3.10"
+PY_VERSION="3.11"
 
 # Source conda's shell hooks so `conda activate` works in a non-interactive script.
 source "$(conda info --base)/etc/profile.d/conda.sh"
@@ -41,7 +41,8 @@ if ! command -v mamba &>/dev/null; then
     echo "🆕 Installing mamba into base env..."
     conda install -n base -c conda-forge -y mamba
 fi
-mamba install -y ros-humble-desktop
+# Keep rclpy on the same Python ABI as .venv_teleop, including reused envs.
+mamba install -y "python=$PY_VERSION" ros-humble-desktop
 
 echo "✅ Sourcing ROS environment from current conda env..."
 source "$CONDA_PREFIX/setup.bash"
@@ -59,6 +60,6 @@ cat <<EOF
       source .venv_teleop/bin/activate          # gear_sonic deps on top
       export ROS_LOCALHOST_ONLY=1               # match the publisher container
 
-    See docs/source/tutorials/vr_wholebody_teleop.md (Isaac Teleop / CloudXR
+    See docs/source/tutorials/vr_wholebody_teleop.md (Isaac Capture / CloudXR
     alternative section) for the full env-composition rationale.
 EOF

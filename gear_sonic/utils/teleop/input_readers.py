@@ -1,7 +1,7 @@
 """Input source readers for body tracking data.
 
 PicoReader         -- pulls data from XRoboToolkit SDK (Pico headset).
-IsaacTeleopReader  -- in-process IsaacTeleop / CloudXR DeviceIO session.
+IsaacTeleopReader  -- in-process IsaacCapture / CloudXR DeviceIO session.
 """
 
 import logging
@@ -187,8 +187,8 @@ def _quat_xyzw(orientation: Any) -> tuple[float, float, float, float] | None:
         return None
 
 
-# Number of joints in the IsaacTeleop FullBodyPoseT (XR_BD_body_tracking).
-# Mirrors core.BodyJoint.NUM_JOINTS in IsaacTeleop's schema bindings.
+# Number of joints in the IsaacCapture FullBodyPose (XR_BD_body_tracking).
+# Mirrors core.BodyJoint.NUM_JOINTS in IsaacCapture's schema bindings.
 _NUM_BODY_JOINTS = 24
 
 _UNRECOGNISED_SCHEMA_LOGGED: set[str] = set()
@@ -212,7 +212,7 @@ def _log_unrecognised_schema_once(body_data: Any) -> None:
 
 
 def _body_data_to_24x7(body_data: Any) -> np.ndarray | None:
-    """Convert ``FullBodyTracker.get_body_pose().data`` to a (24, 7) array.
+    """Convert ``FullBodyTracker.get_body_pose()`` to a (24, 7) array.
 
     Returns ``None`` while no joint is valid (typical when the headset isn't
     connected yet — every ``BodyJointPose.is_valid`` is False, the streamer
@@ -220,11 +220,11 @@ def _body_data_to_24x7(body_data: Any) -> np.ndarray | None:
 
     Two accepted schemas:
 
-    Schema A — IsaacTeleop ``FullBodyPoseT`` (DeviceIO direct).
-        Defined in IsaacTeleop's ``schema/full_body.fbs`` /
+    Schema A — IsaacCapture ``FullBodyPose`` (DeviceIO direct).
+        Defined in IsaacCapture's ``schema/full_body.fbs`` /
         ``schema/python/full_body_bindings.h``::
 
-            FullBodyPoseT.joints                    → BodyJoints (attr)
+            FullBodyPose.joints                     → BodyJoints (attr)
             BodyJoints.joints(index)                → BodyJointPose (METHOD; index 0..23)
             BodyJointPose.is_valid                  → bool
             BodyJointPose.pose.position             → Point (.x .y .z)
@@ -254,7 +254,7 @@ def _body_data_to_24x7(body_data: Any) -> np.ndarray | None:
             body_poses[i, 3:] = quat
         return body_poses
 
-    # Schema A: native FullBodyPoseT — joints exposed via
+    # Schema A: native FullBodyPose — joints exposed via
     # BodyJoints.joints(index) method (one BodyJointPose per call).
     joints_container = getattr(body_data, "joints", None)
     if joints_container is None:
@@ -341,7 +341,7 @@ def _build_controller_dict(raw: dict[str, Any] | None) -> dict[str, Any] | None:
 
 
 class IsaacTeleopReader:
-    """Background reader using the in-process IsaacTeleop / CloudXR DeviceIO session.
+    """Background reader using the in-process IsaacCapture / CloudXR DeviceIO session.
 
     Drop-in alternative to ``PicoReader`` — same ``get_latest()`` /
     ``get_controller_data()`` contract. Hosts the CloudXR runtime in-process
@@ -363,7 +363,8 @@ class IsaacTeleopReader:
             raise RuntimeError(
                 "isaacteleop is required for --input-source isaac-teleop but was not "
                 "found. Install via install_scripts/install_pico.sh, which runs:\n"
-                "  uv pip install 'isaacteleop[cloudxr]~=1.4.0' --prerelease=allow "
+                "  uv pip install -e 'gear_sonic[teleop]' "
+                "'isaacteleop[cloudxr]~=1.5.0' --prerelease=allow "
                 "--extra-index-url https://pypi.nvidia.com"
             )
 
