@@ -47,6 +47,12 @@ This downloads the **latest** policy encoder + decoder + kinematic planner into
 Each command first fetches the repository-level `config.json` release manifest
 and validates the selected model layout before downloading model files.
 
+> **Environment note:** Downloading checkpoints only requires `huggingface_hub`;
+> it does not require Isaac Lab. However, commands that run
+> `gear_sonic/eval_agent_trl.py` or `gear_sonic/train_agent_trl.py`
+> must be run from an Isaac Lab Python environment. MuJoCo sim2sim and
+> C++ deployment use different environments; avoid stacking them in the same shell.
+
 ---
 
 ## Options
@@ -391,6 +397,10 @@ python gear_sonic/train_agent_trl.py \
     manager_env.commands.motion.motion_lib_cfg.motion_file=sample_data/robot_filtered \
     manager_env.commands.motion.motion_lib_cfg.smpl_motion_file=sample_data/smpl_filtered
 ```
+> **Requires Isaac Lab training environment:** This command starts the
+> training script and must be run inside an Isaac Lab Python environment
+> with the training dependencies installed. If you only want to test the
+> downloaded deployment models, follow the MuJoCo sim2sim path in Quick Start.
 
 For full-scale training, download the complete [Bones-SEED](https://huggingface.co/datasets/bones-studio/seed) dataset and follow the [Training Guide](../user_guide/training.md).
 
