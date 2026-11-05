@@ -23,6 +23,7 @@ This codebase serves as the foundation for:
 News
 ----
 
+- **[2026-11-05]** **Speech to Motion with Riva + KIMODO** — voice as a new SONIC input path: Riva ASR transcribes a spoken command, KIMODO generates the motion, a pre-flight safety gate checks it against the G1's real joint limits, and a closed-loop monitor watches real execution against intent for the duration of playback. See `Speech to Motion <tutorials/speech_to_motion.html>`_.
 - **[2026-09-14]** **IsaacTeleop 1.4 and AGX Orin support**: Added IsaacTeleop 1.4 and Jetson AGX Orin support for PICO teleoperation.
 - **[2026-08-31]** **SONIC deployment update** — added per-motor Kp/Kd scaling to reduce stumbling.
 - **[2026-07-23]** **SONIC v1.1 checkpoint** — released a robot-heading-normalized SONIC controller trained with wrist-pose augmentation for whole-body teleoperation and SONIC-backed VLA execution. See the `Model Card <model_card.html>`_ and `Download Models <getting_started/download_models.html#sonic-v11-checkpoint>`_.
@@ -96,6 +97,7 @@ Documentation
    tutorials/gamepad
    tutorials/zmq
    tutorials/manager
+   tutorials/speech_to_motion
    tutorials/isaac_teleop_publisher_setup
    tutorials/vr_wholebody_teleop
    tutorials/live_camera_teleop
