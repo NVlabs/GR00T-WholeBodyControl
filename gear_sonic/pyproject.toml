@@ -42,7 +42,7 @@ teleop = [
 # MuJoCo simulation (run_sim_loop.py and related scripts)
 # Usage: pip install -e "gear_sonic[sim]"
 sim = [
-    "mujoco",
+    "mujoco>=3.12.0",
     "tyro",
     "pin",
     "pyyaml",

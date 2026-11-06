@@ -1,7 +1,10 @@
 """MuJoCo simulation environment and loop for the G1 (and H1) humanoid robots.
 
-DefaultEnv owns the MuJoCo model/data, computes PD torques from Unitree SDK
-commands, steps physics, and publishes observations back via the SDK bridge.
+DefaultEnv loads position-only native PID actuators directly from MJCF. Each
+simulation tick publishes state, latches Unitree SDK position targets and gains,
+then takes one physics step. Nonzero desired velocity or feedforward is rejected.
+Native actuator setup and mapping are isolated in
+_init_motor_pd; latch_motor_commands transfers the latest SDK command fields.
 BaseSimulator wraps DefaultEnv with rate-limiting and viewer/image update loops.
 """
 
@@ -21,6 +24,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 from unitree_sdk2py.core.channel import ChannelFactoryInitialize
 
+from gear_sonic.utils.mujoco_sim.actuation import MotorPD, configure_pd_model
 from gear_sonic.utils.mujoco_sim.metric_utils import check_contact, check_height
 from gear_sonic.utils.mujoco_sim.sim_utils import get_subtree_body_names
 from gear_sonic.utils.mujoco_sim.unitree_sdk2py_bridge import ElasticBand, UnitreeSdk2Bridge
@@ -144,12 +148,58 @@ class DefaultEnv:
 
         return default_dof_properties
 
+    def _init_motor_pd(self):
+        """Find the SDK joint groups and bind them to the source native PID actuators.
+
+        Joint grouping follows the existing model-name convention. Native control
+        addresses and effort caps follow the model's scalar-joint order, which
+        need not match the SDK body/left-hand/right-hand message order.
+        """
+        self.body_joint_index = []
+        self.left_hand_index = []
+        self.right_hand_index = []
+        for i in range(self.mj_model.njnt):
+            name = self.mj_model.joint(i).name
+            if any(
+                [
+                    part_name in name
+                    for part_name in ["hip", "knee", "ankle", "waist", "shoulder", "elbow", "wrist"]
+                ]
+            ):
+                self.body_joint_index.append(i)
+            elif "left_hand" in name:
+                self.left_hand_index.append(i)
+            elif "right_hand" in name:
+                self.right_hand_index.append(i)
+
+        assert len(self.body_joint_index) == self.robot.NUM_JOINTS
+        assert len(self.left_hand_index) == self.robot.NUM_HAND_JOINTS
+        assert len(self.right_hand_index) == self.robot.NUM_HAND_JOINTS
+
+        self.body_joint_index = np.array(self.body_joint_index)
+        self.left_hand_index = np.array(self.left_hand_index)
+        self.right_hand_index = np.array(self.right_hand_index)
+
+        # Keep the source joint order used by the configured effort limits.
+        # SDK body/hand groups need not be contiguous in that order.
+        motor_joints = np.sort(np.concatenate(
+            (self.body_joint_index, self.left_hand_index, self.right_hand_index)
+        ).astype(int))
+        self.joint_names = tuple(self.mj_model.joint(i).name for i in motor_joints)
+        self.body_motor_index, self.left_hand_motor_index, self.right_hand_motor_index = [
+            np.searchsorted(motor_joints, group)
+            for group in (self.body_joint_index, self.left_hand_index, self.right_hand_index)
+        ]
+        configure_pd_model(self.mj_model, self.joint_names, self.torque_limit)
+        self.motor_pd = MotorPD(self.mj_model, self.joint_names)
+
     def init_scene(self):
         """Initialize the default robot scene"""
         xml_path = str(pathlib.Path(GEAR_SONIC_ROOT) / self.config["ROBOT_SCENE"])
         self.mj_model = mujoco.MjModel.from_xml_path(xml_path)
-        self.mj_data = mujoco.MjData(self.mj_model)
         self.mj_model.opt.timestep = self.sim_dt
+        self._init_motor_pd()
+        self.mj_data = mujoco.MjData(self.mj_model)
         self.torso_index = mujoco.mj_name2id(self.mj_model, mujoco.mjtObj.mjOBJ_BODY, "torso_link")
         self.root_body = "pelvis"
         self.root_body_id = self.mj_model.body(self.root_body).id
@@ -222,31 +272,6 @@ class DefaultEnv:
             self.viewer.cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
             self.viewer.cam.trackbodyid = self.mj_model.body("pelvis").id
 
-        self.body_joint_index = []
-        self.left_hand_index = []
-        self.right_hand_index = []
-        for i in range(self.mj_model.njnt):
-            name = self.mj_model.joint(i).name
-            if any(
-                [
-                    part_name in name
-                    for part_name in ["hip", "knee", "ankle", "waist", "shoulder", "elbow", "wrist"]
-                ]
-            ):
-                self.body_joint_index.append(i)
-            elif "left_hand" in name:
-                self.left_hand_index.append(i)
-            elif "right_hand" in name:
-                self.right_hand_index.append(i)
-
-        assert len(self.body_joint_index) == self.robot.NUM_JOINTS
-        assert len(self.left_hand_index) == self.robot.NUM_HAND_JOINTS
-        assert len(self.right_hand_index) == self.robot.NUM_HAND_JOINTS
-
-        self.body_joint_index = np.array(self.body_joint_index)
-        self.left_hand_index = np.array(self.left_hand_index)
-        self.right_hand_index = np.array(self.right_hand_index)
-
     def init_renderers(self):
         self.renderers = {}
         for camera_name, camera_config in self.camera_configs.items():
@@ -255,37 +280,20 @@ class DefaultEnv:
             )
             self.renderers[camera_name] = renderer
 
-    def compute_body_torques(self) -> np.ndarray:
-        # PD control: tau = tau_ff + kp * (q_des - q) + kd * (dq_des - dq)
-        body_torques = np.zeros(self.num_body_dof)
-        if self.unitree_bridge is not None and self.unitree_bridge.low_cmd:
-            for i in range(self.unitree_bridge.num_body_motor):
-                if self.unitree_bridge.use_sensor:
-                    body_torques[i] = (
-                        self.unitree_bridge.low_cmd.motor_cmd[i].tau
-                        + self.unitree_bridge.low_cmd.motor_cmd[i].kp
-                        * (self.unitree_bridge.low_cmd.motor_cmd[i].q - self.mj_data.sensordata[i])
-                        + self.unitree_bridge.low_cmd.motor_cmd[i].kd
-                        * (
-                            self.unitree_bridge.low_cmd.motor_cmd[i].dq
-                            - self.mj_data.sensordata[i + self.unitree_bridge.num_body_motor]
-                        )
-                    )
-                else:
-                    body_torques[i] = (
-                        self.unitree_bridge.low_cmd.motor_cmd[i].tau
-                        + self.unitree_bridge.low_cmd.motor_cmd[i].kp
-                        * (
-                            self.unitree_bridge.low_cmd.motor_cmd[i].q
-                            - self.mj_data.qpos[self.body_joint_index[i] + self.qpos_offset - 1]
-                        )
-                        + self.unitree_bridge.low_cmd.motor_cmd[i].kd
-                        * (
-                            self.unitree_bridge.low_cmd.motor_cmd[i].dq
-                            - self.mj_data.qvel[self.body_joint_index[i] + self.qvel_offset - 1]
-                        )
-                    )
-        return body_torques
+    def latch_motor_commands(self):
+        """Latch SDK positions/gains; reject nonzero velocity/feedforward fields."""
+        commands = np.zeros((len(self.joint_names), 5))
+        bridge = self.unitree_bridge
+        if bridge is not None and bridge.low_cmd:
+            for message, indices in (
+                (bridge.low_cmd, self.body_motor_index),
+                (bridge.left_hand_cmd, self.left_hand_motor_index),
+                (bridge.right_hand_cmd, self.right_hand_motor_index),
+            ):
+                for i, row in enumerate(indices):
+                    motor = message.motor_cmd[i]
+                    commands[row] = (motor.q, motor.dq, motor.kp, motor.kd, motor.tau)
+        self.motor_pd.latch(self.mj_data, commands)
 
     def get_head_pose(self) -> np.ndarray:
         root_pos = self.mj_data.body("torso_link").xpos.copy()
@@ -296,39 +304,6 @@ class DefaultEnv:
 
     def get_root_vel(self) -> np.ndarray:
         return self.mj_data.qvel[:6]
-
-    def compute_hand_torques(self) -> np.ndarray:
-        left_hand_torques = np.zeros(self.num_hand_dof)
-        right_hand_torques = np.zeros(self.num_hand_dof)
-        if self.unitree_bridge is not None and self.unitree_bridge.low_cmd:
-            for i in range(self.unitree_bridge.num_hand_motor):
-                left_hand_torques[i] = (
-                    self.unitree_bridge.left_hand_cmd.motor_cmd[i].tau
-                    + self.unitree_bridge.left_hand_cmd.motor_cmd[i].kp
-                    * (
-                        self.unitree_bridge.left_hand_cmd.motor_cmd[i].q
-                        - self.mj_data.qpos[self.left_hand_index[i] + self.qpos_offset - 1]
-                    )
-                    + self.unitree_bridge.left_hand_cmd.motor_cmd[i].kd
-                    * (
-                        self.unitree_bridge.left_hand_cmd.motor_cmd[i].dq
-                        - self.mj_data.qvel[self.left_hand_index[i] + self.qvel_offset - 1]
-                    )
-                )
-                right_hand_torques[i] = (
-                    self.unitree_bridge.right_hand_cmd.motor_cmd[i].tau
-                    + self.unitree_bridge.right_hand_cmd.motor_cmd[i].kp
-                    * (
-                        self.unitree_bridge.right_hand_cmd.motor_cmd[i].q
-                        - self.mj_data.qpos[self.right_hand_index[i] + self.qpos_offset - 1]
-                    )
-                    + self.unitree_bridge.right_hand_cmd.motor_cmd[i].kd
-                    * (
-                        self.unitree_bridge.right_hand_cmd.motor_cmd[i].dq
-                        - self.mj_data.qvel[self.right_hand_index[i] + self.qvel_offset - 1]
-                    )
-                )
-        return np.concatenate((left_hand_torques, right_hand_torques))
 
     def compute_body_qpos(self) -> np.ndarray:
         body_qpos = np.zeros(self.num_body_dof)
@@ -373,20 +348,24 @@ class DefaultEnv:
         obs["body_q"] = self.mj_data.qpos[self.body_joint_index + 7 - 1]
         obs["body_dq"] = self.mj_data.qvel[self.body_joint_index + 6 - 1]
         obs["body_ddq"] = self.mj_data.qacc[self.body_joint_index + 6 - 1]
-        obs["body_tau_est"] = self.mj_data.actuator_force[self.body_joint_index - 1]
+        obs["body_tau_est"] = self.mj_data.actuator_force[
+            self.motor_pd.actuator_ids[self.body_motor_index]]
         if self.num_hand_dof > 0:
             obs["left_hand_q"] = self.mj_data.qpos[self.left_hand_index + self.qpos_offset - 1]
             obs["left_hand_dq"] = self.mj_data.qvel[self.left_hand_index + self.qvel_offset - 1]
             obs["left_hand_ddq"] = self.mj_data.qacc[self.left_hand_index + self.qvel_offset - 1]
-            obs["left_hand_tau_est"] = self.mj_data.actuator_force[self.left_hand_index - 1]
+            obs["left_hand_tau_est"] = self.mj_data.actuator_force[
+                self.motor_pd.actuator_ids[self.left_hand_motor_index]]
             obs["right_hand_q"] = self.mj_data.qpos[self.right_hand_index + self.qpos_offset - 1]
             obs["right_hand_dq"] = self.mj_data.qvel[self.right_hand_index + self.qvel_offset - 1]
             obs["right_hand_ddq"] = self.mj_data.qacc[self.right_hand_index + self.qvel_offset - 1]
-            obs["right_hand_tau_est"] = self.mj_data.actuator_force[self.right_hand_index - 1]
+            obs["right_hand_tau_est"] = self.mj_data.actuator_force[
+                self.motor_pd.actuator_ids[self.right_hand_motor_index]]
         obs["time"] = self.mj_data.time
         return obs
 
     def sim_step(self):
+        """Publish state before reading commands, then advance one physics step."""
         self.obs = self.prepare_obs()
         self.unitree_bridge.PublishLowState(self.obs)
         if self.unitree_bridge.joystick:
@@ -412,23 +391,9 @@ class DefaultEnv:
                 self.mj_data.xfrc_applied[self.band_attached_link] = self.elastic_band.Advance(pose)
             else:
                 self.mj_data.xfrc_applied[self.band_attached_link] = np.zeros(6)
-        body_torques = self.compute_body_torques()
-        hand_torques = self.compute_hand_torques()
-        # -1: actuator array is 0-based while joint indices from the model are 1-based
-        self.torques[self.body_joint_index - 1] = body_torques
-        if self.num_hand_dof > 0:
-            self.torques[self.left_hand_index - 1] = hand_torques[: self.num_hand_dof]
-            self.torques[self.right_hand_index - 1] = hand_torques[self.num_hand_dof :]
-
-        self.torques = np.clip(self.torques, -self.torque_limit, self.torque_limit)
-
-        if self.config["FREE_BASE"]:
-            # Prepend 6 zeros for the floating-base root DOF actuators
-            self.mj_data.ctrl = np.concatenate((np.zeros(6), self.torques))
-        else:
-            self.mj_data.ctrl = self.torques
-        mujoco.mj_step(self.mj_model, self.mj_data)
-
+        self.latch_motor_commands()
+        self.motor_pd.step(self.mj_data)
+        self.torques[:] = self.mj_data.actuator_force[self.motor_pd.actuator_ids]
         self.check_fall()
 
     def apply_perturbation(self, key):
@@ -524,7 +489,9 @@ class DefaultEnv:
         return self_collision
 
     def reset(self):
+        """Clear physical/native state; retain bridge messages for the next tick."""
         mujoco.mj_resetData(self.mj_model, self.mj_data)
+        self.motor_pd.reset(self.mj_data)
 
 
 class BaseSimulator:
