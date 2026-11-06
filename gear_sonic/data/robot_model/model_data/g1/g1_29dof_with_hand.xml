@@ -2,6 +2,8 @@
   <compiler angle="radian" meshdir="meshes" />
 
   <default>
+    <!-- Start inactive: per-joint kp/kv come from SDK commands; ki stays zero. -->
+    <pid kp="0" kv="0" ki="0" input="pos" ctrllimited="false" forcelimited="true"/>
     <default class="torso_motor">
       <joint damping="0.05" armature="0.01" frictionloss="0.2"/>
     </default>
@@ -554,55 +556,55 @@
   </worldbody>
 
   <actuator>
-    <motor name="left_hip_pitch" joint="left_hip_pitch_joint" ctrlrange="-88 88" />
-    <motor name="left_hip_roll" joint="left_hip_roll_joint" ctrlrange="-88 88" />
-    <motor name="left_hip_yaw" joint="left_hip_yaw_joint" ctrlrange="-88 88" />
-    <motor name="left_knee" joint="left_knee_joint" ctrlrange="-139 139" />
-    <motor name="left_ankle_pitch" joint="left_ankle_pitch_joint" ctrlrange="-50 50" />
-    <motor name="left_ankle_roll" joint="left_ankle_roll_joint" ctrlrange="-50 50" />
+    <pid name="left_hip_pitch" joint="left_hip_pitch_joint" forcerange="-88 88" />
+    <pid name="left_hip_roll" joint="left_hip_roll_joint" forcerange="-88 88" />
+    <pid name="left_hip_yaw" joint="left_hip_yaw_joint" forcerange="-88 88" />
+    <pid name="left_knee" joint="left_knee_joint" forcerange="-139 139" />
+    <pid name="left_ankle_pitch" joint="left_ankle_pitch_joint" forcerange="-50 50" />
+    <pid name="left_ankle_roll" joint="left_ankle_roll_joint" forcerange="-50 50" />
 
-    <motor name="right_hip_pitch" joint="right_hip_pitch_joint" ctrlrange="-88 88" />
-    <motor name="right_hip_roll" joint="right_hip_roll_joint" ctrlrange="-88 88" />
-    <motor name="right_hip_yaw" joint="right_hip_yaw_joint" ctrlrange="-88 88" />
-    <motor name="right_knee" joint="right_knee_joint" ctrlrange="-139 139" />
-    <motor name="right_ankle_pitch" joint="right_ankle_pitch_joint" ctrlrange="-50 50" />
-    <motor name="right_ankle_roll" joint="right_ankle_roll_joint" ctrlrange="-50 50" />
+    <pid name="right_hip_pitch" joint="right_hip_pitch_joint" forcerange="-88 88" />
+    <pid name="right_hip_roll" joint="right_hip_roll_joint" forcerange="-88 88" />
+    <pid name="right_hip_yaw" joint="right_hip_yaw_joint" forcerange="-88 88" />
+    <pid name="right_knee" joint="right_knee_joint" forcerange="-139 139" />
+    <pid name="right_ankle_pitch" joint="right_ankle_pitch_joint" forcerange="-50 50" />
+    <pid name="right_ankle_roll" joint="right_ankle_roll_joint" forcerange="-50 50" />
 
-    <motor name="waist_yaw" joint="waist_yaw_joint" ctrlrange="-88 88" />
-    <motor name="waist_roll" joint="waist_roll_joint" ctrlrange="-50 50" />
-    <motor name="waist_pitch" joint="waist_pitch_joint" ctrlrange="-50 50" />
+    <pid name="waist_yaw" joint="waist_yaw_joint" forcerange="-88 88" />
+    <pid name="waist_roll" joint="waist_roll_joint" forcerange="-50 50" />
+    <pid name="waist_pitch" joint="waist_pitch_joint" forcerange="-50 50" />
 
-    <motor name="left_shoulder_pitch" joint="left_shoulder_pitch_joint" ctrlrange="-25 25" />
-    <motor name="left_shoulder_roll" joint="left_shoulder_roll_joint" ctrlrange="-25 25" />
-    <motor name="left_shoulder_yaw" joint="left_shoulder_yaw_joint" ctrlrange="-25 25" />
-    <motor name="left_elbow" joint="left_elbow_joint" ctrlrange="-25 25" />
-    <motor name="left_wrist_roll" joint="left_wrist_roll_joint" ctrlrange="-25 25" />
-    <motor name="left_wrist_pitch" joint="left_wrist_pitch_joint" ctrlrange="-5 5" />
-    <motor name="left_wrist_yaw" joint="left_wrist_yaw_joint" ctrlrange="-5 5" />
+    <pid name="left_shoulder_pitch" joint="left_shoulder_pitch_joint" forcerange="-25 25" />
+    <pid name="left_shoulder_roll" joint="left_shoulder_roll_joint" forcerange="-25 25" />
+    <pid name="left_shoulder_yaw" joint="left_shoulder_yaw_joint" forcerange="-25 25" />
+    <pid name="left_elbow" joint="left_elbow_joint" forcerange="-25 25" />
+    <pid name="left_wrist_roll" joint="left_wrist_roll_joint" forcerange="-25 25" />
+    <pid name="left_wrist_pitch" joint="left_wrist_pitch_joint" forcerange="-5 5" />
+    <pid name="left_wrist_yaw" joint="left_wrist_yaw_joint" forcerange="-5 5" />
 
-    <motor name="left_hand_thumb_0" joint="left_hand_thumb_0_joint" ctrlrange="-2.45 2.45" />
-    <motor name="left_hand_thumb_1" joint="left_hand_thumb_1_joint" ctrlrange="-1.4 1.4" />
-    <motor name="left_hand_thumb_2" joint="left_hand_thumb_2_joint" ctrlrange="-1.4 1.4" />
-    <motor name="left_hand_middle_0" joint="left_hand_middle_0_joint" ctrlrange="-1.4 1.4" />
-    <motor name="left_hand_middle_1" joint="left_hand_middle_1_joint" ctrlrange="-1.4 1.4" />
-    <motor name="left_hand_index_0" joint="left_hand_index_0_joint" ctrlrange="-1.4 1.4" />
-    <motor name="left_hand_index_1" joint="left_hand_index_1_joint" ctrlrange="-1.4 1.4" />
+    <pid name="left_hand_thumb_0" joint="left_hand_thumb_0_joint" forcerange="-2.45 2.45" />
+    <pid name="left_hand_thumb_1" joint="left_hand_thumb_1_joint" forcerange="-1.4 1.4" />
+    <pid name="left_hand_thumb_2" joint="left_hand_thumb_2_joint" forcerange="-1.4 1.4" />
+    <pid name="left_hand_middle_0" joint="left_hand_middle_0_joint" forcerange="-1.4 1.4" />
+    <pid name="left_hand_middle_1" joint="left_hand_middle_1_joint" forcerange="-1.4 1.4" />
+    <pid name="left_hand_index_0" joint="left_hand_index_0_joint" forcerange="-1.4 1.4" />
+    <pid name="left_hand_index_1" joint="left_hand_index_1_joint" forcerange="-1.4 1.4" />
 
-    <motor name="right_shoulder_pitch" joint="right_shoulder_pitch_joint" ctrlrange="-25 25" />
-    <motor name="right_shoulder_roll" joint="right_shoulder_roll_joint" ctrlrange="-25 25" />
-    <motor name="right_shoulder_yaw" joint="right_shoulder_yaw_joint" ctrlrange="-25 25" />
-    <motor name="right_elbow" joint="right_elbow_joint" ctrlrange="-25 25" />
-    <motor name="right_wrist_roll" joint="right_wrist_roll_joint" ctrlrange="-25 25" />
-    <motor name="right_wrist_pitch" joint="right_wrist_pitch_joint" ctrlrange="-5 5" />
-    <motor name="right_wrist_yaw" joint="right_wrist_yaw_joint" ctrlrange="-5 5" />
+    <pid name="right_shoulder_pitch" joint="right_shoulder_pitch_joint" forcerange="-25 25" />
+    <pid name="right_shoulder_roll" joint="right_shoulder_roll_joint" forcerange="-25 25" />
+    <pid name="right_shoulder_yaw" joint="right_shoulder_yaw_joint" forcerange="-25 25" />
+    <pid name="right_elbow" joint="right_elbow_joint" forcerange="-25 25" />
+    <pid name="right_wrist_roll" joint="right_wrist_roll_joint" forcerange="-25 25" />
+    <pid name="right_wrist_pitch" joint="right_wrist_pitch_joint" forcerange="-5 5" />
+    <pid name="right_wrist_yaw" joint="right_wrist_yaw_joint" forcerange="-5 5" />
 
-    <motor name="right_hand_thumb_0" joint="right_hand_thumb_0_joint" ctrlrange="-2.45 2.45" />
-    <motor name="right_hand_thumb_1" joint="right_hand_thumb_1_joint" ctrlrange="-1.4 1.4" />
-    <motor name="right_hand_thumb_2" joint="right_hand_thumb_2_joint" ctrlrange="-1.4 1.4" />
-    <motor name="right_hand_middle_0" joint="right_hand_middle_0_joint" ctrlrange="-1.4 1.4" />
-    <motor name="right_hand_middle_1" joint="right_hand_middle_1_joint" ctrlrange="-1.4 1.4" />
-    <motor name="right_hand_index_0" joint="right_hand_index_0_joint" ctrlrange="-1.4 1.4" />
-    <motor name="right_hand_index_1" joint="right_hand_index_1_joint" ctrlrange="-1.4 1.4" />
+    <pid name="right_hand_thumb_0" joint="right_hand_thumb_0_joint" forcerange="-2.45 2.45" />
+    <pid name="right_hand_thumb_1" joint="right_hand_thumb_1_joint" forcerange="-1.4 1.4" />
+    <pid name="right_hand_thumb_2" joint="right_hand_thumb_2_joint" forcerange="-1.4 1.4" />
+    <pid name="right_hand_middle_0" joint="right_hand_middle_0_joint" forcerange="-1.4 1.4" />
+    <pid name="right_hand_middle_1" joint="right_hand_middle_1_joint" forcerange="-1.4 1.4" />
+    <pid name="right_hand_index_0" joint="right_hand_index_0_joint" forcerange="-1.4 1.4" />
+    <pid name="right_hand_index_1" joint="right_hand_index_1_joint" forcerange="-1.4 1.4" />
   </actuator>
 
   <sensor>
