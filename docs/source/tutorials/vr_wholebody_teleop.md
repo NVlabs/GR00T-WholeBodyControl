@@ -113,6 +113,27 @@ When you turn on the visualization, wait for a window to pop up showing a Unitre
 
 ---
 
+## Optional Optical Hand Export
+
+To feed a separate hand controller from the manager's existing XRoboToolkit
+connection, enable an additional ZMQ PUB socket:
+
+```bash
+python gear_sonic/scripts/pico_manager_thread_server.py --manager --optical-hand-port 5560
+```
+
+The option defaults to `0` (disabled), requires `--input-source xrt`, and must
+use a port different from the body-command and feedback ports. Export starts
+after body-tracking initialization, including while the manager is OFF.
+It publishes tracking data only; subscribers handle retargeting and hand control.
+
+Each single-part message contains `G1OH1`, a 16-byte session UUID, then a G1PT v1
+payload: a little-endian `<4sBBHQQQ` header (magic, version, hand flags, reserved,
+sequence, device timestamp ns, source monotonic timestamp ns), 672 zero padding
+bytes, two 26-by-7 float32 hand arrays (`xyz` + `xyzw`), and a little-endian CRC32
+of the G1PT header and payload. Flag bits 0/1 indicate valid left/right hands;
+inactive hands contain zeros. Export errors are logged without stopping body control.
+
 (pico-controls)=
 
 ## Complete PICO Controls
