@@ -25,9 +25,12 @@
 from collections import defaultdict, deque
 from enum import Enum, IntEnum
 import os
+import struct
 import subprocess
 import threading
 import time
+import uuid
+import zlib
 
 import msgpack
 import numpy as np
@@ -796,6 +799,128 @@ def _interp_pose_axis_angle(
         out_quats[i] = _quat_lerp_normalized(prev_quats[i], curr_quats[i], alpha)
     out_pose = sRot.from_quat(out_quats).as_rotvec().reshape(prev_pose.shape)
     return out_pose
+
+
+class OpticalHandPublisher:
+    """Optional raw-hand export; shares xrt.init(), never commands the robot.
+
+    One single-part ZMQ message: b'G1OH1' + 16-byte session UUID + G1PT v1.
+    G1PT carries sequence/device/source-monotonic ns, zero body padding, and
+    optional OpenXR hands (26 x 7, xyz + xyzw). Socket belongs to this thread.
+    """
+
+    def __init__(self, port: int):
+        self.port = port
+        self._stop = threading.Event()
+        self._thread = threading.Thread(
+            target=self._run, name="optical-hand-publisher", daemon=True
+        )
+
+    def start(self):
+        try:
+            self._thread.start()
+        except RuntimeError as exc:
+            print(f"[OpticalHands] Export unavailable: {exc}; body control unchanged")
+
+    def stop(self):
+        self._stop.set()
+        if self._thread.ident is not None:
+            self._thread.join(timeout=1.0)
+
+    @staticmethod
+    def _read_hand(side):
+        try:
+            if not getattr(xrt, f"get_{side}_hand_is_active")():
+                return None
+            hand = np.array(
+                getattr(xrt, f"get_{side}_hand_tracking_state")(),
+                dtype="<f4",
+                copy=True,
+            )
+            if hand.shape != (26, 7) or not np.all(np.isfinite(hand)):
+                return None
+            return hand
+        except Exception:
+            # An unavailable/malformed optical hand must not break body control.
+            return None
+
+    @classmethod
+    def _capture(cls):
+        # SDK getters are individually mutex-protected. Timestamp bracketing
+        # rejects updates during reads, but the SDK has no atomic paired-frame API.
+        stamp = int(xrt.get_time_stamp_ns())
+        left = cls._read_hand("left")
+        right = cls._read_hand("right")
+        if stamp <= 0 or int(xrt.get_time_stamp_ns()) != stamp:
+            return None
+        return stamp, left, right
+
+    @staticmethod
+    def _message(session, sequence, stamp, left, right):
+        # Same fixed layout and CRC as workstation g1_pico_teleop/wire.py.
+        # Keep self-contained: this is the only robot file to deploy.
+        flags = (1 if left is not None else 0) | (2 if right is not None else 0)
+        content = struct.pack(
+            "<4sBBHQQQ",
+            b"G1PT",
+            1,
+            flags,
+            0,
+            sequence,
+            stamp,
+            time.monotonic_ns(),
+        ) + bytes(24 * 7 * 4)
+        for hand in (left, right):
+            content += bytes(26 * 7 * 4) if hand is None else hand.tobytes(order="C")
+        return b"G1OH1" + session + content + struct.pack("<I", zlib.crc32(content) & 0xFFFFFFFF)
+
+    def _run(self):
+        context = None
+        publisher = None
+        try:
+            context = zmq.Context()
+            publisher = context.socket(zmq.PUB)
+            publisher.setsockopt(zmq.LINGER, 0)
+            publisher.setsockopt(zmq.SNDHWM, 1)
+            publisher.setsockopt(zmq.CONFLATE, 1)
+            publisher.bind(f"tcp://*:{self.port}")
+            print(f"[OpticalHands] Publishing raw OpenXR hands on port {self.port}")
+            session = uuid.uuid4().bytes
+            sequence = 0
+            last_stamp = -1
+            last_status = 0.0
+            while not self._stop.is_set():
+                try:
+                    sample = self._capture()
+                    if sample is not None and sample[0] > last_stamp:
+                        stamp, left, right = sample
+                        publisher.send(
+                            self._message(session, sequence, stamp, left, right),
+                            flags=zmq.DONTWAIT,
+                        )
+                        sequence += 1
+                        last_stamp = stamp
+                        now = time.monotonic()
+                        if now - last_status >= 5.0:
+                            print(
+                                f"[OpticalHands] frames={sequence} "
+                                f"left={'ok' if left is not None else 'inactive'} "
+                                f"right={'ok' if right is not None else 'inactive'}"
+                            )
+                            last_status = now
+                except zmq.Again:
+                    pass  # Never wait for a workstation subscriber.
+                except Exception as exc:
+                    print(f"[OpticalHands] Export stopped: {exc}; body control unchanged")
+                    break
+                self._stop.wait(0.01)
+        except Exception as exc:
+            print(f"[OpticalHands] Export unavailable: {exc}; body control unchanged")
+        finally:
+            if publisher is not None:
+                publisher.close(linger=0)
+            if context is not None:
+                context.term()
 
 
 class PicoReader:
@@ -1912,6 +2037,7 @@ def run_pico_manager(
     enable_waist_tracking: bool = False,
     enable_smpl_vis: bool = False,
     input_source: str = "xrt",
+    optical_hand_port: int = 0,
 ):
     """
     Manager: creates shared PUB socket and runs pose/planner streamers based on current mode.
@@ -1919,6 +2045,12 @@ def run_pico_manager(
       A+X: Toggle between planner and pose mode
       A+B+X+Y: Toggle policy start/stop
     """
+    if optical_hand_port and (
+        not 1 <= optical_hand_port <= 65535
+        or optical_hand_port in (port, zmq_feedback_port)
+        or input_source != "xrt"
+    ):
+        raise ValueError("optical hand export requires xrt input and a separate valid port")
     reader = _init_input_source(input_source, buffer_size)
 
     context = zmq.Context()
@@ -1985,7 +2117,10 @@ def run_pico_manager(
     vr3pt_parent_mode = StreamMode.PLANNER
     prev_toggle_dc = False
     prev_toggle_da = False
+    optical_hands = OpticalHandPublisher(optical_hand_port) if optical_hand_port else None
     try:
+        if optical_hands is not None:
+            optical_hands.start()
         prev_ax_pressed = False
         prev_by_pressed = False
         prev_start_combo = False
@@ -2150,6 +2285,8 @@ def run_pico_manager(
         print("\nStopping manager...")
     finally:
         # Cleanup resources
+        if optical_hands is not None:
+            optical_hands.stop()
         reader.stop()
         three_point.close()
         socket.close()
@@ -2251,7 +2388,23 @@ if __name__ == "__main__":
             "'isaac-teleop' for in-process IsaacCapture / CloudXR DeviceIO"
         ),
     )
+    parser.add_argument(
+        "--optical-hand-port",
+        type=int,
+        default=0,
+        help="Optional raw optical-hand ZMQ PUB port (0 disables; requires --manager and xrt)",
+    )
     args = parser.parse_args()
+    if args.optical_hand_port and (
+        not args.manager
+        or not 1 <= args.optical_hand_port <= 65535
+        or args.optical_hand_port in (args.port, args.zmq_feedback_port)
+        or args.input_source != "xrt"
+        or args.vr3pt_test
+        or args.vr3pt_live
+        or args.vr3pt_realtime
+    ):
+        parser.error("--optical-hand-port requires --manager, xrt input and a separate valid port")
 
     # Standalone VR3Pt test modes (exit after finishing)
     if args.vr3pt_test:
@@ -2278,6 +2431,7 @@ if __name__ == "__main__":
 
     if args.manager:
         run_pico_manager(
+            optical_hand_port=args.optical_hand_port,
             port=args.port,
             buffer_size=args.buffer_size,
             num_frames_to_send=args.num_frames_to_send,
