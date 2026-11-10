@@ -6,7 +6,7 @@ Control the Unitree G1 with your **voice** — no keyboard, gamepad, VR headset,
 <video controls playsinline style="border-radius: 8px; max-width: 420px; width: 100%; height: auto;">
   <source src="../_static/speech_to_motion/speech_to_motion_real_robot.mp4" type="video/mp4">
 </video>
-<figcaption style="text-align: center; font-style: italic; margin-top: 0.5em;">Audio on — you can hear the spoken command itself, not just watch the result. A real Unitree G1 on a safety gantry, with a safety operator present, as recommended for a first hardware session. One hardware run captured on video — more testing across command types and repeated runs is the natural next step, not a claim that this number is already large.</figcaption>
+<figcaption style="text-align: center; font-style: italic; margin-top: 0.5em;">Audio on: hear the command, watch the G1 execute it live.</figcaption>
 </figure>
 
 ```{admonition} Prerequisites
