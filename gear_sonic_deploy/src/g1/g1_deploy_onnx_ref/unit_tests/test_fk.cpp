@@ -3,14 +3,27 @@
 #include "../include/fk.hpp"
 #include "../include/motion_data_reader.hpp"
 
+#include <cstdlib>
 #include <vector>
 #include <fstream>
 
 TEST(FK, TestFKAndGlobalVelocities) {
 
-    // read some exapmle motion data:
+    // The canonical FK fixture is not distributed in the public repository.
+    // Allow CI/deployment hosts to provide it without copying private data into
+    // the source tree, and skip cleanly instead of dereferencing motions[0].
+    const char* fixture_override = std::getenv("GROOT_FK_TEST_DATA");
+    const std::string fixture_dir = fixture_override != nullptr
+        ? fixture_override
+        : "reference/bones_072925_test/";
+
     MotionDataReader motion_reader;
-    motion_reader.ReadFromCSV("reference/bones_072925_test/");
+    if (!motion_reader.ReadFromCSV(fixture_dir)) {
+        GTEST_SKIP() << "FK test fixture is unavailable or invalid: " << fixture_dir
+                     << ". Set GROOT_FK_TEST_DATA to a directory containing "
+                        "one or more canonical motion folders.";
+    }
+    ASSERT_FALSE(motion_reader.motions.empty());
 
     RobotFK fk("g1/g1_29dof.xml");
 
