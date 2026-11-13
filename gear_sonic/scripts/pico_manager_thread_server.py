@@ -23,6 +23,7 @@
 """
 
 from collections import defaultdict, deque
+from contextlib import ExitStack
 from enum import Enum, IntEnum
 import os
 import subprocess
@@ -817,7 +818,7 @@ class PicoReader:
 
     def stop(self):
         self._stop.set()
-        self._thread.join(timeout=1.0)
+        self._thread.join()
 
     def get_latest(self):
         with self._lock:
@@ -1596,6 +1597,13 @@ def _init_input_source(
     return reader
 
 
+def _close_xrt_sdk(input_source: str) -> None:
+    if input_source == "xrt":
+        if xrt is None:
+            raise RuntimeError("XRoboToolkit SDK disappeared before shutdown")
+        xrt.close()
+
+
 def run_pico(
     buffer_size: int = 15,
     port: int = 5556,
@@ -1641,8 +1649,10 @@ def run_pico(
             reader=reader,
         )
     finally:
-        socket.close()
-        context.term()
+        with ExitStack() as cleanup:
+            cleanup.callback(context.term)
+            cleanup.callback(socket.close)
+            cleanup.callback(_close_xrt_sdk, input_source)
         print("Threads stopped, ZMQ socket closed")
 
 
@@ -2149,12 +2159,15 @@ def run_pico_manager(
     except KeyboardInterrupt:
         print("\nStopping manager...")
     finally:
-        # Cleanup resources
-        reader.stop()
-        three_point.close()
-        socket.close()
-        context.term()
-        print("[Manager] Shutdown complete")
+        try:
+            with ExitStack() as cleanup:
+                cleanup.callback(context.term)
+                cleanup.callback(socket.close)
+                cleanup.callback(three_point.close)
+                cleanup.callback(_close_xrt_sdk, input_source)
+                cleanup.callback(reader.stop)
+        finally:
+            print("[Manager] Shutdown complete")
 
 
 if __name__ == "__main__":

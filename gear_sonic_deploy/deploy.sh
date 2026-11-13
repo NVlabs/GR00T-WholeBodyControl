@@ -213,6 +213,7 @@ show_usage() {
     echo "  --zmq-host HOST         Set the ZMQ host (default: localhost)"
     echo "  --motor-kp-scale SPEC   Scale Kp for hardware motor indices/ranges"
     echo "  --motor-kd-scale SPEC   Scale Kd for hardware motor indices/ranges"
+    echo "  --skip-build            Use the existing verified deployment binary"
     echo ""
     echo "Interface modes:"
     echo "  sim              Use loopback interface for simulation (MuJoCo)"
@@ -255,6 +256,7 @@ OUTPUT_TYPE="$OUTPUT_TYPE_DEFAULT"
 ZMQ_HOST="$ZMQ_HOST_DEFAULT"
 MOTOR_KP_SCALES=()
 MOTOR_KD_SCALES=()
+SKIP_BUILD=false
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -334,6 +336,10 @@ while [[ $# -gt 0 ]]; do
             fi
             MOTOR_KD_SCALES+=("$2")
             shift 2
+            ;;
+        --skip-build)
+            SKIP_BUILD=true
+            shift
             ;;
         sim|real)
             INTERFACE_MODE="$1"
@@ -462,8 +468,9 @@ else
 fi
 
 if [ $MISSING_FILES -gt 0 ]; then
-    echo -e "${YELLOW}⚠️  Some files are missing. Make sure you have pulled the model files.${NC}"
+    echo -e "${RED}❌ Required deployment assets are missing; refusing to build or deploy.${NC}"
     echo "   You may need to run: git lfs pull"
+    exit 2
 fi
 
 echo ""
@@ -515,9 +522,18 @@ set +e  # Temporarily allow errors (for jetson_clocks on non-Jetson systems)
 source scripts/setup_env.sh
 set -e  # Re-enable exit on error
 
-# Always build to ensure we have the latest version
-echo "Building the project..."
-just build
+if [ "$SKIP_BUILD" = true ]; then
+    DEPLOY_BINARY="target/release/g1_deploy_onnx_ref"
+    if [ ! -x "$DEPLOY_BINARY" ]; then
+        echo -e "${RED}❌ --skip-build requested but $DEPLOY_BINARY is missing or not executable.${NC}"
+        exit 2
+    fi
+    echo "Skipping build; using existing deployment binary."
+    sha256sum "$DEPLOY_BINARY"
+else
+    echo "Building the project..."
+    just build
+fi
 
 echo ""
 

@@ -5,6 +5,16 @@
 
 echo "🔧 Setting up G1 Deploy environment..."
 
+# This file is sourced by both interactive shells and strict automation that
+# enables `set -u`. Keep optional inherited paths defined before reading them.
+: "${onnxruntime_DIR:=}"
+: "${CMAKE_PREFIX_PATH:=}"
+: "${LD_LIBRARY_PATH:=}"
+: "${TensorRT_ROOT:=}"
+: "${CUDAToolkit_ROOT:=}"
+: "${BASH_VERSION:=}"
+: "${PS1:=}"
+
 # Run jetson_clocks on Jetson systems (bare-metal only)
 if command -v jetson_clocks &> /dev/null; then
     if [ -f "/.dockerenv" ]; then

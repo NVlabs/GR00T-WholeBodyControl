@@ -35,7 +35,15 @@ foreach(install_path ${ROS2_INSTALL_PATHS})
       file(GLOB ROS2_INCLUDE_SUBDIRS "${ros2_include_path}/*")
       foreach(subdir ${ROS2_INCLUDE_SUBDIRS})
         if(IS_DIRECTORY ${subdir})
-          list(APPEND ROS2_INCLUDE_DIRS ${subdir})
+          # Some ROS packages install C-style headers at the package root.
+          # Adding those roots with -I can shadow libc headers included by
+          # standard C++ headers. Humble's dds/features.h breaks
+          # __GLIBC_PREREQ, while idl/string.h hides strlen/memcpy.
+          if(EXISTS "${subdir}/features.h" OR EXISTS "${subdir}/string.h")
+            message(STATUS "Skipping unsafe ROS2 include directory: ${subdir}")
+          else()
+            list(APPEND ROS2_INCLUDE_DIRS ${subdir})
+          endif()
         endif()
       endforeach()
       set(ROS2_DISTRO_FOUND "${distro}")

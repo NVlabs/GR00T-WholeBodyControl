@@ -2282,9 +2282,37 @@ class G1Deploy {
       msc_->SetTimeout(5.0f);
       msc_->Init();
       std::string form, name;
-      while (msc_->CheckMode(form, name), !name.empty()) {
-        if (msc_->ReleaseMode()) std::cout << "Failed to switch to Release Mode\n";
-        sleep(5);
+      constexpr int kMaxMotionReleaseAttempts = 12;
+      bool motion_service_released = false;
+      for (int attempt = 1; attempt <= kMaxMotionReleaseAttempts; ++attempt) {
+        form.clear();
+        name.clear();
+        const int32_t check_ret = msc_->CheckMode(form, name);
+        if (check_ret != 0) {
+          std::cerr << "[MotionSwitcher] CheckMode failed on attempt " << attempt
+                    << "/" << kMaxMotionReleaseAttempts
+                    << " with error code " << check_ret << std::endl;
+        } else if (name.empty()) {
+          std::cout << "[MotionSwitcher] Motion service is deactivated." << std::endl;
+          motion_service_released = true;
+          break;
+        } else {
+          std::cout << "[MotionSwitcher] Active mode form='" << form
+                    << "' name='" << name << "'; releasing (attempt " << attempt
+                    << "/" << kMaxMotionReleaseAttempts << ")." << std::endl;
+          const int32_t release_ret = msc_->ReleaseMode();
+          if (release_ret == 0) {
+            std::cout << "[MotionSwitcher] ReleaseMode succeeded." << std::endl;
+          } else {
+            std::cerr << "[MotionSwitcher] ReleaseMode failed with error code "
+                      << release_ret << std::endl;
+          }
+        }
+        sleep(1);
+      }
+      if (!motion_service_released) {
+        throw std::runtime_error(
+          "MotionSwitcher did not confirm that the high-level motion service was released");
       }
 
       // create publisher
