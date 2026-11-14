@@ -196,7 +196,6 @@ set(EXE_LIBS
   ${ZMQ_LIBRARY}
 )
 
-
 # build the main executable:
 add_executable(${EXECUTABLE_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/src/g1_deploy_onnx_ref.cpp)
 target_include_directories(${EXECUTABLE_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include/ ${PROJECT_SOURCE_DIR}/src)
@@ -206,6 +205,9 @@ target_link_libraries(
   ${EXECUTABLE_NAME} PRIVATE ${PROJECT_NAME}
   ${EXE_LIBS}
 )
+# The robot program links TensorRT 10, so it cannot run the TensorRT 11 engines in .pte
+# files yet; it always reports an error for a .pte.
+target_compile_definitions(${EXECUTABLE_NAME} PRIVATE HAS_EXECUTORCH=0)
 
 # Setting our output directory and C++ standard
 set_target_properties(
@@ -249,7 +251,9 @@ file(GLOB_RECURSE TEST_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/unit_tests/*.cpp)
 add_executable(run_tests ${TEST_SRCS})
 target_link_directories(run_tests PRIVATE ${CUDA_LINK_DIRS})
 target_link_libraries(run_tests GTest::GTest GTest::Main ${EXE_LIBS})
-target_include_directories(run_tests PUBLIC ${EXE_INCLUDES})
+target_include_directories(run_tests PUBLIC ${EXE_INCLUDES} ${PROJECT_SOURCE_DIR}/src)
+target_compile_definitions(run_tests PRIVATE
+  EXECUTORCH_TEST_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/unit_tests/fixtures")
 
 # Setting our output directory and C++ standard
 set_target_properties(
@@ -259,3 +263,24 @@ set_target_properties(
              CXX_STANDARD 20
              CXX_STANDARD_REQUIRED ON
              CXX_EXTENSIONS OFF)
+
+# Optional: build run_tests with ExecuTorch to test the .pte path of PolicyEngine and
+# EncoderEngine. Point CMAKE_PREFIX_PATH at the installed executorch and
+# torch_tensorrt_executorch_runtime Python packages.
+option(USE_EXECUTORCH "Build run_tests with ExecuTorch and its TensorRT delegate" OFF)
+if(USE_EXECUTORCH)
+  find_package(executorch REQUIRED CONFIG COMPONENTS backend_cuda kernels_optimized)
+  find_package(executorch_backend_tensorrt REQUIRED CONFIG)
+  # backend_cuda registers the CUDA allocator that the program's GPU buffers need, and
+  # kernels_optimized the host/device copy kernels the program runs outside the delegate.
+  # The imported targets carry link options that keep these registration-only libraries
+  # linked.
+  target_link_libraries(run_tests executorch::runtime executorch::backend_tensorrt
+                        executorch::backend_cuda executorch::kernels_optimized)
+  target_compile_definitions(run_tests PRIVATE HAS_EXECUTORCH=1)
+  # Keep this run_tests in the build folder so the default one in target/release stays.
+  set_target_properties(run_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+  message(STATUS "✅ ExecuTorch support enabled in run_tests (.pte models)")
+else()
+  target_compile_definitions(run_tests PRIVATE HAS_EXECUTORCH=0)
+endif()

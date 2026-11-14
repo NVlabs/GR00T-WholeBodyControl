@@ -3,7 +3,8 @@
  * @brief TensorRT-accelerated encoder engine (observations → token state).
  *
  * EncoderEngine loads an ONNX encoder model, converts it to TensorRT, and
- * provides GPU-accelerated inference with optional CUDA graph capture.
+ * provides GPU-accelerated inference with optional CUDA graph capture. A `.pte`
+ * model runs through ExecuTorch instead (see executorch_engine.hpp).
  *
  * The encoder compresses high-dimensional robot observations into a compact
  * latent / token representation that is then consumed by the control policy
@@ -41,6 +42,7 @@
 #include <numeric>
 #include <cuda_runtime.h>
 #include <TRTInference/InferenceEngine.h>
+#include "executorch_engine.hpp"
 
 /**
  * @class EncoderEngine
@@ -56,8 +58,10 @@ public:
 
   /**
    * @brief Initialize the encoder engine from a model path
-   * @param model_path Path to ONNX model file (will be converted to TensorRT)
-   * @param use_fp16 Whether to use FP16 precision
+   * @param model_path Path to ONNX model file (will be converted to TensorRT),
+   *                   or to a `.pte` file (run with ExecuTorch)
+   * @param use_fp16 Whether to use FP16 precision (ONNX only; a `.pte` keeps the
+   *                 precision it was exported with)
    * @return true if initialization successful, false otherwise
    */
   bool Initialize(const std::string& model_path, bool use_fp16 = false) {
@@ -69,7 +73,11 @@ public:
     config_.model_path = model_path;
     config_.use_fp16 = use_fp16;
 
+    Destroy();  // so a second call does not leak the first model's engine, stream and graph
+
     try {
+      if (IsExecuTorchModel(model_path)) { return InitializeExecuTorch(model_path); }
+
       std::cout << "Loading encoder model..." << std::endl;
 
       inference_engine_ = std::make_unique<TRTInferenceEngine>();
@@ -189,6 +197,7 @@ public:
     } catch (const std::exception& e) {
       std::cerr << "✗ EncoderEngine::Initialize - Exception: " << e.what() << std::endl;
       inference_engine_.reset();
+      executorch_engine_.reset();
       return false;
     }
   }
@@ -229,11 +238,13 @@ public:
 
   /**
    * @brief Run encoder inference and populate internal token buffer
-   * @param stream CUDA stream for inference (uses internal stream if nullptr)
+   * @param stream CUDA stream for inference (uses internal stream if nullptr;
+   *               ignored for `.pte` models)
    * @return true if inference successful, false otherwise
    */
   bool Encode(cudaStream_t stream = nullptr) {
     if (!initialized_) { std::cerr << "✗ EncoderEngine::Encode - Not initialized" << std::endl; return false; }
+    if (executorch_engine_) { return executorch_engine_->Run(encoder_input_buffer_.data(), token_buffer_.data()); }
     if (!inference_engine_) { std::cerr << "✗ EncoderEngine::Encode - TensorRT engine not initialized" << std::endl; return false; }
 
     cudaStream_t encode_stream = (stream != nullptr) ? stream : cuda_stream_;
@@ -263,9 +274,12 @@ public:
 
   /**
    * @brief Capture CUDA graph for optimized execution
-   * @return true if capture successful, false otherwise
+   *
+   * For a `.pte` model this warms the model up instead (see ExecuTorchEngine::Warmup).
+   * @return true if capture (or the warm-up) succeeded, false otherwise
    */
   bool CaptureGraph() {
+    if (executorch_engine_) { return executorch_engine_->Warmup(encoder_input_buffer_.data()); }
     if (!initialized_ || !inference_engine_) {
       std::cerr << "✗ EncoderEngine::CaptureGraph - Cannot capture (engine not initialized)" << std::endl;
       return false;
@@ -373,10 +387,39 @@ public:
     if (cuda_graph_ != nullptr) { cudaGraphDestroy(cuda_graph_); cuda_graph_ = nullptr; }
     if (cuda_stream_ != nullptr) { cudaStreamDestroy(cuda_stream_); cuda_stream_ = nullptr; }
     if (inference_engine_) { inference_engine_->Destroy(); inference_engine_.reset(); }
+    executorch_engine_.reset();
     graph_captured_ = false; initialized_ = false;
   }
 
 private:
+  /**
+   * @brief The `.pte` branch of Initialize: load the model with ExecuTorchEngine
+   * @param model_path Path to the `.pte` file
+   * @return true if the model loaded and its sizes fit, false otherwise
+   */
+  bool InitializeExecuTorch(const std::string& model_path) {
+    std::cout << "Loading encoder model with ExecuTorch..." << std::endl;
+    if (config_.use_fp16) {
+      std::cout << "  FP16 is ignored for .pte models: precision is chosen when the model is exported" << std::endl;
+    }
+    executorch_engine_ = std::make_unique<ExecuTorchEngine>();
+    if (!executorch_engine_->Initialize(model_path)) {
+      executorch_engine_.reset();
+      return false;
+    }
+    config_.input_dimension = executorch_engine_->GetInputDimension();
+    config_.token_dimension = executorch_engine_->GetOutputDimension();
+    encoder_input_buffer_.resize(config_.input_dimension, 0.0f);
+    token_buffer_.resize(config_.token_dimension, 0.0f);
+
+    initialized_ = true;
+    std::cout << "✓ Encoder initialized successfully!" << std::endl;
+    std::cout << "  Model: " << model_path << std::endl;
+    std::cout << "  Input dimension: " << config_.input_dimension << std::endl;
+    std::cout << "  Token dimension: " << config_.token_dimension << std::endl;
+    return true;
+  }
+
   // Internal configuration state
   struct Config {
     std::string model_path;
@@ -389,6 +432,9 @@ private:
 
   // TensorRT inference engine
   std::unique_ptr<TRTInferenceEngine> inference_engine_;
+
+  // ExecuTorch engine, used instead of TensorRT for .pte models
+  std::unique_ptr<ExecuTorchEngine> executorch_engine_;
 
   // Tensor names
   std::string input_tensor_name_;
