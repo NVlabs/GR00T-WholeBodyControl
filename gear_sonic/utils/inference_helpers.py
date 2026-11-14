@@ -5,9 +5,15 @@ Focuses on SONIC / universal-token model export:
   - all encoders           (``export_universal_token_encoders_as_onnx``)
   - decoder only           (``export_universal_token_decoder_as_onnx``)
   - generic policy         (``export_policy_as_onnx``)
+
+The encoders and the decoder can also be saved as ``torch.export`` programs
+(``export_universal_token_encoders_as_pt2``, ``export_universal_token_decoder_as_pt2``),
+which ``gear_sonic/scripts/pt2_to_pte.py`` turns into ExecuTorch ``.pte`` files that run
+on TensorRT.
 """
 
 import copy
+import math
 import os
 
 import torch
@@ -201,10 +207,8 @@ def export_universal_token_module_as_onnx(
 # ---------------------------------------------------------------------------
 
 
-def export_universal_token_encoders_as_onnx(
-    universal_token_module, path, exported_model_name, batch_size=1
-):
-    """Export only the ENCODERS of a UniversalTokenModule as ONNX.
+def _encoders_only_wrapper(universal_token_module, batch_size=1):
+    """Wrap the ENCODERS of a UniversalTokenModule behind one flat input.
 
     Uses ``encoder_index`` to dynamically select which encoder to run.
 
@@ -212,15 +216,10 @@ def export_universal_token_encoders_as_onnx(
 
         [encoder_index(1) | tokenizer_observations]
 
-    Args:
-        universal_token_module: The UniversalTokenModule instance.
-        path: Directory path to save the ONNX model.
-        exported_model_name: Name of the exported ONNX file.
-        batch_size: Batch size for example input.
+    Returns:
+        The wrapper, an example input dict, the encoder names, and the required
+        tokenizer observations.
     """
-    os.makedirs(path, exist_ok=True)
-    full_path = os.path.join(path, exported_model_name)
-
     module = copy.deepcopy(universal_token_module).to("cpu")
     module.eval()
 
@@ -277,7 +276,8 @@ def export_universal_token_encoders_as_onnx(
             index = 0
             for feature_name in self.required_tokenizer_obs:
                 feature_dims = tuple(self.module.tokenizer_obs_dims[feature_name])
-                feature_size = torch.prod(torch.tensor(feature_dims)).item()
+                # Plain Python ints keep the slice sizes static for torch.export.
+                feature_size = math.prod(feature_dims)
                 feature_data = tokenizer_input[..., index : index + feature_size]
                 tokenizer_obs[feature_name] = feature_data.reshape(
                     feature_data.shape[:2] + feature_dims
@@ -312,7 +312,32 @@ def export_universal_token_encoders_as_onnx(
     obs_dict = {
         "actor_obs": torch.cat([example_encoder_index, example_tokenizer_obs], dim=-1),
     }
-    example_input_dict = {"obs_dict": obs_dict}
+    return wrapper, {"obs_dict": obs_dict}, encoder_names, required_tokenizer_obs
+
+
+def export_universal_token_encoders_as_onnx(
+    universal_token_module, path, exported_model_name, batch_size=1
+):
+    """Export only the ENCODERS of a UniversalTokenModule as ONNX.
+
+    Uses ``encoder_index`` to dynamically select which encoder to run.
+
+    Input layout::
+
+        [encoder_index(1) | tokenizer_observations]
+
+    Args:
+        universal_token_module: The UniversalTokenModule instance.
+        path: Directory path to save the ONNX model.
+        exported_model_name: Name of the exported ONNX file.
+        batch_size: Batch size for example input.
+    """
+    os.makedirs(path, exist_ok=True)
+    full_path = os.path.join(path, exported_model_name)
+
+    wrapper, example_input_dict, encoder_names, required_tokenizer_obs = _encoders_only_wrapper(
+        universal_token_module, batch_size
+    )
 
     with torch.no_grad():
         torch.onnx.export(
@@ -331,8 +356,7 @@ def export_universal_token_encoders_as_onnx(
     print(f"Saved to: {full_path}")  # noqa: T201
     print(f"Required tokenizer observations: {required_tokenizer_obs}")  # noqa: T201
     print(  # noqa: T201
-        f"Input shapes: tokenizer_obs={example_tokenizer_obs.shape}, "
-        f"encoder_index={example_encoder_index.shape}"
+        f"Input shape: actor_obs={example_input_dict['obs_dict']['actor_obs'].shape}"
     )
 
 
@@ -341,25 +365,16 @@ def export_universal_token_encoders_as_onnx(
 # ---------------------------------------------------------------------------
 
 
-def export_universal_token_decoder_as_onnx(
-    universal_token_module, decoder_name, path, exported_model_name, batch_size=1
-):
-    """Export only the DECODER of a UniversalTokenModule as ONNX.
+def _decoder_only_wrapper(universal_token_module, decoder_name, batch_size=1):
+    """Wrap the DECODER of a UniversalTokenModule behind one flat input.
 
     Input layout::
 
         [encoded_tokens | tokenizer_observations | proprioception]
 
-    Args:
-        universal_token_module: The UniversalTokenModule instance.
-        decoder_name: Name of the decoder to use.
-        path: Directory path to save the ONNX model.
-        exported_model_name: Name of the exported ONNX file.
-        batch_size: Batch size for example input.
+    Returns:
+        The wrapper, an example input dict, and the required tokenizer observations.
     """
-    os.makedirs(path, exist_ok=True)
-    full_path = os.path.join(path, exported_model_name)
-
     module = copy.deepcopy(universal_token_module).to("cpu")
     module.eval()
 
@@ -398,7 +413,8 @@ def export_universal_token_decoder_as_onnx(
             tokenizer_feature_dim = 0
             for feature_name in self.required_tokenizer_obs:
                 feature_dims = self.module.tokenizer_obs_dims[feature_name]
-                tokenizer_feature_dim += torch.prod(torch.tensor(feature_dims)).item()
+                # Plain Python ints keep the slice sizes static for torch.export.
+                tokenizer_feature_dim += math.prod(feature_dims)
 
             # Split input: [encoded_tokens | tokenizer_obs | proprioception]
             encoded_tokens = inputs[..., :token_total_dim]
@@ -415,7 +431,7 @@ def export_universal_token_decoder_as_onnx(
             index = 0
             for feature_name in self.required_tokenizer_obs:
                 feature_dims = tuple(self.module.tokenizer_obs_dims[feature_name])
-                feature_size = torch.prod(torch.tensor(feature_dims)).item()
+                feature_size = math.prod(feature_dims)
                 feature_data = tokenizer_part[..., index : index + feature_size]
                 tokenizer_obs[feature_name] = feature_data.reshape(
                     feature_data.shape[:2] + feature_dims
@@ -445,7 +461,31 @@ def export_universal_token_decoder_as_onnx(
             [example_encoded_tokens, example_tokenizer, example_proprioception], dim=-1
         ),
     }
-    example_input_dict = {"obs_dict": obs_dict}
+    return wrapper, {"obs_dict": obs_dict}, required_tokenizer_obs
+
+
+def export_universal_token_decoder_as_onnx(
+    universal_token_module, decoder_name, path, exported_model_name, batch_size=1
+):
+    """Export only the DECODER of a UniversalTokenModule as ONNX.
+
+    Input layout::
+
+        [encoded_tokens | tokenizer_observations | proprioception]
+
+    Args:
+        universal_token_module: The UniversalTokenModule instance.
+        decoder_name: Name of the decoder to use.
+        path: Directory path to save the ONNX model.
+        exported_model_name: Name of the exported ONNX file.
+        batch_size: Batch size for example input.
+    """
+    os.makedirs(path, exist_ok=True)
+    full_path = os.path.join(path, exported_model_name)
+
+    wrapper, example_input_dict, required_tokenizer_obs = _decoder_only_wrapper(
+        universal_token_module, decoder_name, batch_size
+    )
 
     with torch.no_grad():
         torch.onnx.export(
@@ -462,6 +502,84 @@ def export_universal_token_decoder_as_onnx(
     print(f"Saved to: {full_path}")  # noqa: T201
     print(f"Required tokenizer observations: {required_tokenizer_obs}")  # noqa: T201
     print(  # noqa: T201
-        f"Input shapes: encoded_tokens={example_encoded_tokens.shape}, "
-        f"tokenizer={example_tokenizer.shape}, proprioception={example_proprioception.shape}"
+        f"Input shape: actor_obs={example_input_dict['obs_dict']['actor_obs'].shape}"
     )
+
+
+# ---------------------------------------------------------------------------
+# torch.export (.pt2) for ExecuTorch
+# ---------------------------------------------------------------------------
+
+
+def _save_as_pt2(wrapper, actor_obs, full_path):
+    """Save a wrapper as a ``torch.export`` program (``.pt2``) with one flat float32 input.
+
+    ``gear_sonic/scripts/pt2_to_pte.py`` turns the file into an ExecuTorch ``.pte`` on the
+    device that will run it. Only ``torch`` is needed here.
+    """
+
+    class FlatInputWrapper(nn.Module):
+        def __init__(self, wrapper):
+            super().__init__()
+            self.wrapper = wrapper
+
+        def forward(self, actor_obs):
+            return self.wrapper({"actor_obs": actor_obs})
+
+    with torch.no_grad():
+        # Non-strict export: the wrappers read OmegaConf configs, which strict tracing rejects.
+        exported_program = torch.export.export(
+            FlatInputWrapper(wrapper).eval(), (actor_obs,), strict=False
+        )
+    torch.export.save(exported_program, full_path)
+
+
+def export_universal_token_encoders_as_pt2(
+    universal_token_module, path, exported_model_name, batch_size=1
+):
+    """Export only the ENCODERS of a UniversalTokenModule as a ``torch.export`` program.
+
+    Same input and output as ``export_universal_token_encoders_as_onnx``.
+
+    Args:
+        universal_token_module: The UniversalTokenModule instance.
+        path: Directory path to save the ``.pt2`` file.
+        exported_model_name: Name of the exported ``.pt2`` file.
+        batch_size: Batch size for example input.
+    """
+    os.makedirs(path, exist_ok=True)
+    full_path = os.path.join(path, exported_model_name)
+    wrapper, example_input_dict, encoder_names, required_tokenizer_obs = _encoders_only_wrapper(
+        universal_token_module, batch_size
+    )
+    _save_as_pt2(wrapper, example_input_dict["obs_dict"]["actor_obs"], full_path)
+    print(  # noqa: T201
+        f"\nExported ENCODERS ONLY model with {len(encoder_names)} encoders: {encoder_names}"
+    )
+    print(f"Saved to: {full_path}")  # noqa: T201
+    print(f"Required tokenizer observations: {required_tokenizer_obs}")  # noqa: T201
+
+
+def export_universal_token_decoder_as_pt2(
+    universal_token_module, decoder_name, path, exported_model_name, batch_size=1
+):
+    """Export only the DECODER of a UniversalTokenModule as a ``torch.export`` program.
+
+    Same input and output as ``export_universal_token_decoder_as_onnx``.
+
+    Args:
+        universal_token_module: The UniversalTokenModule instance.
+        decoder_name: Name of the decoder to use.
+        path: Directory path to save the ``.pt2`` file.
+        exported_model_name: Name of the exported ``.pt2`` file.
+        batch_size: Batch size for example input.
+    """
+    os.makedirs(path, exist_ok=True)
+    full_path = os.path.join(path, exported_model_name)
+    wrapper, example_input_dict, required_tokenizer_obs = _decoder_only_wrapper(
+        universal_token_module, decoder_name, batch_size
+    )
+    _save_as_pt2(wrapper, example_input_dict["obs_dict"]["actor_obs"], full_path)
+    print(f"\nExported DECODER ONLY model with decoder: {decoder_name}")  # noqa: T201
+    print(f"Saved to: {full_path}")  # noqa: T201
+    print(f"Required tokenizer observations: {required_tokenizer_obs}")  # noqa: T201

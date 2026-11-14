@@ -4,7 +4,8 @@
  *
  * PolicyEngine loads an ONNX policy model, converts it to TensorRT at first
  * run (cached on disk), and provides GPU-accelerated inference with optional
- * CUDA graph capture for deterministic, sub-millisecond latency.
+ * CUDA graph capture for deterministic, sub-millisecond latency. A `.pte`
+ * model runs through ExecuTorch instead (see executorch_engine.hpp).
  *
  * ## I/O Contract
  *
@@ -33,6 +34,7 @@
 #include <numeric>
 #include <cuda_runtime.h>
 #include <TRTInference/InferenceEngine.h>
+#include "executorch_engine.hpp"
 #include "robot_parameters.hpp"
 
 /**
@@ -49,8 +51,10 @@ public:
 
   /**
    * @brief Initialize the control policy from a model path
-   * @param model_path Path to ONNX model file (will be converted to TensorRT)
-   * @param use_fp16 Whether to use FP16 precision
+   * @param model_path Path to ONNX model file (will be converted to TensorRT),
+   *                   or to a `.pte` file (run with ExecuTorch)
+   * @param use_fp16 Whether to use FP16 precision (ONNX only; a `.pte` keeps the
+   *                 precision it was exported with)
    * @return true if initialization successful, false otherwise
    */
   bool Initialize(const std::string& model_path, bool use_fp16 = false) {
@@ -62,7 +66,11 @@ public:
     config_.model_path = model_path;
     config_.use_fp16 = use_fp16;
 
+    Destroy();  // so a second call does not leak the first model's engine, stream and graph
+
     try {
+      if (IsExecuTorchModel(model_path)) { return InitializeExecuTorch(model_path); }
+
       std::cout << "Loading policy model..." << std::endl;
 
       inference_engine_ = std::make_unique<TRTInferenceEngine>();
@@ -194,6 +202,7 @@ public:
     } catch (const std::exception& e) {
       std::cerr << "✗ PolicyEngine::Initialize - Exception: " << e.what() << std::endl;
       inference_engine_.reset();
+      executorch_engine_.reset();
       return false;
     }
   }
@@ -233,13 +242,17 @@ public:
 
   /**
    * @brief Run control policy inference and populate internal action buffer
-   * @param stream CUDA stream for inference (uses internal stream if nullptr)
+   * @param stream CUDA stream for inference (uses internal stream if nullptr;
+   *               ignored for `.pte` models)
    * @return true if inference successful, false otherwise
    */
   bool Infer(cudaStream_t stream = nullptr) {
     if (!initialized_) { 
       std::cerr << "✗ PolicyEngine::Infer - Not initialized" << std::endl; 
       return false; 
+    }
+    if (executorch_engine_) {
+      return executorch_engine_->Run(policy_input_buffer_.data(), action_buffer_.data());
     }
     if (!inference_engine_) { 
       std::cerr << "✗ PolicyEngine::Infer - TensorRT engine not initialized" << std::endl; 
@@ -273,9 +286,12 @@ public:
 
   /**
    * @brief Capture CUDA graph for optimized execution
-   * @return true if capture successful, false otherwise
+   *
+   * For a `.pte` model this warms the model up instead (see ExecuTorchEngine::Warmup).
+   * @return true if capture (or the warm-up) succeeded, false otherwise
    */
   bool CaptureGraph() {
+    if (executorch_engine_) { return executorch_engine_->Warmup(policy_input_buffer_.data()); }
     if (!initialized_ || !inference_engine_) {
       std::cerr << "✗ PolicyEngine::CaptureGraph - Cannot capture (engine not initialized)" << std::endl;
       return false;
@@ -401,11 +417,46 @@ public:
       inference_engine_->Destroy(); 
       inference_engine_.reset(); 
     }
+    executorch_engine_.reset();
     graph_captured_ = false; 
     initialized_ = false;
   }
 
 private:
+  /**
+   * @brief The `.pte` branch of Initialize: load the model with ExecuTorchEngine
+   * @param model_path Path to the `.pte` file
+   * @return true if the model loaded and its sizes fit, false otherwise
+   */
+  bool InitializeExecuTorch(const std::string& model_path) {
+    std::cout << "Loading policy model with ExecuTorch..." << std::endl;
+    if (config_.use_fp16) {
+      std::cout << "  FP16 is ignored for .pte models: precision is chosen when the model is exported" << std::endl;
+    }
+    executorch_engine_ = std::make_unique<ExecuTorchEngine>();
+    if (!executorch_engine_->Initialize(model_path)) {
+      executorch_engine_.reset();
+      return false;
+    }
+    config_.input_dimension = executorch_engine_->GetInputDimension();
+    config_.action_dimension = executorch_engine_->GetOutputDimension();
+    if (config_.action_dimension != G1_NUM_MOTOR) {
+      std::cerr << "✗ Policy action dimension (" << config_.action_dimension
+                << ") doesn't match G1 robot motors (" << G1_NUM_MOTOR << ")" << std::endl;
+      executorch_engine_.reset();
+      return false;
+    }
+    policy_input_buffer_.resize(config_.input_dimension, 0.0f);
+    action_buffer_.resize(config_.action_dimension, 0.0f);
+
+    initialized_ = true;
+    std::cout << "✓ Policy engine initialized successfully!" << std::endl;
+    std::cout << "  Model: " << model_path << std::endl;
+    std::cout << "  Input dimension: " << config_.input_dimension << std::endl;
+    std::cout << "  Action dimension: " << config_.action_dimension << std::endl;
+    return true;
+  }
+
   // Internal configuration state
   struct Config {
     std::string model_path;
@@ -418,6 +469,9 @@ private:
 
   // TensorRT inference engine
   std::unique_ptr<TRTInferenceEngine> inference_engine_;
+
+  // ExecuTorch engine, used instead of TensorRT for .pte models
+  std::unique_ptr<ExecuTorchEngine> executorch_engine_;
 
   // Tensor names
   std::string input_tensor_name_;

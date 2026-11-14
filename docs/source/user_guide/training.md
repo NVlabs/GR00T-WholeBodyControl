@@ -300,6 +300,69 @@ Output (in `exported/` next to the checkpoint):
 Use the encoder+decoder pair matching your input modality. See
 [deployment code reference](../references/deployment_code.md) for C++ details.
 
+### ExecuTorch export (optional)
+
+Add `+export_pt2=true` to the command above to also save the encoder and the
+decoder as `torch.export` programs (`*_encoder.pt2`, `*_decoder.pt2`). This runs
+in the training environment and needs no extra packages.
+
+Then turn them into ExecuTorch `.pte` files on the device you deploy to. Each
+`.pte` holds a TensorRT engine, so the robot does not build one at startup. A
+TensorRT engine only runs on the GPU type and TensorRT version it was built with,
+which is why this step runs on the device. Use a separate Python 3.11+
+environment, because Torch-TensorRT and ExecuTorch need newer PyTorch and NumPy
+versions than training:
+
+```bash
+python3 -m venv ~/pte_env && source ~/pte_env/bin/activate
+pip install "torch_tensorrt[executorch]==2.15.*"
+python gear_sonic/scripts/pt2_to_pte.py \
+    <experiment_dir>/exported/model_step_000123_encoder.pt2 \
+    <experiment_dir>/exported/model_step_000123_decoder.pt2
+```
+
+Use the step number of your own export in the file names. This was tested on
+Jetson AGX Thor with `.pt2` files from PyTorch 2.7 (the training environment) and
+Torch-TensorRT 2.15, so the command pins that version. The wheels need JetPack 7 or
+newer (CUDA 13). On an older JetPack, the pin makes `pip` fail instead of quietly
+installing an older Torch-TensorRT that lacks options the script uses. Loading a
+`.pt2` from PyTorch 2.7 prints a warning that the file format is deprecated; the
+conversion still works.
+
+For the released checkpoint, the exported encoder takes the inputs of
+`gear_sonic_deploy/policy/release/observation_config.yaml` without the 2 root height
+observations (`motion_root_z_position_10frame_step5` and `motion_root_z_position`),
+which its encoders do not read. Set those 2 to `enabled: false` in a copy of that file
+and pass the copy to the deployment with `--obs-config`. Do not use
+`observation_config_sonic_release.yaml` for it: that file has the same number of
+values but in a different order, and the deployment only checks the number. Other
+checkpoints need the observation config that matches their own inputs.
+
+The C++ side has a loader for these files: `PolicyEngine` and `EncoderEngine` use
+it when the model path ends in `.pte`. No program in the repo can run one yet,
+though. `g1_deploy_onnx_ref` always links TensorRT 10 for its ONNX engines and the
+planner, while a `.pte` uses the TensorRT 11 that comes with `torch_tensorrt`, and
+they cannot share a process. So `g1_deploy_onnx_ref` is always built without
+ExecuTorch for now, and it reports an error for a `.pte`. Running `.pte` files needs
+the deployment to move to the same TensorRT build that `torch_tensorrt` installs
+(11.4 today).
+
+To work on the loader, build `run_tests` with ExecuTorch support. Set up the shell
+as for the default build (`source gear_sonic_deploy/scripts/setup_env.sh`), then
+activate the environment above and keep it: the tests load the libraries of the
+installed packages from there. The ExecuTorch CMake package needs CMake 3.28 or
+newer, and the tests need a GPU. The option only changes `run_tests`, and this
+`run_tests` stays in its build folder, so the programs in `target/release` stay the
+default ones.
+
+```bash
+SITE=$(python3 -c "import site; print(site.getsitepackages()[0])")
+cmake -S gear_sonic_deploy -B gear_sonic_deploy/build/executorch -DCMAKE_BUILD_TYPE=Release \
+    -DUSE_EXECUTORCH=ON -DCMAKE_PREFIX_PATH="$SITE/executorch;$SITE/torch_tensorrt_executorch_runtime"
+cmake --build gear_sonic_deploy/build/executorch --target run_tests -j
+gear_sonic_deploy/build/executorch/run_tests --gtest_filter='ExecuTorch*'
+```
+
 ## Training with SOMA encoder
 
 The `sonic_bones_seed` config adds a fourth SOMA encoder for BVH-derived
