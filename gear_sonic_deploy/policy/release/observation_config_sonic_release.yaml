@@ -31,24 +31,23 @@ encoder:
   dimension: 64
   use_fp16: false
   encoder_observations:
-    # Used by all encoder modes
+    # Same order as the exported encoder input, which follows the order of the terms in
+    # TokenizerCfg (gear_sonic/envs/manager_env/mdp/observations.py). The deployment only
+    # checks the total size. encoder_modes below lists which mode uses each observation.
     - name: "encoder_index"
       enabled: true
-    # G1 mode
     - name: "command_multi_future_nonflat"
+      enabled: true
+    - name: "motion_anchor_ori_b"
       enabled: true
     - name: "motion_anchor_ori_b_mf_nonflat"
       enabled: true
-    # Teleop mode
     - name: "command_multi_future_lower_body"
       enabled: true
     - name: "vr_3point_local_target"
       enabled: true
     - name: "vr_3point_local_orn_target"
       enabled: true
-    - name: "motion_anchor_ori_b"
-      enabled: true
-    # SMPL mode
     - name: "smpl_joints_multi_future_local_nonflat"
       enabled: true
     - name: "smpl_root_ori_b_multi_future"
