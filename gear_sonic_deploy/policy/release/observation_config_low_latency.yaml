@@ -41,11 +41,11 @@ encoder:
       enabled: true
     - name: "motion_joint_velocities_10frame_step1"
       enabled: true
-    # g1 encoder: motion_anchor_ori_b_mf_nonflat (body, multi-frame FIRST), step1
-    - name: "motion_anchor_orientation_10frame_step1"
-      enabled: true
-    # teleop encoder: motion_anchor_ori_b (body, single-frame SECOND)
+    # teleop encoder: motion_anchor_ori_b (body, single-frame FIRST, as declared in TokenizerCfg)
     - name: "motion_anchor_orientation"
+      enabled: true
+    # g1 encoder: motion_anchor_ori_b_mf_nonflat (body, multi-frame SECOND), step1
+    - name: "motion_anchor_orientation_10frame_step1"
       enabled: true
     # teleop encoder: command_multi_future_lower_body, step1
     - name: "motion_joint_positions_lowerbody_10frame_step1"
