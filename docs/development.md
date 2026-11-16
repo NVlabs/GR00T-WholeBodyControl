@@ -70,6 +70,34 @@ python tools/dev.py bootstrap --system-site-packages
 `doctor --strict` 会在必需依赖缺失时返回非零，适合脚本或 CI 使用；默认模式
 只报告，不因为“没挂数据盘”而阻断纯代码开发。
 
+## VSCode
+
+仓库共享 `.vscode/` 下的项目配置，打开仓库后 VSCode 会提示安装推荐扩展：
+
+- Python / Pylance / debugpy：解释器、补全与调试；
+- Ruff：使用 `pyproject.toml` 固定的 lint 规则；
+- EditorConfig：遵循 `.editorconfig` 的缩进与换行；
+- clangd：解析 `unreal-script/` 与 `unreal-sample/` 的 UE C++；
+- TOML / YAML / GitHub Actions：配置与 CI 文件的基础支持。
+
+项目配置默认：
+
+- 解释器默认指向 `${workspaceFolder}/.venv/bin/python`；Windows 上让 Python
+  扩展通过 `python.venvPath` 自动发现 `.venv\Scripts\python.exe`，或在
+  User Settings / 命令面板手动选择，不要改共享的 `settings.json`；
+- Test Explorer 使用 pytest，测试目录为 `tests/`；
+- 保存时不自动格式化、不自动整理 import，避免把历史格式差异混进功能改动；
+- `Dev: doctor`、`Dev: test`、`Dev: lint`、`Dev: check` 等任务可直接从
+  `Terminal → Run Task` 运行；
+- `UE: generate clangd compile database` 调用
+  `unreal-script/gen_compile_commands.py` 生成 clangd 索引；
+- `UE: sync plugin mirror` / `UE: check plugin mirror` 调用插件同步脚本；
+  这两个任务需要 PowerShell 7（`pwsh`），Linux 未安装 `pwsh` 时会失败；
+- 在 Markdown 文件中输入 `mwexp` 可插入实验记录骨架。
+
+共享文件只有 `settings.json`、`tasks.json`、`launch.json`、`extensions.json`
+和 `experiments.code-snippets`；其他 `.vscode` 本地文件仍被忽略。
+
 ## 测试
 
 pytest 是唯一总入口：
@@ -78,8 +106,8 @@ pytest 是唯一总入口：
 .venv/bin/python -m pytest -q
 ```
 
-Windows 使用 `.venv\Scripts\python.exe -m pytest -q`。`pyproject.toml` 已把
-`tests/` 和 `inference/profiling/` 都纳入测试路径，并设置 `pythonpath = ["."]`。
+Windows 使用 `.venv\Scripts\python.exe -m pytest -q`。`pyproject.toml` 的
+`testpaths` 为 `tests/`，并设置 `pythonpath = ["."]`。
 
 不要再把 `unittest discover -s tests` 当作全量测试：仓库里已有 pytest
 fixture / parametrize 用例，unittest discover 会静默漏掉一部分。

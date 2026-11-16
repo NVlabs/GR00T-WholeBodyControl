@@ -36,6 +36,8 @@ MotionWeaver（原 AIAnimationSystem）是面向 Unreal Engine 的 AI 角色动�
 任务：给定过去 24 帧历史、未来 24 帧 Root 轨迹与 0–2 帧硬参考，生成其余帧的全身关节姿态。
 这是**补间生成**（in-betweening），不是重建——锚点以外的 22–24 帧全部由模型生成。
 
+> 2026-11-14 的 `full_release_v2` 20/30 epoch 对照使用不同数据与测试口径，数字不能与本节的 v3 封盘直接横比；记录见 [实验索引](docs/experiments/README.md)。
+
 | 档位 | GT 帧 | 生成帧 | 模型 | Lerp 基线 | 优于基线 | 脚滑（全帧） | 脚滑（纯生成） |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | `no_reference` | 0 | 24 | **5.28 cm** | 16.64 | **3.15×** | 6.9× | **6.9×** |
@@ -93,7 +95,9 @@ python3 -m venv .venv
 
 Windows 将 `.venv/bin/python` 换成 `.venv\Scripts\python.exe`。`setup` 默认安装
 `.[training,dev]`；另加 `--demo` / `--export` 可补 MuJoCo 与 ONNX 依赖。
-完整搭建、测试分类、Lint 策略和数据路径见 [开发环境](docs/development.md)。
+仓库已带共享 VSCode 配置，打开后安装推荐扩展即可使用 Python/Pytest、Ruff、
+调试任务和 UE clangd 索引。完整搭建、测试分类、Lint 策略和数据路径见
+[开发环境](docs/development.md)。
 
 ### Unreal 侧范围
 

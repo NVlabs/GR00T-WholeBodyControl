@@ -1,0 +1,13 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "ms-python.debugpy",
+    "charliermarsh.ruff",
+    "editorconfig.editorconfig",
+    "llvm-vs-code-extensions.vscode-clangd",
+    "tamasfe.even-better-toml",
+    "redhat.vscode-yaml",
+    "github.vscode-github-actions"
+  ]
+}
