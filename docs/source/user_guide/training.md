@@ -300,6 +300,49 @@ Output (in `exported/` next to the checkpoint):
 Use the encoder+decoder pair matching your input modality. See
 [deployment code reference](../references/deployment_code.md) for C++ details.
 
+For the released checkpoint, the exported encoder (`*_encoder.onnx`, and
+`*_encoder.pt2` from the ExecuTorch export below) takes the inputs of
+`gear_sonic_deploy/policy/release/observation_config.yaml` without the 2 root height
+observations (`motion_root_z_position_10frame_step5` and `motion_root_z_position`),
+which its encoders do not read. Set those 2 to `enabled: false` in a copy of that file
+and pass the copy to the deployment with `--obs-config`. Do not use
+`observation_config_sonic_release.yaml` for it: that file has the same number of
+values but in a different order, and the deployment only checks the number. Other
+checkpoints need the observation config that matches their own inputs.
+
+### ExecuTorch export (optional)
+
+This exports the encoder and the decoder as ExecuTorch `.pte` files. No program in
+the repo can run them yet.
+
+Add `+export_pt2=true` to the command above to also save the encoder and the
+decoder as `torch.export` programs (`*_encoder.pt2`, `*_decoder.pt2`). This runs
+in the training environment and needs no extra packages.
+
+Then turn them into ExecuTorch `.pte` files on the device you deploy to. Each
+`.pte` holds a TensorRT engine, so the robot does not build one at startup. A
+TensorRT engine only runs on the GPU type and TensorRT version it was built with,
+which is why this step runs on the device. Use a separate Python 3.11 to 3.14
+environment, because Torch-TensorRT and ExecuTorch need newer PyTorch and NumPy
+versions than training:
+
+```bash
+python3 -m venv ~/pte_env && source ~/pte_env/bin/activate
+pip install "torch_tensorrt[executorch]==2.15.*"
+python gear_sonic/scripts/pt2_to_pte.py \
+    <experiment_dir>/exported/model_step_000123_encoder.pt2 \
+    <experiment_dir>/exported/model_step_000123_decoder.pt2
+```
+
+Use the step number of your own export in the file names. This was tested on
+Jetson AGX Thor (JetPack 7.2) with `.pt2` files from PyTorch 2.7 (the training
+environment) and Torch-TensorRT 2.15, so the command pins that version. The wheels
+need JetPack 7 (CUDA 13). On JetPack 6, the pin makes `pip` fail instead of quietly
+installing an older Torch-TensorRT that lacks options the script uses. Loading a
+`.pt2` from PyTorch 2.7 prints an error trace and then a warning that the file format
+is deprecated. The PyTorch 2.15 that the pin brings still reads that format, so the
+conversion works.
+
 ## Training with SOMA encoder
 
 The `sonic_bones_seed` config adds a fourth SOMA encoder for BVH-derived

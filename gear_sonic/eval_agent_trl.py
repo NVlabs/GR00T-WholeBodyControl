@@ -544,10 +544,27 @@ def main(override_config: omegaconf.OmegaConf):
                 f'Exported decoder ONNX to {os.path.join(exported_policy_path, exported_onnx_name.replace(".onnx", "_decoder.onnx"))}'  # noqa: E501
             )
 
+            if config.get("export_pt2", False):
+                inference_helpers.export_universal_token_encoders_as_pt2(
+                    model.policy.actor_module,
+                    path=exported_policy_path,
+                    exported_model_name=exported_onnx_name.replace(".onnx", "_encoder.pt2"),
+                    batch_size=1,
+                )
+                inference_helpers.export_universal_token_decoder_as_pt2(
+                    model.policy.actor_module,
+                    decoder_name="g1_dyn",
+                    path=exported_policy_path,
+                    exported_model_name=exported_onnx_name.replace(".onnx", "_decoder.pt2"),
+                    batch_size=1,
+                )
+
         else:
             inference_helpers.export_policy_as_onnx(
                 {"actor": model.policy}, exported_policy_path, exported_onnx_name, example_obs_dict
             )
+            if config.get("export_pt2", False):
+                logger.warning("export_pt2 is only supported for universal-token policies; skipped")
 
         logger.info(f"Exported policy as onnx to: {os.path.join(exported_policy_path)}")
 
