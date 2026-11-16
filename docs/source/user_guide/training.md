@@ -313,7 +313,8 @@ checkpoints need the observation config that matches their own inputs.
 ### ExecuTorch export (optional)
 
 This exports the encoder and the decoder as ExecuTorch `.pte` files. No program in
-the repo can run them yet.
+the repo can run them yet: read the limit at the end of this section before you set
+up anything.
 
 Add `+export_pt2=true` to the command above to also save the encoder and the
 decoder as `torch.export` programs (`*_encoder.pt2`, `*_decoder.pt2`). This runs
@@ -342,6 +343,38 @@ installing an older Torch-TensorRT that lacks options the script uses. Loading a
 `.pt2` from PyTorch 2.7 prints an error trace and then a warning that the file format
 is deprecated. The PyTorch 2.15 that the pin brings still reads that format, so the
 conversion works.
+
+The limit: the C++ side has a loader for these files (`PolicyEngine` and
+`EncoderEngine` use it when the model path ends in `.pte`), but no program in the repo
+can run one yet. `g1_deploy_onnx_ref` links TensorRT 10 for its ONNX engines and the
+planner, while a `.pte` uses the TensorRT 11 that comes with `torch_tensorrt` (11.4
+today), and the two cannot share a process. So `g1_deploy_onnx_ref` is always built
+without ExecuTorch, and it reports an error for a `.pte`. Moving the deployment to
+TensorRT 11 is not a simple switch: the
+[deployment install guide](../getting_started/installation_deploy.md) requires exactly
+TensorRT 10.13 (10.7 on the onboard Orin), because other versions make the planner
+output wrong motion. The planner would first have to be checked on the new version.
+The `torch_tensorrt` wheels also need JetPack 7, so they do not install on the onboard
+Orin, which uses JetPack 6. The move would also have to link the ExecuTorch TensorRT
+delegate (`executorch_backend_tensorrt`, installed by `torch_tensorrt[executorch]`)
+and the ExecuTorch CUDA backend, which provides the GPU memory a `.pte` uses. No build
+in the repo links them yet.
+
+To work on the loader, build `run_tests` with ExecuTorch support. It tests the loader
+with small CPU programs, because it links TensorRT 10 too. Set up the shell as for the
+default build (`source scripts/setup_env.sh` in `gear_sonic_deploy`), then go back to the
+repo root and activate the environment above, where the commands below find the
+`executorch` package. The ExecuTorch CMake package needs CMake 3.28 or newer, and the
+tests need a GPU. The option only changes `run_tests`, and this `run_tests` stays in its
+build folder, so the programs in `target/release` stay the default ones.
+
+```bash
+SITE=$(python3 -c "import site; print(site.getsitepackages()[0])")
+cmake -S gear_sonic_deploy -B gear_sonic_deploy/build/executorch -DCMAKE_BUILD_TYPE=Release \
+    -DUSE_EXECUTORCH=ON -DCMAKE_PREFIX_PATH="$SITE/executorch"
+cmake --build gear_sonic_deploy/build/executorch --target run_tests -j
+gear_sonic_deploy/build/executorch/run_tests --gtest_filter='ExecuTorch*'
+```
 
 ## Training with SOMA encoder
 
