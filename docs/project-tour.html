@@ -1,0 +1,3170 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>MotionWeaver 项目导览</title>
+<style>
+  :root {
+    --bg: #070b14;
+    --bg-2: #0a1020;
+    --panel: rgba(15, 23, 42, .78);
+    --panel-solid: #0e1728;
+    --panel-2: rgba(20, 31, 51, .72);
+    --line: rgba(148, 163, 184, .16);
+    --line-strong: rgba(148, 163, 184, .30);
+    --text: #e7eef8;
+    --muted: #94a3b8;
+    --faint: #64748b;
+    --mint: #5eead4;
+    --mint-2: #2dd4bf;
+    --sky: #7dd3fc;
+    --violet: #c4b5fd;
+    --amber: #fbbf24;
+    --rose: #fb7185;
+    --lime: #bef264;
+    --shadow: 0 24px 70px rgba(0, 0, 0, .35);
+    --radius: 18px;
+    --max: 1240px;
+  }
+  html[data-theme="light"] {
+    --bg: #f5f8fc;
+    --bg-2: #eef4fb;
+    --panel: rgba(255, 255, 255, .86);
+    --panel-solid: #ffffff;
+    --panel-2: rgba(241, 245, 249, .86);
+    --line: rgba(15, 23, 42, .10);
+    --line-strong: rgba(15, 23, 42, .18);
+    --text: #0f172a;
+    --muted: #52637a;
+    --faint: #7b8ba0;
+    --mint: #0f766e;
+    --mint-2: #0d9488;
+    --sky: #0369a1;
+    --violet: #6d28d9;
+    --amber: #b45309;
+    --rose: #be123c;
+    --lime: #4d7c0f;
+    --shadow: 0 20px 60px rgba(15, 23, 42, .10);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 92px; }
+  body {
+    margin: 0;
+    color: var(--text);
+    background:
+      radial-gradient(900px 500px at 12% -5%, rgba(45, 212, 191, .14), transparent 60%),
+      radial-gradient(900px 600px at 92% 8%, rgba(125, 211, 252, .12), transparent 62%),
+      radial-gradient(800px 500px at 50% 100%, rgba(196, 181, 253, .08), transparent 65%),
+      var(--bg);
+    font-family: "Inter", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 15.5px;
+    line-height: 1.68;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      linear-gradient(rgba(148, 163, 184, .035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148, 163, 184, .035) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: linear-gradient(to bottom, rgba(0,0,0,.7), transparent 72%);
+    z-index: -1;
+  }
+  a { color: var(--sky); text-decoration: none; }
+  a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  ::selection { background: rgba(94, 234, 212, .28); }
+  code, pre, kbd {
+    font-family: "SFMono-Regular", "Cascadia Code", "JetBrains Mono", Consolas, "Liberation Mono", monospace;
+  }
+  code {
+    font-size: .91em;
+    color: var(--mint);
+    background: rgba(94, 234, 212, .09);
+    border: 1px solid rgba(94, 234, 212, .16);
+    border-radius: 6px;
+    padding: .10em .38em;
+    word-break: break-word;
+  }
+  h1, h2, h3, h4 { line-height: 1.22; margin: 0; letter-spacing: -.02em; }
+  h1 { font-size: clamp(2.25rem, 5.2vw, 4.4rem); font-weight: 780; }
+  h2 { font-size: clamp(1.55rem, 2.7vw, 2.35rem); font-weight: 740; }
+  h3 { font-size: 1.16rem; font-weight: 700; }
+  h4 { font-size: .98rem; font-weight: 700; }
+  p { margin: 0; }
+  ul, ol { margin: 0; padding-left: 1.15rem; }
+  li + li { margin-top: .35rem; }
+  .wrap { width: min(var(--max), calc(100% - 40px)); margin: 0 auto; }
+  .muted { color: var(--muted); }
+  .faint { color: var(--faint); }
+  .small { font-size: .86rem; }
+  .tiny { font-size: .76rem; }
+  .mono { font-family: "SFMono-Regular", "Cascadia Code", "JetBrains Mono", Consolas, monospace; }
+  .nowrap { white-space: nowrap; }
+
+  /* ---------- top progress + nav ---------- */
+  .progress {
+    position: fixed; top: 0; left: 0; height: 2px; width: 0%;
+    background: linear-gradient(90deg, var(--mint), var(--sky), var(--violet));
+    z-index: 100; box-shadow: 0 0 16px rgba(94, 234, 212, .45);
+  }
+  .nav {
+    position: sticky; top: 0; z-index: 90;
+    backdrop-filter: blur(18px) saturate(150%);
+    background: color-mix(in srgb, var(--bg) 78%, transparent);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav-inner {
+    width: min(var(--max), calc(100% - 40px)); margin: 0 auto;
+    min-height: 64px; display: flex; align-items: center; gap: 18px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 760; letter-spacing: -.02em; white-space: nowrap; }
+  .brand-mark {
+    width: 30px; height: 30px; border-radius: 9px; position: relative;
+    background: conic-gradient(from 210deg, var(--mint), var(--sky), var(--violet), var(--mint));
+    box-shadow: 0 0 24px rgba(94, 234, 212, .22);
+  }
+  .brand-mark::after {
+    content: ""; position: absolute; inset: 7px; border-radius: 5px;
+    background: var(--bg); border: 1px solid rgba(255,255,255,.14);
+  }
+  .brand small { display: block; font-size: .64rem; color: var(--muted); letter-spacing: .16em; font-weight: 600; }
+  .nav-links { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; flex: 1; }
+  .nav-links::-webkit-scrollbar { display: none; }
+  .nav-links a {
+    color: var(--muted); font-size: .82rem; font-weight: 600; padding: 8px 9px;
+    border-radius: 8px; white-space: nowrap; transition: .18s ease;
+  }
+  .nav-links a:hover { color: var(--text); background: rgba(148, 163, 184, .08); text-decoration: none; }
+  .nav-links a.active { color: var(--mint); background: rgba(94, 234, 212, .09); }
+  .nav-actions { display: flex; gap: 8px; align-items: center; }
+  .icon-btn {
+    appearance: none; border: 1px solid var(--line); background: var(--panel-2); color: var(--text);
+    border-radius: 10px; min-width: 38px; height: 38px; cursor: pointer; font-size: .92rem;
+    display: inline-flex; align-items: center; justify-content: center; transition: .18s ease;
+  }
+  .icon-btn:hover { border-color: var(--line-strong); transform: translateY(-1px); }
+  .menu-toggle { display: none; }
+
+  /* ---------- generic ---------- */
+  section { padding: 78px 0; position: relative; }
+  section + section { border-top: 1px solid var(--line); }
+  .section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 30px; margin-bottom: 34px; }
+  .section-head .lead { max-width: 700px; margin-top: 12px; color: var(--muted); }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    color: var(--mint); font-size: .72rem; font-weight: 760; letter-spacing: .18em;
+    text-transform: uppercase; margin-bottom: 12px;
+  }
+  .eyebrow::before { content: ""; width: 22px; height: 1px; background: var(--mint); display: block; }
+  .section-num { color: var(--faint); font-size: .78rem; font-weight: 700; letter-spacing: .12em; white-space: nowrap; }
+  .section-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; }
+  .level {
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid var(--line); border-radius: 999px; padding: 3px 9px;
+    color: var(--muted); font-size: .66rem; font-weight: 760; letter-spacing: .07em;
+    white-space: nowrap;
+  }
+  .level::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; display: block; }
+  .level.start { color: var(--mint); border-color: rgba(94, 234, 212, .26); background: rgba(94, 234, 212, .06); }
+  .level.core { color: var(--sky); border-color: rgba(125, 211, 252, .26); background: rgba(125, 211, 252, .06); }
+  .level.deep { color: var(--violet); border-color: rgba(196, 181, 253, .26); background: rgba(196, 181, 253, .06); }
+  .level.ref { color: var(--amber); border-color: rgba(251, 191, 36, .26); background: rgba(251, 191, 36, .06); }
+  .plain-line {
+    display: flex; align-items: flex-start; gap: 10px; margin: -16px 0 22px;
+    padding: 11px 14px; border-left: 3px solid var(--sky);
+    background: rgba(125, 211, 252, .055); border-radius: 0 10px 10px 0;
+    color: var(--muted); font-size: .84rem;
+  }
+  .plain-line b {
+    color: var(--sky); white-space: nowrap; font-size: .70rem;
+    letter-spacing: .08em; padding-top: 1px;
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: var(--shadow); backdrop-filter: blur(12px);
+  }
+  .card-pad { padding: 24px; }
+  .grid { display: grid; gap: 16px; }
+  .grid > *, .split-panel > *, .math-grid > *, .priority-grid > *, .evo-grid > * { min-width: 0; }
+  .card, .lane, .route, .priority, .evo-card, .math-card { min-width: 0; }
+  .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .span-2 { grid-column: span 2; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    border: 1px solid var(--line); background: rgba(148, 163, 184, .06);
+    color: var(--muted); border-radius: 999px; padding: 5px 10px; font-size: .75rem; font-weight: 600;
+    white-space: nowrap;
+  }
+  .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 10px var(--mint); }
+  .pill.amber .dot { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
+  .pill.rose .dot { background: var(--rose); box-shadow: 0 0 10px var(--rose); }
+  .tag {
+    display: inline-block; border-radius: 6px; padding: 2px 7px; font-size: .70rem; font-weight: 760;
+    letter-spacing: .06em; text-transform: uppercase; white-space: nowrap;
+  }
+  .tag.mint { color: var(--mint); background: rgba(94, 234, 212, .10); border: 1px solid rgba(94, 234, 212, .22); }
+  .tag.sky { color: var(--sky); background: rgba(125, 211, 252, .10); border: 1px solid rgba(125, 211, 252, .22); }
+  .tag.amber { color: var(--amber); background: rgba(251, 191, 36, .10); border: 1px solid rgba(251, 191, 36, .22); }
+  .tag.rose { color: var(--rose); background: rgba(251, 113, 133, .10); border: 1px solid rgba(251, 113, 133, .22); }
+  .tag.violet { color: var(--violet); background: rgba(196, 181, 253, .10); border: 1px solid rgba(196, 181, 253, .22); }
+  .callout {
+    border-left: 3px solid var(--mint); background: rgba(94, 234, 212, .06);
+    border-radius: 0 12px 12px 0; padding: 14px 16px; color: var(--muted);
+  }
+  .callout.warn { border-left-color: var(--amber); background: rgba(251, 191, 36, .06); }
+  .callout.rose { border-left-color: var(--rose); background: rgba(251, 113, 133, .06); }
+  .callout strong { color: var(--text); }
+  .divider { height: 1px; background: var(--line); margin: 20px 0; }
+
+  /* ---------- hero ---------- */
+  .hero { padding: 62px 0 54px; }
+  .hero-grid { display: grid; grid-template-columns: minmax(0, 1.18fr) minmax(360px, .82fr); gap: 48px; align-items: center; }
+  .hero .kicker {
+    display: inline-flex; align-items: center; gap: 10px; color: var(--mint);
+    font-size: .78rem; font-weight: 760; letter-spacing: .14em; text-transform: uppercase; margin-bottom: 20px;
+  }
+  .hero .kicker .line { width: 34px; height: 1px; background: var(--mint); }
+  .hero h1 span {
+    background: linear-gradient(105deg, var(--text) 18%, var(--mint) 55%, var(--sky) 88%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero .sub { margin-top: 22px; max-width: 680px; color: var(--muted); font-size: 1.05rem; }
+  .hero .sub strong { color: var(--text); font-weight: 650; }
+  .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+  .btn {
+    appearance: none; cursor: pointer; border-radius: 11px; padding: 10px 15px;
+    font-size: .86rem; font-weight: 700; display: inline-flex; align-items: center; gap: 8px;
+    border: 1px solid var(--line); background: var(--panel-2); color: var(--text); transition: .18s ease;
+  }
+  .btn:hover { transform: translateY(-1px); border-color: var(--line-strong); text-decoration: none; }
+  .btn.primary { background: linear-gradient(135deg, var(--mint), var(--mint-2)); color: #03110f; border: 0; box-shadow: 0 10px 30px rgba(45, 212, 191, .18); }
+  .btn.ghost { background: transparent; }
+  .hero-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+  .hero-visual {
+    position: relative; padding: 22px; min-height: 390px; overflow: hidden;
+    background: linear-gradient(160deg, rgba(20, 31, 51, .9), rgba(9, 14, 26, .94));
+    border: 1px solid var(--line); border-radius: 24px; box-shadow: var(--shadow);
+  }
+  html[data-theme="light"] .hero-visual { background: linear-gradient(160deg, #ffffff, #eff6fb); }
+  .hero-visual::before {
+    content: ""; position: absolute; inset: -2px; border-radius: 24px; pointer-events: none;
+    background: radial-gradient(400px 220px at 80% 0%, rgba(94, 234, 212, .18), transparent 65%);
+  }
+  .terminal-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 18px; position: relative; }
+  .terminal-dots { display: flex; gap: 6px; }
+  .terminal-dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); display: block; }
+  .terminal-dots i:nth-child(1) { background: var(--rose); }
+  .terminal-dots i:nth-child(2) { background: var(--amber); }
+  .terminal-dots i:nth-child(3) { background: var(--mint); }
+  .terminal-title { font-size: .68rem; color: var(--faint); letter-spacing: .14em; text-transform: uppercase; font-weight: 700; }
+  .hero-flow { position: relative; display: grid; gap: 9px; }
+  .hero-node {
+    display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+    border: 1px solid var(--line); border-radius: 11px; background: rgba(148, 163, 184, .045);
+    position: relative;
+  }
+  .hero-node .idx {
+    width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center;
+    font-size: .68rem; font-weight: 800; color: var(--bg); background: var(--mint); flex: none;
+  }
+  .hero-node:nth-child(2) .idx { background: var(--sky); }
+  .hero-node:nth-child(4) .idx { background: var(--violet); }
+  .hero-node:nth-child(6) .idx { background: var(--amber); }
+  .hero-node:nth-child(8) .idx { background: var(--rose); }
+  .hero-node strong { font-size: .82rem; display: block; }
+  .hero-node span { font-size: .70rem; color: var(--muted); display: block; margin-top: 1px; }
+  .hero-connector { height: 15px; display: flex; align-items: center; padding-left: 23px; }
+  .hero-connector i { width: 1px; height: 15px; background: linear-gradient(var(--line-strong), var(--mint)); display: block; margin-left: 0; }
+  .hero-console {
+    margin-top: 14px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line);
+    background: rgba(0, 0, 0, .18); color: var(--mint); font-size: .68rem; line-height: 1.6;
+    overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  }
+  html[data-theme="light"] .hero-console { background: rgba(15, 23, 42, .045); }
+  .hero-console .cursor { display: inline-block; width: 7px; height: 12px; background: var(--mint); vertical-align: -1px; animation: blink 1.1s steps(2, start) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .stats {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px; background: var(--line); border: 1px solid var(--line);
+    border-radius: 16px; overflow: hidden; margin-top: 44px;
+  }
+  .stat { background: color-mix(in srgb, var(--panel-solid) 80%, transparent); padding: 18px 20px; }
+  .stat .v { font-size: 1.42rem; font-weight: 780; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+  .stat .v em { font-style: normal; font-size: .76em; color: var(--muted); font-weight: 600; margin-left: 3px; }
+  .stat .k { color: var(--muted); font-size: .74rem; margin-top: 2px; }
+  .stat.accent .v { color: var(--mint); }
+
+  /* ---------- zero-background starter ---------- */
+  .starter { margin-top: 18px; padding: 26px; position: relative; overflow: hidden; }
+  .starter::after {
+    content: ""; position: absolute; right: -80px; top: -100px; width: 260px; height: 260px;
+    border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle, rgba(94, 234, 212, .10), transparent 68%);
+  }
+  .starter-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+  .starter h2 { font-size: clamp(1.35rem, 2.6vw, 2rem); }
+  .starter .lead { color: var(--muted); margin-top: 8px; max-width: 760px; }
+  .starter .lead strong { color: var(--text); }
+  .analogy {
+    margin-top: 16px; padding: 14px 16px; border-radius: 12px;
+    border: 1px solid rgba(94, 234, 212, .22); background: rgba(94, 234, 212, .055);
+    color: var(--text); font-size: .92rem;
+  }
+  .analogy strong { color: var(--mint); }
+  .plain-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+  .plain-item {
+    border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+    background: rgba(148, 163, 184, .025); min-width: 0;
+  }
+  .plain-item .n { color: var(--faint); font-size: .64rem; font-weight: 800; letter-spacing: .12em; }
+  .plain-item strong { display: block; font-size: .86rem; margin-top: 3px; }
+  .plain-item p { color: var(--muted); font-size: .78rem; margin-top: 4px; }
+  .starter-route { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .starter-route a {
+    display: inline-flex; align-items: center; gap: 7px; padding: 8px 11px;
+    border: 1px solid var(--line); border-radius: 8px; background: rgba(148, 163, 184, .04);
+    color: var(--text); font-size: .78rem; font-weight: 650;
+  }
+  .starter-route a:hover { border-color: rgba(94, 234, 212, .35); text-decoration: none; }
+  .starter-route a span { color: var(--faint); font-size: .68rem; }
+  .starter-bottom { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-top: 16px; }
+  .term-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .term-chips span {
+    font-size: .72rem; color: var(--muted); border: 1px solid var(--line);
+    border-radius: 999px; padding: 3px 8px; background: rgba(148, 163, 184, .035);
+  }
+  .term-chips b { color: var(--text); font-weight: 700; }
+  .starter-skip { max-width: 360px; color: var(--muted); font-size: .76rem; line-height: 1.7; }
+  .starter-skip strong { color: var(--amber); }
+
+  /* ---------- overview / map ---------- */
+  .mental-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+  .mental-card { padding: 20px; position: relative; overflow: hidden; }
+  .mental-card::after {
+    content: ""; position: absolute; right: -20px; bottom: -30px; width: 110px; height: 110px;
+    border-radius: 50%; background: radial-gradient(circle, rgba(94,234,212,.11), transparent 70%);
+  }
+  .mental-card .num { color: var(--faint); font-size: .68rem; font-weight: 800; letter-spacing: .14em; }
+  .mental-card h3 { margin-top: 8px; font-size: 1rem; }
+  .mental-card p { color: var(--muted); font-size: .84rem; margin-top: 6px; }
+  .mental-card .mini { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 5px; }
+  .mental-card .mini span { font-size: .67rem; color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 2px 6px; background: rgba(148,163,184,.04); }
+
+  .folder-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .folder-card { padding: 18px 20px; transition: .2s ease; }
+  .folder-card:hover { border-color: var(--line-strong); transform: translateY(-2px); }
+  .folder-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .folder-top code { font-size: .93rem; font-weight: 700; background: none; border: 0; padding: 0; color: var(--text); }
+  .folder-top .count { font-size: .68rem; color: var(--faint); font-variant-numeric: tabular-nums; }
+  .folder-card p { color: var(--muted); font-size: .81rem; margin-top: 7px; }
+  .folder-card .role { color: var(--mint); font-size: .72rem; font-weight: 700; margin-top: 10px; }
+  .tree {
+    font-family: "SFMono-Regular", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    font-size: .78rem; line-height: 1.85; color: var(--muted); overflow-x: auto;
+    padding: 18px; margin: 0; background: rgba(0, 0, 0, .14); border-radius: 12px; border: 1px solid var(--line);
+  }
+  html[data-theme="light"] .tree { background: rgba(15, 23, 42, .035); }
+  .tree .b { color: var(--text); font-weight: 700; }
+  .tree .g { color: var(--mint); }
+  .tree .y { color: var(--amber); }
+  .tree .m { color: var(--faint); }
+
+  /* ---------- tables ---------- */
+  .table-wrap { overflow-x: auto; max-width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 14px; }
+  table { border-collapse: collapse; width: 100%; min-width: 650px; font-size: .82rem; }
+  th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-size: .70rem; letter-spacing: .08em; text-transform: uppercase; background: rgba(148, 163, 184, .045); font-weight: 760; }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.highlight td { background: rgba(94, 234, 212, .045); }
+  .good { color: var(--mint); font-weight: 700; }
+  .bad { color: var(--rose); font-weight: 700; }
+  .warn { color: var(--amber); font-weight: 700; }
+
+  /* ---------- data pipeline ---------- */
+  .step-rail { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
+  .step-btn {
+    appearance: none; cursor: pointer; text-align: left; border: 1px solid var(--line);
+    background: rgba(148, 163, 184, .035); color: var(--muted); border-radius: 12px;
+    padding: 12px 12px 11px; transition: .18s ease; position: relative; min-width: 0;
+  }
+  .step-btn:hover { border-color: var(--line-strong); color: var(--text); }
+  .step-btn.active { border-color: rgba(94, 234, 212, .45); background: rgba(94, 234, 212, .075); color: var(--text); box-shadow: 0 0 0 1px rgba(94,234,212,.08) inset; }
+  .step-btn .n { display: block; font-size: .64rem; font-weight: 800; color: var(--faint); letter-spacing: .10em; }
+  .step-btn.active .n { color: var(--mint); }
+  .step-btn .t { display: block; font-size: .76rem; font-weight: 700; margin-top: 3px; line-height: 1.35; }
+  .step-detail { display: none; padding: 24px; }
+  .step-detail.active { display: block; }
+  .step-detail .detail-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+  .step-detail h3 { font-size: 1.05rem; }
+  .step-detail p { color: var(--muted); font-size: .88rem; margin-top: 7px; max-width: 820px; }
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 18px; }
+  .detail-box { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; background: rgba(148,163,184,.03); }
+  .detail-box .lbl { font-size: .68rem; letter-spacing: .10em; text-transform: uppercase; color: var(--faint); font-weight: 760; margin-bottom: 7px; }
+  .detail-box p, .detail-box li { font-size: .82rem; color: var(--muted); }
+  .detail-box ul { padding-left: 1rem; }
+
+  .window-viz { margin-top: 18px; }
+  .window-labels { display: flex; justify-content: space-between; font-size: .68rem; color: var(--faint); margin-bottom: 7px; }
+  .window-grid { display: grid; grid-template-columns: repeat(48, minmax(0, 1fr)); gap: 2px; }
+  .window-grid i {
+    height: 28px; border-radius: 2px; display: block; position: relative;
+    background: rgba(125, 211, 252, .18); border: 1px solid rgba(125, 211, 252, .16);
+  }
+  .window-grid i.hist { background: rgba(125, 211, 252, .14); }
+  .window-grid i.future { background: rgba(94, 234, 212, .16); border-color: rgba(94, 234, 212, .17); }
+  .window-grid i.origin { background: var(--amber); border-color: var(--amber); box-shadow: 0 0 12px rgba(251,191,36,.35); }
+  .window-grid i.anchor { background: var(--violet); border-color: var(--violet); box-shadow: 0 0 12px rgba(196,181,253,.38); }
+  .window-grid i span { display: none; }
+  .window-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; font-size: .72rem; color: var(--muted); }
+  .window-legend b { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  .window-legend .l1 { background: rgba(125,211,252,.55); }
+  .window-legend .l2 { background: rgba(94,234,212,.65); }
+  .window-legend .l3 { background: var(--amber); }
+  .window-legend .l4 { background: var(--violet); }
+  .anchor-table { margin-top: 16px; }
+  .anchor-table td:first-child { white-space: nowrap; }
+
+  .contract-tree { display: grid; grid-template-columns: 1.05fr .95fr; gap: 18px; }
+  .field-list { display: grid; gap: 8px; }
+  .field {
+    display: grid; grid-template-columns: 150px 1fr; gap: 12px; align-items: baseline;
+    padding: 9px 0; border-bottom: 1px dashed var(--line);
+  }
+  .field:last-child { border-bottom: 0; }
+  .field code { justify-self: start; }
+  .field span { color: var(--muted); font-size: .81rem; }
+
+  /* ---------- model arch ---------- */
+  .arch-wrap { padding: 10px 14px 18px; overflow-x: auto; }
+  .arch-svg { width: 100%; min-width: 840px; height: auto; display: block; }
+  .arch-svg text { font-family: "Inter", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  .arch-svg .box { fill: var(--panel-2); stroke: var(--line-strong); stroke-width: 1; rx: 11; }
+  .arch-svg .box-accent { fill: rgba(94, 234, 212, .075); stroke: rgba(94, 234, 212, .45); }
+  .arch-svg .box-sky { fill: rgba(125, 211, 252, .075); stroke: rgba(125, 211, 252, .40); }
+  .arch-svg .box-violet { fill: rgba(196, 181, 253, .075); stroke: rgba(196, 181, 253, .42); }
+  .arch-svg .box-amber { fill: rgba(251, 191, 36, .07); stroke: rgba(251, 191, 36, .38); }
+  .arch-svg .label { fill: var(--text); font-size: 13px; font-weight: 700; }
+  .arch-svg .sub { fill: var(--muted); font-size: 10.5px; }
+  .arch-svg .dim { fill: var(--mint); font-size: 10.5px; font-family: "SFMono-Regular", Consolas, monospace; }
+  .arch-svg .arrow { stroke: var(--line-strong); stroke-width: 1.4; fill: none; marker-end: url(#arrow); }
+  .arch-svg .arrow-accent { stroke: rgba(94, 234, 212, .65); stroke-width: 1.5; fill: none; marker-end: url(#arrowMint); }
+  .arch-svg .arrow-dash { stroke: rgba(196, 181, 253, .55); stroke-width: 1.3; stroke-dasharray: 5 4; fill: none; marker-end: url(#arrowViolet); }
+
+  /* ---------- training ---------- */
+  .train-flow { display: grid; gap: 10px; }
+  .train-row { display: grid; grid-template-columns: 34px 1fr; gap: 13px; align-items: start; }
+  .train-row .n {
+    width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center;
+    background: rgba(94,234,212,.09); border: 1px solid rgba(94,234,212,.22); color: var(--mint);
+    font-size: .72rem; font-weight: 800;
+  }
+  .train-row .body { border: 1px solid var(--line); border-radius: 12px; padding: 13px 15px; background: rgba(148,163,184,.025); }
+  .train-row .body strong { display: block; font-size: .88rem; }
+  .train-row .body p { color: var(--muted); font-size: .81rem; margin-top: 3px; }
+  .train-row .body .meta { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+  .train-row .body .meta span { font-size: .66rem; color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 2px 6px; }
+  .formula {
+    border: 1px solid rgba(94,234,212,.22); background: rgba(94,234,212,.055);
+    border-radius: 14px; padding: 18px 20px; font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: .82rem; line-height: 1.9; color: var(--text); overflow-x: auto;
+  }
+  .formula .mut { color: var(--muted); }
+  .formula .hi { color: var(--mint); }
+  .formula .am { color: var(--amber); }
+  .metric-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .metric { border: 1px solid var(--line); border-radius: 12px; padding: 13px 14px; background: rgba(148,163,184,.025); }
+  .metric .v { font-size: 1.18rem; font-weight: 780; font-variant-numeric: tabular-nums; }
+  .metric .k { color: var(--muted); font-size: .70rem; margin-top: 1px; }
+
+  /* ---------- inference / benchmark ---------- */
+  .lane { border: 1px solid var(--line); border-radius: 15px; padding: 20px; background: rgba(148,163,184,.025); }
+  .lane-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .lane-head h3 { font-size: 1rem; }
+  .lane ul { margin-top: 12px; }
+  .lane li { color: var(--muted); font-size: .82rem; }
+  .lane .out { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); font-size: .76rem; color: var(--faint); }
+  .gate-list { display: grid; gap: 7px; margin-top: 12px; }
+  .gate { display: flex; align-items: center; gap: 8px; font-size: .78rem; color: var(--muted); }
+  .gate::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--mint); flex: none; box-shadow: 0 0 8px rgba(94,234,212,.5); }
+  .gate.warn::before { background: var(--amber); box-shadow: 0 0 8px rgba(251,191,36,.5); }
+  .gate.bad::before { background: var(--rose); box-shadow: 0 0 8px rgba(251,113,133,.5); }
+
+  /* ---------- timeline / order ---------- */
+  .timeline { position: relative; padding-left: 26px; }
+  .timeline::before { content: ""; position: absolute; left: 8px; top: 8px; bottom: 8px; width: 1px; background: linear-gradient(var(--mint), var(--sky), var(--violet), transparent); opacity: .45; }
+  .tl-item { position: relative; padding-bottom: 26px; }
+  .tl-item:last-child { padding-bottom: 0; }
+  .tl-item::before {
+    content: ""; position: absolute; left: -23px; top: 5px; width: 9px; height: 9px; border-radius: 50%;
+    background: var(--bg); border: 2px solid var(--mint); box-shadow: 0 0 12px rgba(94,234,212,.3);
+  }
+  .tl-item.warn::before { border-color: var(--amber); box-shadow: 0 0 12px rgba(251,191,36,.3); }
+  .tl-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .tl-head h3 { font-size: .98rem; }
+  .tl-head .phase { font-size: .66rem; letter-spacing: .12em; color: var(--faint); font-weight: 800; }
+  .tl-item p { color: var(--muted); font-size: .83rem; margin-top: 5px; }
+  .tl-item .out { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .tl-item .out span { font-size: .68rem; border: 1px solid var(--line); border-radius: 5px; padding: 2px 6px; color: var(--muted); }
+
+  /* ---------- code blocks ---------- */
+  .code {
+    position: relative; margin-top: 12px; border: 1px solid var(--line); border-radius: 12px;
+    background: rgba(0,0,0,.22); overflow: hidden;
+  }
+  html[data-theme="light"] .code { background: rgba(15,23,42,.045); }
+  .code-top {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 7px 10px 7px 13px; border-bottom: 1px solid var(--line);
+    color: var(--faint); font-size: .65rem; letter-spacing: .10em; text-transform: uppercase;
+  }
+  .code pre { margin: 0; padding: 13px 15px; overflow-x: auto; font-size: .76rem; line-height: 1.7; color: var(--muted); }
+  .code pre .cmt { color: var(--faint); }
+  .copy {
+    appearance: none; cursor: pointer; border: 1px solid var(--line); background: transparent;
+    color: var(--muted); border-radius: 6px; font-size: .64rem; padding: 3px 7px; font-weight: 700;
+  }
+  .copy:hover { color: var(--mint); border-color: rgba(94,234,212,.35); }
+
+  /* ---------- onboarding ---------- */
+  .route-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .route { padding: 20px; }
+  .route .time { font-size: .70rem; color: var(--mint); font-weight: 760; letter-spacing: .10em; text-transform: uppercase; }
+  .route h3 { margin-top: 4px; font-size: 1rem; }
+  .route ol { margin-top: 12px; }
+  .route li { color: var(--muted); font-size: .82rem; }
+  .route li a { color: var(--text); }
+  .glossary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .term { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: rgba(148,163,184,.025); }
+  .term dt { font-weight: 760; font-size: .84rem; }
+  .term dd { margin: 4px 0 0; color: var(--muted); font-size: .78rem; }
+  .pitfalls { display: grid; gap: 9px; }
+  .pitfall { display: grid; grid-template-columns: 26px 1fr; gap: 10px; padding: 11px 13px; border: 1px solid var(--line); border-radius: 10px; background: rgba(251,191,36,.025); }
+  .pitfall .n { color: var(--amber); font-size: .72rem; font-weight: 800; }
+  .pitfall strong { font-size: .83rem; }
+  .pitfall p { color: var(--muted); font-size: .78rem; margin-top: 2px; }
+
+  /* ---------- experiment history / deep dive ---------- */
+  .wide-table table { min-width: 980px; }
+  .evo-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  .evo-card { padding: 18px; position: relative; overflow: hidden; }
+  .evo-card::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    background: var(--line-strong);
+  }
+  .evo-card.bad::before { background: var(--rose); }
+  .evo-card.warn::before { background: var(--amber); }
+  .evo-card.good::before { background: var(--mint); }
+  .evo-card .when { font-size: .66rem; letter-spacing: .12em; color: var(--faint); font-weight: 800; }
+  .evo-card h3 { font-size: .98rem; margin-top: 5px; }
+  .evo-card p { color: var(--muted); font-size: .80rem; margin-top: 6px; }
+  .evo-card .verdict { margin-top: 10px; font-size: .72rem; font-weight: 760; color: var(--muted); }
+  .evo-card.bad .verdict { color: var(--rose); }
+  .evo-card.warn .verdict { color: var(--amber); }
+  .evo-card.good .verdict { color: var(--mint); }
+  .split-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .route-panel { padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: rgba(148,163,184,.025); }
+  .route-panel.bad { border-color: rgba(251,113,133,.25); background: rgba(251,113,133,.035); }
+  .route-panel.good { border-color: rgba(94,234,212,.25); background: rgba(94,234,212,.035); }
+  .route-panel h3 { font-size: 1rem; }
+  .route-panel p, .route-panel li { color: var(--muted); font-size: .82rem; }
+  .route-panel ul { margin-top: 10px; }
+  .priority-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .priority { padding: 20px; position: relative; overflow: hidden; }
+  .priority .p { font-size: .68rem; font-weight: 800; letter-spacing: .12em; color: var(--faint); }
+  .priority h3 { font-size: 1rem; margin-top: 5px; }
+  .priority p, .priority li { color: var(--muted); font-size: .81rem; }
+  .priority ul { margin-top: 10px; }
+  .priority.p0 { border-color: rgba(251,113,133,.26); }
+  .priority.p1 { border-color: rgba(251,191,36,.26); }
+  .priority.p2 { border-color: rgba(94,234,212,.26); }
+  .priority.p0 .p { color: var(--rose); }
+  .priority.p1 .p { color: var(--amber); }
+  .priority.p2 .p { color: var(--mint); }
+  .checklist { display: grid; gap: 8px; }
+  .check { display: grid; grid-template-columns: 22px 1fr; gap: 9px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(148,163,184,.025); }
+  .check .box { width: 16px; height: 16px; border: 1px solid var(--line-strong); border-radius: 4px; margin-top: 3px; }
+  .check strong { font-size: .82rem; }
+  .check p { color: var(--muted); font-size: .78rem; margin-top: 2px; }
+  .faq { display: grid; gap: 8px; }
+  .faq details { border: 1px solid var(--line); border-radius: 11px; padding: 0; background: rgba(148,163,184,.025); }
+  .faq summary { cursor: pointer; padding: 13px 15px; font-size: .84rem; font-weight: 700; }
+  .faq .answer { padding: 0 15px 14px; color: var(--muted); font-size: .81rem; }
+  .faq .answer p + p { margin-top: 7px; }
+  .code-inline-note { font-size: .76rem; color: var(--faint); margin-top: 6px; }
+  .math-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .math-card { padding: 18px; }
+  .math-card h3 { font-size: .98rem; }
+  .math-card p, .math-card li { color: var(--muted); font-size: .81rem; }
+  .math-card .eq { margin-top: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: rgba(0,0,0,.16); font-family: "SFMono-Regular", Consolas, monospace; font-size: .76rem; line-height: 1.75; overflow-x: auto; color: var(--text); }
+  html[data-theme="light"] .math-card .eq { background: rgba(15,23,42,.04); }
+  .evidence-list { display: grid; gap: 8px; }
+  .evidence-row { display: grid; grid-template-columns: 150px 1fr auto; gap: 12px; align-items: baseline; padding: 10px 0; border-bottom: 1px dashed var(--line); }
+  .evidence-row:last-child { border-bottom: 0; }
+  .evidence-row .kind { font-size: .68rem; color: var(--faint); letter-spacing: .08em; text-transform: uppercase; font-weight: 760; }
+  .evidence-row .what { font-size: .82rem; }
+  .evidence-row .what span { display: block; color: var(--muted); font-size: .76rem; margin-top: 2px; }
+  .evidence-row .tag { align-self: start; }
+  .risk-table td:first-child { white-space: nowrap; }
+  .timeline.compact .tl-item { padding-bottom: 18px; }
+  .timeline.compact .tl-item p { max-width: 980px; }
+
+  .footer { padding: 48px 0 64px; border-top: 1px solid var(--line); color: var(--muted); }
+  .footer-grid { display: flex; align-items: flex-start; justify-content: space-between; gap: 28px; }
+  .footer p { font-size: .78rem; }
+  .footer .links { display: flex; flex-wrap: wrap; gap: 8px; }
+  .footer .links a { font-size: .72rem; border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; color: var(--muted); }
+  .footer .links a:hover { color: var(--mint); text-decoration: none; border-color: rgba(94,234,212,.30); }
+  .toast {
+    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%) translateY(16px);
+    background: var(--panel-solid); color: var(--text); border: 1px solid var(--line-strong);
+    padding: 9px 14px; border-radius: 10px; font-size: .78rem; box-shadow: var(--shadow);
+    opacity: 0; pointer-events: none; transition: .2s ease; z-index: 120;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .legacy-block { display: none; }
+  body.show-legacy .legacy-block { display: block; }
+  .legacy-inline { display: none; }
+  body.show-legacy .legacy-inline { display: inline-flex; }
+
+  /* ---------- reveal ---------- */
+  .reveal { opacity: 1; transform: none; transition: opacity .55s ease, transform .55s ease; }
+  html.js .reveal { opacity: 0; transform: translateY(14px); }
+  html.js .reveal.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    .reveal { opacity: 1; transform: none; }
+  }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 1080px) {
+    .hero-grid { grid-template-columns: 1fr; gap: 34px; }
+    .hero-visual { min-height: auto; }
+    .mental-grid, .folder-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .step-rail { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .plain-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .route-grid { grid-template-columns: 1fr; }
+    .evo-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .priority-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 780px) {
+    body { font-size: 15px; }
+    .wrap { width: min(var(--max), calc(100% - 28px)); }
+    .nav-inner { width: min(var(--max), calc(100% - 28px)); min-height: 58px; gap: 8px; }
+    .nav-links { display: none; position: absolute; left: 14px; right: 14px; top: 58px; background: var(--panel-solid); border: 1px solid var(--line); border-radius: 12px; padding: 8px; box-shadow: var(--shadow); }
+    .nav-links.open { display: grid; grid-template-columns: 1fr 1fr; }
+    .menu-toggle { display: inline-flex; }
+    .brand small { display: none; }
+    .hero { padding: 42px 0 38px; }
+    .hero .kicker { font-size: .68rem; letter-spacing: .10em; }
+    .hero h1 { font-size: clamp(1.9rem, 10.2vw, 3.2rem); }
+    .hero .sub { font-size: .96rem; }
+    .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .stat { padding: 14px 16px; }
+    .stat .v { font-size: 1.2rem; }
+    .section-head { display: block; }
+    .section-meta { align-items: flex-start; margin-top: 8px; }
+    .section-num { display: block; margin-top: 0; }
+    section { padding: 58px 0; }
+    .mental-grid, .folder-grid, .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+    .plain-grid { grid-template-columns: 1fr; }
+    .starter { padding: 20px; }
+    .starter-head, .starter-bottom { display: block; }
+    .starter-skip { margin-top: 14px; max-width: none; }
+    .plain-line { margin-top: -8px; }
+    .span-2 { grid-column: auto; }
+    .step-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .detail-grid, .contract-tree, .glossary { grid-template-columns: 1fr; }
+    .split-panel, .math-grid { grid-template-columns: 1fr; }
+    .evo-grid { grid-template-columns: 1fr; }
+    .evidence-row { grid-template-columns: 1fr; gap: 3px; }
+    .evidence-row .tag { justify-self: start; }
+    .metric-row { grid-template-columns: 1fr; }
+    .footer-grid { display: block; }
+    .footer .links { margin-top: 16px; }
+    .field { grid-template-columns: 1fr; gap: 3px; }
+    .window-grid { grid-template-columns: repeat(24, minmax(0, 1fr)); }
+    .window-grid i { height: 18px; }
+  }
+  @media print {
+    body { background: #fff; color: #111; font-size: 11pt; }
+    body::before, .nav, .progress, .hero-actions, .copy, .toast { display: none !important; }
+    .card, .hero-visual, .lane, .train-row .body, .step-detail, .step-btn { box-shadow: none; background: #fff; }
+    section { padding: 24px 0; break-inside: avoid; }
+    .reveal { opacity: 1; transform: none; }
+    a { color: #111; text-decoration: underline; }
+  }
+</style>
+</head>
+<body>
+<div class="progress" id="progress"></div>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span>MotionWeaver<small>PROJECT TOUR</small></span>
+    </div>
+    <div class="nav-links" id="navLinks">
+      <a href="#start">起步</a>
+      <a href="#map">地图</a>
+      <a href="#history">复盘</a>
+      <a href="#data">数据</a>
+      <a href="#model">模型</a>
+      <a href="#training">训练</a>
+      <a href="#inference">推理</a>
+      <a href="#benchmark">Benchmark</a>
+      <a href="#metrics">指标</a>
+      <a href="#tests">测试</a>
+      <a href="#recommendations">建议</a>
+      <a href="#order">顺序</a>
+      <a href="#troubleshooting">排障</a>
+      <a href="#onboarding">新人</a>
+    </div>
+    <div class="nav-actions">
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="切换主题" title="切换主题">◐</button>
+      <button class="icon-btn menu-toggle" id="menuToggle" type="button" aria-label="打开目录">☰</button>
+    </div>
+  </div>
+</nav>
+
+<header class="hero" id="overview">
+  <div class="wrap">
+    <div class="hero-grid">
+      <div>
+        <div class="kicker"><span class="line"></span> MotionWeaver / Reference-Guided Pose</div>
+        <h1>从一段动作，<br><span>到可播放的姿态。</span></h1>
+        <p class="sub">
+          MotionWeaver 是一个面向 Unreal Engine 的 AI 角色动画实验项目：
+          把 SOMA 动作数据整理成训练契约，用<strong>参考引导姿态补全</strong>模型生成 24 帧未来的全身姿态，
+          再验证、导出，并逐步接近 UE 运行时。
+        </p>
+        <div class="hero-actions">
+          <a class="btn primary" href="#start">零基础先看 <span aria-hidden="true">→</span></a>
+          <a class="btn ghost" href="#map">看全局地图</a>
+          <a class="btn ghost" href="#order">直接看执行顺序</a>
+          <button class="btn ghost" id="legacyToggle" type="button">显示历史对照</button>
+        </div>
+        <div class="hero-meta">
+          <span class="pill"><i class="dot"></i>主线：RefPose v3</span>
+          <span class="pill"><i class="dot"></i>78 骨 · 120 fps</span>
+          <span class="pill amber"><i class="dot"></i>UE 侧仍在实验阶段</span>
+        </div>
+      </div>
+
+      <div class="hero-visual" aria-label="项目链路速览">
+        <div class="terminal-head">
+          <div class="terminal-dots"><i></i><i></i><i></i></div>
+          <div class="terminal-title">motionweaver / pipeline</div>
+        </div>
+        <div class="hero-flow">
+          <div class="hero-node"><span class="idx">01</span><div><strong>SOMA 动作库</strong><span>71,132 条非镜像 · BVH / 原生轨道</span></div></div>
+          <div class="hero-connector"><i></i></div>
+          <div class="hero-node"><span class="idx">02</span><div><strong>固定骨架 + 四键 NPZ</strong><span>78 骨 · 120.0048 fps · Root 代理</span></div></div>
+          <div class="hero-connector"><i></i></div>
+          <div class="hero-node"><span class="idx">03</span><div><strong>48 帧窗口 + 稀疏硬参考</strong><span>24 历史 + 24 未来 · 0–2 帧锚点</span></div></div>
+          <div class="hero-connector"><i></i></div>
+          <div class="hero-node"><span class="idx">04</span><div><strong>RefPose v3 训练</strong><span>GRU + Transformer · 3.09 M 参数</span></div></div>
+          <div class="hero-connector"><i></i></div>
+          <div class="hero-node"><span class="idx">05</span><div><strong>离线评测 + ONNX 门禁</strong><span>四档参考 · CPU 数值对齐 · 延迟</span></div></div>
+          <div class="hero-connector"><i></i></div>
+          <div class="hero-node"><span class="idx">06</span><div><strong>UE 实验宿主</strong><span>尚未完成 AnimGraph / 实机闭环</span></div></div>
+        </div>
+        <div class="hero-console">$ python tools/dev.py doctor <span class="cursor" aria-hidden="true"></span></div>
+      </div>
+    </div>
+
+    <div class="stats" aria-label="关键数字">
+      <div class="stat"><div class="v">71,127</div><div class="k">训练契约 clips</div></div>
+      <div class="stat"><div class="v">2,490,688</div><div class="k">窗口总数 · 24 帧步长</div></div>
+      <div class="stat accent"><div class="v">3.654<em>cm</em></div><div class="k">v3 最优验证 RMSE</div></div>
+      <div class="stat accent"><div class="v">2.17<em>cm</em></div><div class="k">test · middle_and_end</div></div>
+      <div class="stat"><div class="v">78</div><div class="k">SOMA 骨骼节点</div></div>
+      <div class="stat"><div class="v">3.09<em>M</em></div><div class="k">模型参数量</div></div>
+      <div class="stat"><div class="v">8.7<em>h</em></div><div class="k">20 epoch · RTX 4070 Laptop</div></div>
+      <div class="stat"><div class="v">1.69–3.15×</div><div class="k">四档位置精度优于 Lerp</div></div>
+    </div>
+
+    <div class="starter card reveal" id="start">
+      <div class="starter-head">
+        <div>
+          <div class="eyebrow">Start Here / 零基础</div>
+          <h2>先别急着看代码：用 5 句话搞懂这个项目</h2>
+          <p class="lead">你可以完全不懂动画、深度学习和 UE。把动作想成一段连环画，这个项目就是让 AI 根据前后文补画中间页。</p>
+        </div>
+        <span class="pill"><i class="dot"></i>约 30 分钟 · 不用一次读完</span>
+      </div>
+
+      <div class="analogy">
+        <strong>一句话比喻：</strong>AI 已经看到前 24 页（历史动作），也知道角色接下来往哪走（未来 Root 路线），还拿到 0–2 张未来关键页（硬参考）；它要补画剩下的未来页。
+      </div>
+
+      <div class="plain-grid">
+        <div class="plain-item">
+          <div class="n">01 数据</div>
+          <strong>先把动作变成标准格式</strong>
+          <p>不同来源的动作，统一成 78 个关节、每秒约 120 帧、四个固定字段。就像把各种食材切成同样大小。</p>
+        </div>
+        <div class="plain-item">
+          <div class="n">02 任务</div>
+          <strong>不是凭空生成，是有条件补全</strong>
+          <p>过去 24 帧已知，未来 24 帧角色往哪走已知，再加 0–2 帧未来姿势作硬参考；模型补其余未来帧。</p>
+        </div>
+        <div class="plain-item">
+          <div class="n">03 模型</div>
+          <strong>先读历史，再让未来帧互相商量</strong>
+          <p>GRU 读历史动作，Transformer 让 24 个未来帧交换信息，最后输出每帧 78 个关节的姿态。</p>
+        </div>
+        <div class="plain-item">
+          <div class="n">04 训练</div>
+          <strong>用海量窗口反复做题</strong>
+          <p>71,127 条动作切成约 249 万个训练窗口；验证集像模拟考，用来挑最好的权重，test 只做最后验收。</p>
+        </div>
+        <div class="plain-item">
+          <div class="n">05 现状</div>
+          <strong>离线能打，实时还没闭环</strong>
+          <p>离线精度已经可用；UE 里的 AnimGraph、打包、多角色和脚滑补齐还没完成，不能对外说“运行时已搞定”。</p>
+        </div>
+      </div>
+
+      <div class="starter-route" aria-label="零基础阅读路线">
+        <a href="#map">1. 看全局地图 <span>5 min</span></a>
+        <a href="#data">2. 看数据怎么来 <span>5 min</span></a>
+        <a href="#model">3. 看模型吃什么 <span>5 min</span></a>
+        <a href="#order">4. 看执行顺序 <span>5 min</span></a>
+        <a href="#onboarding">5. 跑最小闭环 <span>10 min</span></a>
+      </div>
+
+      <div class="starter-bottom">
+        <div>
+          <div class="tiny faint">缩写先翻译，不认识的可以跳过</div>
+          <div class="term-chips">
+            <span><b>clip</b> 一段动作</span>
+            <span><b>骨架</b> 关节的层级结构</span>
+            <span><b>帧 / fps</b> 一张画面 / 每秒多少张</span>
+            <span><b>Root</b> 角色整体位移与朝向</span>
+            <span><b>窗口</b> 一次喂给模型的 48 帧</span>
+            <span><b>anchor</b> 不能改的硬参考帧</span>
+            <span><b>6D 旋转</b> 用 6 个数表示旋转</span>
+            <span><b>RMSE</b> 平均误差，越小越好</span>
+            <span><b>ONNX</b> 模型打包格式</span>
+            <span><b>UE</b> Unreal Engine</span>
+            <span><b>mmap</b> 按需从磁盘读数据</span>
+            <span><b>SOMA</b> 一套动作数据/骨架标准</span>
+          </div>
+        </div>
+        <div class="starter-skip">
+          <strong>第一次可以跳过：</strong>失败复盘、指标公式、测试矩阵、实验建议、排障。它们不影响理解主线，需要时再回来查。
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ================= 1. 全局地图 ================= -->
+<section id="map">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div>
+        <div class="eyebrow">01 / Map</div>
+        <h2>先看全局：四层结构，一条主线</h2>
+        <p class="lead">不要从“哪个脚本能跑”开始。先分清数据契约、模型定义、训练/推理编排、验证证据这四层，再沿着链路往下看。</p>
+      </div>
+      <div class="section-meta"><span class="level start">起点 · 先看</span><div class="section-num">REPO LAYOUT</div></div>
+    </div>
+
+    <div class="plain-line reveal"><b>人话</b><span>把项目想成四条流水线：数据、模型、训练/推理、验证。先知道谁交给谁，不用背文件名。</span></div>
+
+    <div class="mental-grid reveal">
+      <div class="card mental-card">
+        <div class="num">LAYER 01</div>
+        <h3>数据与契约层</h3>
+        <p>固定骨架、四键 NPZ、窗口索引、归一化统计量、mmap 训练集。所有训练/推理都先过这一层。</p>
+        <div class="mini"><span>data/runtime</span><span>data/tools</span><span>data/skeletons</span></div>
+      </div>
+      <div class="card mental-card">
+        <div class="num">LAYER 02</div>
+        <h3>模型层</h3>
+        <p>RefPose 主模型、VQ tokenizer 历史路线、动作表示与几何工具。模型文件不依赖训练 CLI。</p>
+        <div class="mini"><span>model/MotionWeaver/refpose</span><span>tokenizer</span><span>representation</span></div>
+      </div>
+      <div class="card mental-card">
+        <div class="num">LAYER 03</div>
+        <h3>训练 / 推理层</h3>
+        <p>数据采样、损失、优化器、检查点；推理加载、反归一化、6D 旋转解码、ONNX 导出。</p>
+        <div class="mini"><span>training</span><span>inference</span><span>benchmark/manifest</span></div>
+      </div>
+      <div class="card mental-card">
+        <div class="num">LAYER 04</div>
+        <h3>验证与证据层</h3>
+        <p>测试、Benchmark、实验记录、技术报告、软著材料。数字必须能追溯到契约与命令。</p>
+        <div class="mini"><span>tests</span><span>benchmark</span><span>docs/experiments</span><span>paper</span></div>
+      </div>
+    </div>
+
+    <div class="grid grid-2" style="margin-top: 16px;">
+      <div class="card card-pad reveal">
+        <div class="eyebrow">One-line Story</div>
+        <h3 style="font-size: 1.05rem;">主线只做一件事</h3>
+        <p class="muted small" style="margin-top: 8px;">
+          给定过去 24 帧历史、未来 24 帧 Root 轨迹、以及 0–2 帧硬参考，
+          直接回归其余帧的 78 骨全身姿态。它不是重建，也不是无条件预测。
+        </p>
+        <div class="divider"></div>
+        <div class="field-list">
+          <div class="field"><code>history</code><span>24 帧历史姿态 + 7 维 root_local</span></div>
+          <div class="field"><code>root_plan</code><span>未来 24 帧 Root 轨迹（理想离线条件）</span></div>
+          <div class="field"><code>reference</code><span>稀疏硬参考帧，未选中帧整行为 0</span></div>
+          <div class="field"><code>mask</code><span>参考可见性，1 表示该帧可见</span></div>
+        </div>
+      </div>
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Current Boundary</div>
+        <h3 style="font-size: 1.05rem;">已经做到 / 还没有做到</h3>
+        <div class="grid grid-2" style="margin-top: 12px;">
+          <div>
+            <div class="tag mint">已做到</div>
+            <ul class="small muted" style="margin-top: 8px;">
+              <li>全库 71,127 clips 训练视图</li>
+              <li>20 epoch 主线权重与四档评测</li>
+              <li>FP32 → ONNX CPU 数值对齐</li>
+              <li>脚滑约束、恢复训练、单测</li>
+            </ul>
+          </div>
+          <div>
+            <div class="tag rose">未完成</div>
+            <ul class="small muted" style="margin-top: 8px;">
+              <li>UE AnimGraph / NNE 正式接线</li>
+              <li>打包、多角色并发、网络</li>
+              <li>CMC / Mover 实际控制闭环</li>
+              <li>脚滑 &lt; 5× 目标</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top: 34px;" class="reveal">
+      <div class="eyebrow">Folder Distribution</div>
+      <h3 style="margin-bottom: 14px;">顶层目录：谁负责什么</h3>
+      <div class="folder-grid">
+        <div class="card folder-card">
+          <div class="folder-top"><code>data/</code><span class="count">145 py</span></div>
+          <p>数据契约、原生导入、重定向、窗口、契约构建、审核与发布。</p>
+          <div class="role">runtime · tools · skeletons · freezes</div>
+        </div>
+        <div class="card folder-card">
+          <div class="folder-top"><code>model/MotionWeaver/</code><span class="count">52 py</span></div>
+          <p>纯模型源码：refpose 主模型、tokenizer、backbone、动作表示、几何。</p>
+          <div class="role">模型不依赖 training / CLI</div>
+        </div>
+        <div class="card folder-card">
+          <div class="folder-top"><code>training/</code><span class="count">32 py</span></div>
+          <p>训练入口、Lightning 封装、损失、采样、评估、配置。</p>
+          <div class="role">pretrain · models · common · evaluation</div>
+        </div>
+        <div class="card folder-card">
+          <div class="folder-top"><code>inference/</code><span class="count">63 py</span></div>
+          <p>加载检查点、条件推理、导出、性能测量、可视化和 G1 演示。</p>
+          <div class="role">runtime · export · profiling · visualization</div>
+        </div>
+        <div class="card folder-card">
+          <div class="folder-top"><code>benchmark/</code><span class="count">15 py</span></div>
+          <p>统一重建评测 + refpose 部署门禁：manifest、ONNX、延迟。</p>
+          <div class="role">primitives · manifest · out</div>
+        </div>
+        <div class="card folder-card">
+          <div class="folder-top"><code>tests/</code><span class="count">58 py</span></div>
+          <p>契约、训练、导出、目录边界、仓库守卫与数值等价回归。</p>
+          <div class="role">pytest 唯一总入口</div>
+        </div>
+        <div class="card folder-card">
+          <div class="folder-top"><code>tools/</code><span class="count">49 py</span></div>
+          <p>日常开发入口、兼容 shim、一次性迁移脚本与验证工具。</p>
+          <div class="role">dev.py · train_reference_pose.py</div>
+        </div>
+        <div class="card folder-card">
+          <div class="folder-top"><code>docs/</code><span class="count">66 md</span></div>
+          <p>架构、数据契约、实验记录、迁移历史、方向决策。</p>
+          <div class="role">先读 README + 本页 + refpose v3</div>
+        </div>
+        <div class="card folder-card">
+          <div class="folder-top"><code>unreal-script/</code><span class="count">插件镜像</span></div>
+          <p>MotionWeaver 插件副本与同步工具；旧 79 骨插件已于 2026-11 移除。</p>
+          <div class="role">UE 侧边界</div>
+        </div>
+        <div class="card folder-card">
+          <div class="folder-top"><code>unreal-sample/</code><span class="count">实验宿主</span></div>
+          <p>AIMotionSample：GASP 示例工程副本，尚未接入模型与 AnimGraph。</p>
+          <div class="role">Content 不入 Git</div>
+        </div>
+        <div class="card folder-card">
+          <div class="folder-top"><code>paper/</code><span class="count">报告 / 软著</span></div>
+          <p>技术报告 HTML 工作稿、图表、软著材料。</p>
+          <div class="role">paper/main.html</div>
+        </div>
+        <div class="card folder-card">
+          <div class="folder-top"><code>.build/</code><span class="count">本地证据</span></div>
+          <p>安装元数据、实验输出、历史验收报告。混有可重建产物与证据，不要整目录删除。</p>
+          <div class="role">按文件判断去留</div>
+        </div>
+      </div>
+    </div>
+
+    <details class="card card-pad reveal" style="margin-top: 16px;">
+      <summary style="cursor: pointer; font-weight: 700;">展开完整目录树与模块边界</summary>
+      <div class="grid grid-2" style="margin-top: 18px;">
+        <pre class="tree"><span class="b">MotionWeaver/</span>
+├── <span class="g">data/</span>                  # 数据契约与 ETL
+│   ├── <span class="b">runtime/</span>          # 骨架、四键 NPZ、窗口、契约
+│   ├── <span class="b">tools/</span>            # ingest / build / audit / publish
+│   ├── <span class="b">skeletons/</span>        # soma_uniform_v1.json
+│   ├── <span class="b">freezes/</span>          # 封版锁文件
+│   └── <span class="y">raw/ prepared/</span>    # 本地数据，不提交
+├── <span class="g">model/MotionWeaver/</span>  # 网络、表示、几何
+│   ├── <span class="b">refpose/</span>          # 主线模型 + loss
+│   ├── <span class="b">tokenizer/</span>        # 历史 VQ-VAE 路线
+│   ├── <span class="b">backbone/</span>         # Pose / Root 网络
+│   └── <span class="b">representation/</span>   # 动作表示与共享特征
+├── <span class="g">training/</span>             # 训练与评估编排
+│   ├── <span class="b">pretrain/</span>         # train_unreal / train_conditioned_pose
+│   ├── <span class="b">models/</span>           # Lightning 封装
+│   ├── <span class="b">common/</span>           # 采样、质量、优化器
+│   ├── <span class="b">evaluation/</span>       # 四档评估、画廊、诊断
+│   └── <span class="y">runs/</span>             # 本地检查点，不提交
+├── <span class="g">inference/</span>            # 推理、导出、性能、可视化
+│   ├── <span class="b">runtime/</span>          # ConditionedPosePredictor
+│   ├── <span class="b">export/</span>           # FP32 / ONNX 导出
+│   ├── <span class="b">profiling/</span>        # 延迟、流式、参考姿态实验
+│   ├── <span class="b">visualization/</span>    # 预览、闭环播放、矩阵对比
+│   └── <span class="b">demo/ cli/</span>       # G1 MuJoCo 参考演示
+├── <span class="g">benchmark/</span>            # 统一评测 + 部署门禁
+│   ├── <span class="b">primitives/</span>       # 官方 metric / rms 复用
+│   ├── <span class="b">manifest/</span>         # refpose manifest / ONNX / latency
+│   └── <span class="b">out/</span>              # 小型评测报告
+├── <span class="g">tests/</span>               # pytest 回归
+├── <span class="g">docs/</span>                # 架构、实验、迁移、方向
+├── <span class="g">tools/</span>               # 开发入口 + 兼容 shim
+├── <span class="g">unreal-script/</span>       # 插件镜像（UE 边界）
+├── <span class="g">unreal-sample/</span>       # GASP 实验宿主
+├── <span class="g">paper/</span>               # 技术报告 / 软著
+├── <span class="g">model-weight/</span>        # LFS / 本地权重
+└── <span class="y">.build/</span>              # 本地证据，勿整目录删除</pre>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>模块</th><th>负责</th><th>不负责</th><th>入口</th></tr></thead>
+            <tbody>
+              <tr><td><code>data/runtime</code></td><td>骨架契约、四键 NPZ、窗口、归一化、接触标签</td><td>训练、模型结构</td><td><code>MotionWindows</code></td></tr>
+              <tr><td><code>data/tools</code></td><td>导入、重定向、构建、审计、审核、发布</td><td>梯度训练</td><td><code>python -m data.tools...</code></td></tr>
+              <tr><td><code>model/refpose</code></td><td>ReferenceGuidedPose、RootPlanHead、loss</td><td>读数据、CLI、UE</td><td><code>model/MotionWeaver/refpose/</code></td></tr>
+              <tr><td><code>training</code></td><td>训练循环、Lightning 封装、评估</td><td>正式 UE 运行时</td><td><code>tools/train_reference_pose.py</code></td></tr>
+              <tr><td><code>inference</code></td><td>加载、推理、导出、性能、可视化</td><td>训练权重</td><td><code>inference/runtime/</code></td></tr>
+              <tr><td><code>benchmark</code></td><td>统一指标、重建评测、部署门禁</td><td>训练模型</td><td><code>benchmark/run.py</code></td></tr>
+              <tr><td><code>unreal-*</code></td><td>实验宿主、插件镜像、UE 边界</td><td>训练数据生产</td><td><code>unreal-script/README.md</code></td></tr>
+              <tr><td><code>tests</code></td><td>契约、数值、目录、恢复训练回归</td><td>替代人工验收</td><td><code>pytest -q</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+
+    <div class="card card-pad reveal" style="margin-top: 16px;">
+      <div class="eyebrow">Call Graph</div>
+      <h3>两条运行链：训练与推理在代码里怎么走</h3>
+      <div class="split-panel" style="margin-top: 12px;">
+        <div>
+          <div class="tag mint">TRAIN</div>
+          <pre class="tree" style="margin-top: 9px; font-size: .76rem;"><span class="b">tools/train_reference_pose.py</span>
+├─ 读取 contract.json / windows.jsonl
+├─ 校验 fps / bones / split / stats
+├─ MotionWindows(split="train")
+│  ├─ mmap: p.npy / r.npy / k.npy
+│  ├─ origin = root[middle-1]
+│  ├─ history / root_plan / reference / mask
+│  └─ ClipShuffleSampler(chunk=16)
+├─ ReferenceGuidedPose(bones=78, width=256)
+├─ losses(position, rotation, velocity, contact)
+├─ AdamW + CosineAnnealingLR
+└─ last.pt / best.pt / history.json</pre>
+        </div>
+        <div>
+          <div class="tag sky">INFER / EXPORT</div>
+          <pre class="tree" style="margin-top: 9px; font-size: .76rem;"><span class="b">ConditionedPosePredictor</span>
+├─ verify_release(contract, artifacts, skeleton)
+├─ load checkpoint + contract_sha256
+├─ build inputs
+│  ├─ normalize positions with frozen mean/std
+│  ├─ rotations -> row-major 6D
+│  └─ reference * mask
+├─ forward -> [1,24,702]
+├─ denormalize + 6D -> matrix
+├─ hard override mask frames
+└─ NPZ / ONNX export / latency</pre>
+        </div>
+      </div>
+      <div class="callout small" style="margin-top: 12px;">
+        <strong>依赖方向：</strong><code>model/</code> 不依赖 training/CLI；推理运行时也不 import 训练入口。这样同一份模型类可以被训练、评估、ONNX 导出和 UE 侧契约复用，避免“为了推理把整个训练栈拖进来”。
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 2. 实验演进与失败路线 ================= -->
+<section id="history">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div>
+        <div class="eyebrow">02 / Experiment History</div>
+        <h2>实验演进：主线不是一开始就长这样</h2>
+        <p class="lead">这个项目最重要的资产不只是 3.09 M 参数的权重，而是“哪些路线被证伪、为什么被证伪、现在凭什么继续”。下面把失败路线、转折点和判断依据放在同一张时间线上，避免后来者重复踩坑。</p>
+      </div>
+      <div class="section-meta"><span class="level deep">复盘 · 后看</span><div class="section-num">FAILURE → PIVOT → V3</div></div>
+    </div>
+
+    <div class="plain-line reveal"><b>人话</b><span>这里记录“哪些路走不通、为什么”。第一次看可以只读每段时间线标题，不必啃完所有表格。</span></div>
+
+    <div class="evo-grid reveal">
+      <div class="card evo-card bad">
+        <div class="when">2026-09 / ROUTE A</div>
+        <h3>VQ-VAE Token + 大主干</h3>
+        <p>先把连续姿态压成离散码字，再让生成主干预测 token。结构看起来“更生成式”，实际把误差天花板压在了分词器上。</p>
+        <div class="verdict">结论：已否证，不再作为主线</div>
+      </div>
+      <div class="card evo-card warn">
+        <div class="when">2026-09 → 2026-10 / ROUTE B</div>
+        <h3>旧 79 骨 UE 闭环</h3>
+        <p>30 fps、单输入窗口、VQ 重建、Root 由源动画驱动。它验证过线程与缓冲骨架，但与 78 骨 SOMA / 120 fps / 四输入契约不兼容。</p>
+        <div class="verdict">结论：插件移除，只保留经验</div>
+      </div>
+      <div class="card evo-card good">
+        <div class="when">2026-10 → 2026-11 / ROUTE C</div>
+        <h3>直接回归姿态</h3>
+        <p>跳过离散 token，直接从历史、未来 Root 和稀疏硬参考回归 24×702。任务变成“补间”，误差不再被码本封顶。</p>
+        <div class="verdict">结论：当前主线，v3 封盘</div>
+      </div>
+      <div class="card evo-card warn">
+        <div class="when">2026-11-14 / POST-FREEZE</div>
+        <h3>复现与口径复核</h3>
+        <p>后续全量复现暴露接触损失 fps 写死 30 的缺陷；同时证明 20→30 epoch 只多换 0.08–0.19 cm，继续堆 epoch 不划算。</p>
+        <div class="verdict">结论：保留 v3 主成绩，补充口径更正</div>
+      </div>
+    </div>
+
+    <div class="card card-pad reveal" style="margin-top: 16px;">
+      <div class="eyebrow">Timeline</div>
+      <h3>从“能跑”到“可解释”的关键节点</h3>
+      <div class="timeline compact" style="margin-top: 16px;">
+        <div class="tl-item">
+          <div class="tl-head"><h3>上游 MotionBricks / G1 参考演示</h3><span class="phase">BASE</span></div>
+          <p>保留上游的 VQ-VAE、Root/Pose 主干、动作表示、MuJoCo 参考演示和预训练权重。它证明“动作 token 化 + 生成”在参考骨架与演示环境里可行，但不等于 UE 游戏运行时能力。</p>
+        </div>
+        <div class="tl-item warn">
+          <div class="tl-head"><h3>旧 UE 79 骨 VQ 重建链路</h3><span class="phase">2026-09</span></div>
+          <p>单输入、固定窗口、30 fps、只重建已知姿态；Root 始终由源动画驱动。它验证了“动画工作线程同步推理 + 有界 PoseBuffer 融合”的工程骨架，但没有解决条件生成、网络位移、接触和 120 fps 契约。旧插件最终在 2026-11 移除。</p>
+          <div class="out"><span>保留：线程/缓冲经验</span><span>移除：79 骨插件</span><span>不兼容：78 骨/四输入/120 fps</span></div>
+        </div>
+        <div class="tl-item warn">
+          <div class="tl-head"><h3>归一化口径缺陷被定位</h3><span class="phase">2026-10</span></div>
+          <p>训练侧使用落盘前已标准化的特征，评测侧却喂原始特征，`is_normalized` 又被写死为默认值。后果是训练目标与评测目标不是同一个量：30,000 步后关节误差从 108 cm 断崖到 310 cm。对齐口径后，同一评测下 RMSE 从 94.54 cm 降到 83.85 cm（−11.3%）。这是项目至今最大的单点收益，且不来自任何损失项。</p>
+          <div class="out"><span>教训：先验口径，再调模型</span><span>教训：归一化是契约</span></div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-head"><h3>SOMA 固定骨架与全库训练视图</h3><span class="phase">2026-10</span></div>
+          <p>确定 78 骨 SOMA uniform 为训练目标；SOMA 非镜像全库整理为 71,127 条 fps120 clip；四场景 A/B/C/D 与四键 NPZ 落盘；随后构建可 mmap 的逐字段 npy，随机窗口读从 3.75 ms 降到 1.33 ms，吞吐从 322 升到 1,829 samples/s。</p>
+          <div class="out"><span>71,127 clips</span><span>2,490,688 windows</span><span>176.7 GB mmap</span></div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-head"><h3>RefPose v3 全库训练与封盘</h3><span class="phase">2026-11-02</span></div>
+          <p>20 epoch、batch 256、bf16、RTX 4070 Laptop 8.7 小时；验证 RMSE 7.046 → 3.654 cm；test 四档 5.28 / 3.22 / 3.22 / 2.17 cm；优于 Lerp 1.69–3.15 倍。权重 SHA-256 `6d10d358…ed55ffc`，作为交付基线冻结。</p>
+          <div class="out"><span>frozen</span><span>3,087,038 params</span><span>脚滑未达 &lt;5×</span></div>
+        </div>
+        <div class="tl-item warn">
+          <div class="tl-head"><h3>接触损失 fps 缺陷与全量复现</h3><span class="phase">2026-11-14</span></div>
+          <p>复核发现旧实现把脚速换算帧率写死为 30，而契约是 120.0048 fps；脚速进入平方后，`contact_weight=0.4` 实际只生效 1/16，等效 0.025。修复后用同强度对照验证“修复本身中性”；再测 0.1 与 0.4，前者四档 RMSE 涨 22–36%、脚滑只降 5–11%，后者直接发散。结论：不要再靠调 contact_weight 压脚滑。</p>
+          <div class="out"><span>w0.025 ≈ 旧轮</span><span>w0.1 不划算</span><span>w0.4 发散</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-pad reveal" style="margin-top: 16px;">
+      <div class="eyebrow">Postmortem</div>
+      <h3>失败路线总表：症状、根因与留下的资产</h3>
+      <div class="table-wrap wide-table" style="margin-top: 14px;">
+        <table>
+          <thead>
+            <tr><th>路线 / 改动</th><th>观察到的症状</th><th>根因</th><th>证据</th><th>留下的结论</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>VQ-VAE tokenizer + 大主干</strong></td>
+              <td>码本约 20k 步后塌缩；每批 token 量化到同一码字；关节 RMSE 早期约 96.5 cm，训练到 100k 步仍约 84–86 cm。</td>
+              <td>码字里没有可优化信息，分词器退化；生成主干再大也无法突破 tokenizer 的重建天花板。</td>
+              <td><code>model/MotionWeaver/tokenizer/__init__.py</code>、<code>docs/refpose-v3-training-evaluation.md §11</code>、<code>paper/main.html §9/§11</code></td>
+              <td>离散 token 不是本任务的必要条件；姿态精度应直接优化。</td>
+            </tr>
+            <tr>
+              <td><strong>旧 79 骨 UE 插件</strong></td>
+              <td>能加载、能预览、能验证线程，但无法承接 78 骨 SOMA、120 fps、四输入 refpose。</td>
+              <td>契约代际不兼容：单输入 vs 四输入、79 vs 78 骨、30 vs 120 fps、VQ 重建 vs 条件生成。</td>
+              <td><code>docs/repository-layout.md</code>、<code>docs/refpose-ue-runtime-integration-research.md</code></td>
+              <td>旧会话层不能复用；线程、PoseBuffer、验收统计骨架可以沿用。</td>
+            </tr>
+            <tr>
+              <td><strong>训练/评测归一化不一致</strong></td>
+              <td>训练 loss 正常，评测 RMSE 断崖式恶化；30k 步后 108 → 310 cm。</td>
+              <td>一侧标准化、一侧原始特征，`is_normalized` 默认值掩盖了差异。</td>
+              <td><code>README.md “最近的实测结论”</code>、<code>paper/main.html §9</code></td>
+              <td>口径修复带来 −11.3%，比任何损失项都大；先对齐数据再调模型。</td>
+            </tr>
+            <tr>
+              <td><strong>分片存储（2,000 窗口/片）</strong></td>
+              <td>随机读取比整条 NPZ 还慢约 100 倍。</td>
+              <td><code>np.savez</code> 打包后必须解压整包，随机访问代价极高。</td>
+              <td><code>docs/refpose-v3-training-evaluation.md §11</code></td>
+              <td>训练窗口存储应按字段、可 mmap，不按“片”打包。</td>
+            </tr>
+            <tr>
+              <td><strong>tiny：每 clip 只存前 48 帧</strong></td>
+              <td>读取很快，但大量窗口取到错误动作。</td>
+              <td>窗口 start 分布为 0–16,416，97.1% 的窗口不是从第 0 帧开始。</td>
+              <td><code>data/runtime/refpose_windows.py</code> 注释、v3 记录 §11</td>
+              <td>正确性优先于缓存技巧；不能把“前 48 帧”当成整条动作。</td>
+            </tr>
+            <tr>
+              <td><strong>LRU 从 256 加到 4096</strong></td>
+              <td>期望减少 IO，实际更慢。</td>
+              <td>内存压力导致换页，LRU 命中收益被系统换页吞掉。</td>
+              <td>v3 记录 §11</td>
+              <td>缓存容量要跟内存预算一起评估，不是越大越好。</td>
+            </tr>
+            <tr>
+              <td><strong>contact_weight 直接加到 1.0</strong></td>
+              <td>脚滑改善，但位置精度退化约 40%。</td>
+              <td>接触项与位置项的量级关系决定了“用精度换脚滑”的交换比很差。</td>
+              <td><code>docs/experiments/2026-11-14-refpose-contact-fps.md</code></td>
+              <td>0.4 是旧口径的平衡点；修复 fps 后 0.4 会发散，不能照搬。</td>
+            </tr>
+            <tr>
+              <td><strong>把验收指标直接写进损失</strong></td>
+              <td>17 组同步数对照，关节位置损失效应 +0.10 cm，小于换种子的 0.56 cm 抖动；符号检验 p=0.75。</td>
+              <td>码本已塌缩，token 中没有可优化信息；损失项无法创造信息。</td>
+              <td><code>README.md</code>、<code>paper/main.html §9</code></td>
+              <td>先修表示与数据，再谈损失工程。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout rose small" style="margin-top: 14px;">
+        <strong>不要把“失败”理解成“没产出”。</strong> 这些实验留下了三类资产：可复用的工程骨架（线程、PoseBuffer、导出、测试）、可量化的否证（码本塌缩、fps 缺陷、存储反模式）、以及一套更严格的实验口径。后者决定了 v3 的数字是否可信。
+      </div>
+    </div>
+
+    <div class="split-panel reveal" style="margin-top: 16px;">
+      <div class="route-panel bad">
+        <div class="tag rose">ROUTE A / 已否证</div>
+        <h3 style="margin-top: 8px;">VQ token 生成路线</h3>
+        <ul>
+          <li><strong>表示：</strong>连续姿态 → 离散码字 → token 序列。</li>
+          <li><strong>模型：</strong>VQ-VAE tokenizer + Root/Pose 大主干，结构复杂、显存与调参成本高。</li>
+          <li><strong>监督：</strong>重建 + token 预测；误差先经过量化，再进入生成。</li>
+          <li><strong>结果：</strong>码本塌缩到 perplexity=1.000；重建 RMSE 长期停在几十厘米级。</li>
+          <li><strong>根因：</strong>分词器退化后，生成主干没有可用的离散信息；这不是“再训久一点”能解决的。</li>
+          <li><strong>仍然保留：</strong>上游 G1 演示、历史对照、Tokenizer 代码与部分工程经验。</li>
+        </ul>
+      </div>
+      <div class="route-panel good">
+        <div class="tag mint">ROUTE C / 当前主线</div>
+        <h3 style="margin-top: 8px;">RefPose 直接回归路线</h3>
+        <ul>
+          <li><strong>表示：</strong>78 骨 × (3 位置 + 6D 旋转)，直接输出 24×702。</li>
+          <li><strong>模型：</strong>GRU 历史编码 + 条件投影 + 3 层 Transformer，3.09 M 参数。</li>
+          <li><strong>条件：</strong>24 帧历史、24 帧未来 Root、0–2 帧硬参考；mask 末帧硬覆盖。</li>
+          <li><strong>结果：</strong>test 四档 5.28 / 3.22 / 3.22 / 2.17 cm；优于 Lerp 1.69–3.15 倍。</li>
+          <li><strong>代价：</strong>脚滑 6.9–8.7×，需 UE 端 IK/Foot Locking；Root 仍是 oracle。</li>
+          <li><strong>为什么继续：</strong>任务定义清晰、误差可分解、可导出 ONNX、可逐层验收。</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="grid grid-3 reveal" style="margin-top: 16px;">
+      <div class="card card-pad">
+        <div class="eyebrow">Why It Failed</div>
+        <h3>码本塌缩的判别</h3>
+        <p class="small muted" style="margin-top: 6px;">不是看 loss 是否下降，而是看 <code>perplexity</code> 是否长期接近 1、不同样本是否量化到同一码字、以及重建是否退化为自编码。只要这三件事同时出现，继续加 backbone 或调损失都没有意义。</p>
+      </div>
+      <div class="card card-pad">
+        <div class="eyebrow">Why It Works</div>
+        <h3>直接回归的收益</h3>
+        <p class="small muted" style="margin-top: 6px;">误差直接落在关节位置与旋转上，没有量化瓶颈；参考帧用 <code>torch.where</code> 精确覆盖；训练与评测共享同一套归一化、窗口和 6D 排布。模型小，但每个设计都能被单独验证。</p>
+      </div>
+      <div class="card card-pad">
+        <div class="eyebrow">What Changed</div>
+        <h3>真正的转折点</h3>
+        <p class="small muted" style="margin-top: 6px;">不是“换了个更大的模型”，而是把任务从“重建已知动作”改成“在稀疏参考下补全未来”，并把数据、归一化、窗口、6D、Root 权威逐项钉成契约。模型只是契约上的一个可替换部件。</p>
+      </div>
+    </div>
+
+    <div class="callout warn reveal" style="margin-top: 16px;">
+      <strong>如果只记三句话：</strong>① VQ token 路线的失败是表示层失败，不是训练时间不够；② 归一化口径修复比任何损失项都值钱；③ 当前 v3 的强项是离线姿态精度，不是 UE 运行时、脚滑或 Root 预测。把这三件事分开说，才不会把实验结果讲错。
+    </div>
+  </div>
+</section>
+
+<!-- ================= 3. 数据链路 ================= -->
+<section id="data">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div>
+        <div class="eyebrow">03 / Data Pipeline</div>
+        <h2>数据链路：从 BVH 到可训练的契约</h2>
+        <p class="lead">当前主线不经过 UE 编辑器。原始 SOMA 动作在 Python 中完成固定骨架适配、Root 代理、窗口索引和 mmap 落盘；UE 只保留实验宿主与后续运行时边界。</p>
+      </div>
+      <div class="section-meta"><span class="level core">主线 · 必读</span><div class="section-num">DATA → CONTRACT</div></div>
+    </div>
+
+    <div class="plain-line reveal"><b>人话</b><span>把各种原始动作整理成统一格式：固定 78 个关节、固定帧率、固定四个字段，再切成模型能吃的 48 帧小段。</span></div>
+
+    <div class="step-rail reveal" role="tablist" aria-label="数据链路步骤">
+      <button class="step-btn active" data-step="s1" type="button"><span class="n">STEP 01</span><span class="t">素材与元数据</span></button>
+      <button class="step-btn" data-step="s2" type="button"><span class="n">STEP 02</span><span class="t">原生导入 / 标准化</span></button>
+      <button class="step-btn" data-step="s3" type="button"><span class="n">STEP 03</span><span class="t">固定 SOMA 骨架</span></button>
+      <button class="step-btn" data-step="s4" type="button"><span class="n">STEP 04</span><span class="t">训练视图</span></button>
+      <button class="step-btn" data-step="s5" type="button"><span class="n">STEP 05</span><span class="t">契约 + mmap</span></button>
+      <button class="step-btn" data-step="s6" type="button"><span class="n">STEP 06</span><span class="t">48 帧窗口</span></button>
+      <button class="step-btn" data-step="s7" type="button"><span class="n">STEP 07</span><span class="t">基线 / 评测</span></button>
+    </div>
+
+    <div class="card reveal">
+      <div class="step-detail active" data-panel="s1">
+        <div class="detail-top">
+          <div><h3>素材与元数据：先把来源固定住</h3><p>训练主线使用 SOMA uniform 的非镜像动作。来源 BVH、元数据和处理回执都保留身份，不用“看起来差不多”的文件替代。</p></div>
+          <span class="tag sky">SOURCE</span>
+        </div>
+        <div class="detail-grid">
+          <div class="detail-box"><div class="lbl">主库</div><p><code>soma_uniform/bvh/</code> 保留原始 BVH；<code>seed_metadata_v004.csv</code> 中 <code>is_mirror=False</code> 为 71,132 条、62,301,201 帧。</p></div>
+          <div class="detail-box"><div class="lbl">跨骨架来源</div><p>UEFN 原生导出经离线 Python FK 转为固定 SOMA；2026-10-18 批次 1,969 条，30 fps，作为内部参考，不与 120 fps 主表混算。</p></div>
+          <div class="detail-box"><div class="lbl">输出位置</div><p><code>raw/soma_uniform/&lt;run&gt;/</code>、<code>processed/soma_uniform/&lt;run&gt;/</code>、<code>reports/.../progress.json</code>；完成状态以进度文件为准。</p></div>
+          <div class="detail-box"><div class="lbl">原则</div><p>原始文件不改写、不删除；镜像、重采样、裁剪和跨骨架结果继承同一来源分区，不制造跨 train/test 的同源泄漏。</p></div>
+        </div>
+      </div>
+
+      <div class="step-detail" data-panel="s2">
+        <div class="detail-top">
+          <div><h3>原生导入与标准化：保留时间与局部变换</h3><p>把 BVH / FBX / glTF 等来源读成可回读的原生运动，再做空间与时间标准化。这里定义“真实帧”，后续窗口只从真实帧取。</p></div>
+          <span class="tag violet">NORMALIZE</span>
+        </div>
+        <div class="detail-grid">
+          <div class="detail-box"><div class="lbl">关键代码</div><p><code>native_motion.py</code>、<code>native_motion_io.py</code>、<code>normalize_motion.py</code>、<code>motion_features.py</code>、<code>motion_processing.py</code>。</p></div>
+          <div class="detail-box"><div class="lbl">Root 代理 v1</div><p>Root 位置取记录空间 Hips 的 X/Z，Y=0；朝向取左右髋形成的前向。高度全部留在身体位置中。它是<strong>可逆离线代理</strong>，不是 UE Actor 的真实轨迹。</p></div>
+          <div class="detail-box"><div class="lbl">接触候选</div><p>三态：<code>-1 unknown</code>、<code>0 noncontact_candidate</code>、<code>1 contact_candidate</code>。脚用完整记录空间的踝/趾速度，手保持 unknown；候选不是物理接触真值。</p></div>
+          <div class="detail-box"><div class="lbl">时间规则</div><p>保留来源声明的秒数与 FPS，不默认降到 30 fps；所有条件、参考和监督目标必须在同一时间轴上。</p></div>
+        </div>
+      </div>
+
+      <div class="step-detail" data-panel="s3">
+        <div class="detail-top">
+          <div><h3>固定 SOMA 骨架：78 个节点，统一表示</h3><p><code>soma_uniform_v1.json</code> 固定名称、顺序、父索引、局部 rest TRS、单位和轴方向。训练模型只认这套骨架。</p></div>
+          <span class="tag mint">78 BONES</span>
+        </div>
+        <div class="detail-grid">
+          <div class="detail-box"><div class="lbl">节点与角色</div><p>78 个命名节点：<code>Root</code> + <code>Hips</code> 身体子树，含手指、面部和具名末端。角色表提供 <code>left_foot</code> / <code>left_toe</code> / <code>right_foot</code> / <code>right_toe</code> 等语义。</p></div>
+          <div class="detail-box"><div class="lbl">UEFN → SOMA</div><p><code>retarget_uefn_to_soma.py</code> 使用显式映射、实际 FK 方向、参考锚点、极分解和尺寸统一；不调用 UE IK Retargeter。缺失监督的关节用掩码标出。</p></div>
+          <div class="detail-box"><div class="lbl">坐标</div><p>模型内部坐标系：前 +Z、上 +Y、右 −X；UE 转换见 <code>inference/visualization/ue_axis.py</code>：<code>ue = (ours_z, -ours_x, ours_y)</code>。</p></div>
+          <div class="detail-box"><div class="lbl">边界</div><p>跨骨架骨长变化可能改变手脚落点；方向与回读通过不等于接触精度。所有结果默认 <code>training_ready=false</code>，后续再建正式划分/窗口。</p></div>
+        </div>
+      </div>
+
+      <div class="step-detail" data-panel="s4">
+        <div class="detail-top">
+          <div><h3>训练视图：四键 NPZ + 场景分类</h3><p><code>build_soma_training_set.py</code> 把 processed 运动变成训练/评测共用的四键 NPZ，并按场景 A/B/C/D 与帧率组分开。</p></div>
+          <span class="tag sky">4-KEY NPZ</span>
+        </div>
+        <div class="detail-grid">
+          <div class="detail-box"><div class="lbl">四键</div><p><code>positions</code> <span class="mono">[T,78,3]</span>、<code>rotations</code> <span class="mono">[T,78,3,3]</span>、<code>timestamps</code> <span class="mono">[T]</span>、<code>root_track</code> <span class="mono">[T,7]</span>（xyz + xyzw）。</p></div>
+          <div class="detail-box"><div class="lbl">场景</div><p>A 常规移动 · B 大姿态转换 · C 跑酷攀爬 · D 开放交互。D 组参与训练提升泛化，但不用于动作合成的硬约束。</p></div>
+          <div class="detail-box"><div class="lbl">帧率组</div><p>按 <code>fps_group</code> 分目录，绝不混批；同一个 tokenizer 的时间粒度只在同帧率组内一致。120 fps 主库与 30 fps 重定向库分开报告。</p></div>
+          <div class="detail-box"><div class="lbl">拒绝项</div><p>帧数不足、token 预算超限、格式错误等逐条写入 <code>rejected.jsonl</code>；失败目录不写 <code>dataset.json</code>，避免半成品被当成发布。</p></div>
+        </div>
+      </div>
+
+      <div class="step-detail" data-panel="s5">
+        <div class="detail-top">
+          <div><h3>契约 + mmap：把“训练到底吃什么”冻结</h3><p><code>build_refpose_release.py</code> 产出 <code>contract.json</code>、<code>windows.jsonl</code>、训练分区统计量和 mmap 目录，解决“NPZ 整包解压太慢”的问题。</p></div>
+          <span class="tag amber">FROZEN CONTRACT</span>
+        </div>
+        <div class="contract-tree">
+          <div>
+            <pre class="tree"><span class="b">&lt;release&gt;/</span>
+  contract/
+    <span class="g">contract.json</span>      # 窗口、骨骼、fps、划分、哈希
+    <span class="g">windows.jsonl</span>     # {"clip_index": i, "start": s}
+    stats/
+      <span class="y">pose_mean.npy</span>     # (78,3) 只用 train 分区
+      <span class="y">pose_std.npy</span>
+<span class="b">&lt;mmap&gt;/</span>
+  clips/fps120/&lt;clip_id&gt;/
+    <span class="g">p.npy</span>             # positions, 全部帧
+    <span class="g">r.npy</span>             # 6D, row-major interleaved
+    <span class="g">k.npy</span>             # root_track, 权威 Root
+    <span class="m">c.npy</span>             # 可选接触
+  skeleton.json</pre>
+            <div class="callout small" style="margin-top: 12px;">
+              <strong>两个字段不能混：</strong><code>raw_file</code> 必须是 NPZ 路径；<code>mmap_file</code> 是 mmap 目录。写反会让评测/推理在读数据时直接失败。
+            </div>
+          </div>
+          <div class="detail-box">
+            <div class="lbl">为什么 mmap</div>
+            <p>一条 clip 平均 868 帧，训练只用 48 帧，NPZ 整包解压浪费约 94.5%。改成逐字段 <code>.npy</code> + <code>mmap</code> 后：</p>
+            <div class="metric-row" style="margin-top: 10px;">
+              <div class="metric"><div class="v good">1.33 ms</div><div class="k">随机窗口读（原 3.75 ms）</div></div>
+              <div class="metric"><div class="v good">1,829</div><div class="k">样本/秒（原 322）</div></div>
+              <div class="metric"><div class="v">176.7 GB</div><div class="k">全量 mmap 体积</div></div>
+            </div>
+            <div class="divider"></div>
+            <div class="lbl">划分与规模</div>
+            <ul>
+              <li>按 asset 家族 SHA-256 确定性划分 80 / 10 / 10；同一家族不跨分区。</li>
+              <li>71,127 clips；窗口 2,490,688；train 1,988,285 / validation 245,232 / test 257,171。</li>
+              <li>窗口起点步长 = 24；不是“只取每条 clip 前 48 帧”。</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-detail" data-panel="s6">
+        <div class="detail-top">
+          <div><h3>48 帧窗口：历史、未来与硬参考</h3><p><code>MotionWindows</code> 在 <code>__getitem__</code> 里把一条 clip 切成 48 帧：前 24 帧历史，后 24 帧未来。未来里只有 mask 选中的帧能进入 reference。</p></div>
+          <span class="tag violet">24 + 24</span>
+        </div>
+        <div class="window-viz">
+          <div class="window-labels"><span>history · 24 帧</span><span>future · 24 帧</span></div>
+          <div class="window-grid" id="windowGrid" aria-label="48 帧窗口示意"></div>
+          <div class="window-legend">
+            <span><b class="l1"></b>历史帧</span>
+            <span><b class="l2"></b>未来帧</span>
+            <span><b class="l3"></b>origin = root[23]</span>
+            <span><b class="l4"></b>硬参考锚点</span>
+          </div>
+        </div>
+        <div class="grid grid-2" style="margin-top: 18px;">
+          <div class="detail-box">
+            <div class="lbl">窗口内顺序</div>
+            <ol class="small muted" style="margin-top: 6px;">
+              <li><code>start</code> → <code>start+24</code> 为历史；<code>start+24</code> → <code>start+48</code> 为未来。</li>
+              <li><code>origin = root[middle - 1]</code>，即最后一帧历史 Root；不是 <code>root[middle]</code>。</li>
+              <li>姿态位置用 train 分区 <code>mean/std</code> 归一化；旋转 6D 与 root_local 不归一化。</li>
+              <li><code>reference</code> 在未选中帧整行为 0；<code>mask</code> 为 0/1，表示“不可见/可见”。</li>
+            </ol>
+          </div>
+          <div class="detail-box">
+            <div class="lbl">四档参考</div>
+            <div class="table-wrap anchor-table">
+              <table>
+                <thead><tr><th>档位</th><th>参考帧</th><th>生成帧</th><th>含义</th></tr></thead>
+                <tbody>
+                  <tr><td><code>no_reference</code></td><td>0</td><td>24</td><td>纯预测</td></tr>
+                  <tr><td><code>middle_reference</code></td><td>12</td><td>23</td><td>只有中点</td></tr>
+                  <tr><td><code>end_reference</code></td><td>23</td><td>23</td><td>只有末帧</td></tr>
+                  <tr class="highlight"><td><code>middle_and_end</code></td><td>12, 23</td><td>22</td><td>中点 + 末帧</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="small muted" style="margin-top: 8px;">训练时支持随机参考采样：v3 主线使用 0 / 1 / 2 帧的四档位置组合，<code>diverse</code> 模式可采 0–3 帧任意位置；评测四档固定，便于跨模型比较。</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-detail" data-panel="s7">
+        <div class="detail-top">
+          <div><h3>基线与评测：先有尺子，再看模型</h3><p>在训练模型之前，先用 Hold 与 Lerp 两个零成本基线确认评测协议有区分度；模型评估复用同一套 <code>score</code> / <code>aggregate</code>。</p></div>
+          <span class="tag rose">BASELINE</span>
+        </div>
+        <div class="detail-grid">
+          <div class="detail-box"><div class="lbl">Hold</div><p>把历史最后一帧原样复制到未来；有参考帧时用参考帧覆盖。简单，但在长位移动作上误差很大。</p></div>
+          <div class="detail-box"><div class="lbl">Lerp</div><p>位置线性插值、旋转四元数 SLERP；参考帧把未来切成若干段。它是“无学习”的强基线，也是模型必须超过的门槛。</p></div>
+          <div class="detail-box"><div class="lbl">主指标</div><p><code>non_anchor_pose_rmse_cm</code>：只算非锚点帧的关节位置 RMSE；每 clip 等权，避免长动作主导。</p></div>
+          <div class="detail-box"><div class="lbl">辅助指标</div><p>旋转平均角误差、速度误差、接触期脚速、源动作接触脚速；脚滑倍数 = 接触期脚速 ÷ 源动作接触期脚速。</p></div>
+        </div>
+        <div class="callout warn small" style="margin-top: 16px;">
+          <strong>不要跨契约比数字：</strong>基线报告、v2/v3 训练记录可能使用不同窗口密度或划分；“窗口数”“test clips”看起来像同一件事，实际可能是不同契约版本。比较前先核对 contract sha256 与窗口定义。
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-3" style="margin-top: 16px;">
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Scenes</div>
+        <h3>四场景分布</h3>
+        <div class="field-list" style="margin-top: 10px;">
+          <div class="field"><code>A · 常规移动</code><span>27,182</span></div>
+          <div class="field"><code>B · 大姿态转换</code><span>14,235</span></div>
+          <div class="field"><code>C · 跑酷攀爬</code><span>2,621</span></div>
+          <div class="field"><code>D · 开放交互</code><span>27,089</span></div>
+        </div>
+      </div>
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Splits</div>
+        <h3>窗口划分</h3>
+        <div class="field-list" style="margin-top: 10px;">
+          <div class="field"><code>train</code><span>1,988,285</span></div>
+          <div class="field"><code>validation</code><span>245,232</span></div>
+          <div class="field"><code>test</code><span>257,171</span></div>
+          <div class="field"><code>step</code><span>24 帧</span></div>
+        </div>
+      </div>
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Contract Guards</div>
+        <h3>契约里必须对上的东西</h3>
+        <ul class="small muted" style="margin-top: 10px;">
+          <li><code>history_frames=24</code>、<code>future_frames=24</code></li>
+          <li>骨架 SHA-256、来源清单 SHA-256</li>
+          <li>每段 NPZ 的 <code>raw_sha256</code></li>
+          <li>train 分区统计量，不能重算</li>
+          <li>Root 四元数归一化、时间轴固定帧率</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 4. 模型 ================= -->
+<section id="model">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div>
+        <div class="eyebrow">04 / Model</div>
+        <h2>模型：一个直接回归的姿态补全器</h2>
+        <p class="lead">主线模型 <code>ReferenceGuidedPose</code> 不经过 VQ-VAE tokenizer，直接输出 24 帧 × 78 骨 × 9 维。它用 GRU 编码历史，用 Transformer 建模未来时间轴，并在输出端硬覆盖参考帧。</p>
+      </div>
+      <div class="section-meta"><span class="level core">主线 · 必读</span><div class="section-num">3.09 M PARAMS</div></div>
+    </div>
+
+    <div class="plain-line reveal"><b>人话</b><span>模型像一个“看前后文填空”的网络：历史交给 GRU，未来 24 帧用 Transformer 互相参考，最后输出每帧姿态。</span></div>
+
+    <div class="card reveal" style="overflow: hidden;">
+      <div class="arch-wrap">
+        <svg class="arch-svg" viewBox="0 0 1120 500" role="img" aria-label="ReferenceGuidedPose 架构图">
+          <defs>
+            <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,4 L0,8 Z" fill="var(--line-strong)"/>
+            </marker>
+            <marker id="arrowMint" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,4 L0,8 Z" fill="rgba(94,234,212,.8)"/>
+            </marker>
+            <marker id="arrowViolet" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,4 L0,8 Z" fill="rgba(196,181,253,.8)"/>
+            </marker>
+          </defs>
+
+          <text class="sub" x="24" y="18">INPUTS · 四路条件</text>
+
+          <rect class="box box-sky" x="24" y="32" width="250" height="82" rx="11"/>
+          <text class="label" x="40" y="57">history</text>
+          <text class="dim" x="40" y="76">[24, 709]</text>
+          <text class="sub" x="40" y="94">234 pos + 468 rot6d + 7 root_local</text>
+
+          <rect class="box" x="24" y="140" width="250" height="58" rx="11"/>
+          <text class="label" x="40" y="163">root_plan</text>
+          <text class="dim" x="40" y="182">[24, 7] · xyz + xyzw</text>
+
+          <rect class="box box-violet" x="24" y="222" width="250" height="58" rx="11"/>
+          <text class="label" x="40" y="245">reference</text>
+          <text class="dim" x="40" y="264">[24, 702] · 未选中帧全 0</text>
+
+          <rect class="box box-amber" x="24" y="304" width="250" height="50" rx="11"/>
+          <text class="label" x="40" y="326">mask</text>
+          <text class="dim" x="40" y="344">[24, 1] · 0 / 1</text>
+
+          <rect class="box box-accent" x="340" y="44" width="190" height="78" rx="11"/>
+          <text class="label" x="356" y="70">GRU</text>
+          <text class="dim" x="356" y="89">709 → 256</text>
+          <text class="sub" x="356" y="107">取最后 hidden state</text>
+
+          <rect class="box box-accent" x="340" y="205" width="190" height="86" rx="11"/>
+          <text class="label" x="356" y="231">Linear</text>
+          <text class="dim" x="356" y="250">710 → 256</text>
+          <text class="sub" x="356" y="268">root + reference + mask</text>
+
+          <rect class="box" x="340" y="330" width="190" height="55" rx="11"/>
+          <text class="label" x="356" y="354">time embedding</text>
+          <text class="dim" x="356" y="372">[1, 24, 256] · learned</text>
+
+          <circle cx="590" cy="230" r="27" fill="rgba(94,234,212,.10)" stroke="rgba(94,234,212,.48)" stroke-width="1.2"/>
+          <text x="590" y="237" text-anchor="middle" fill="var(--mint)" font-size="20" font-weight="700">+</text>
+
+          <rect class="box box-accent" x="660" y="176" width="210" height="108" rx="11"/>
+          <text class="label" x="676" y="202">TransformerEncoder</text>
+          <text class="dim" x="676" y="221">3 layers · 4 heads</text>
+          <text class="sub" x="676" y="241">ff_dim 768 · dropout 0.1</text>
+          <text class="sub" x="676" y="259">norm_first · batch_first</text>
+
+          <rect class="box box-sky" x="920" y="186" width="168" height="88" rx="11"/>
+          <text class="label" x="936" y="212">LayerNorm + Linear</text>
+          <text class="dim" x="936" y="231">256 → 702</text>
+          <text class="sub" x="936" y="251">reshape [24, 78, 9]</text>
+
+          <rect class="box box-violet" x="920" y="338" width="168" height="78" rx="11"/>
+          <text class="label" x="936" y="363">hard override</text>
+          <text class="dim" x="936" y="382">Where(mask, ref, pred)</text>
+          <text class="sub" x="936" y="400">锚点输出精确等于 reference</text>
+
+          <path class="arrow" d="M274 73 H340"/>
+          <path class="arrow" d="M274 169 C300 169 315 215 340 230"/>
+          <path class="arrow" d="M274 251 H340"/>
+          <path class="arrow" d="M274 329 C300 329 315 280 340 268"/>
+          <path class="arrow-accent" d="M530 83 C556 83 566 190 572 210"/>
+          <path class="arrow-accent" d="M530 248 H562"/>
+          <path class="arrow-accent" d="M530 357 C556 357 566 270 572 250"/>
+          <path class="arrow-accent" d="M617 230 H660"/>
+          <path class="arrow-accent" d="M870 230 H920"/>
+          <path class="arrow-dash" d="M1004 274 V338"/>
+          <path class="arrow-dash" d="M274 251 C300 251 300 430 936 430 V416"/>
+
+          <text class="sub" x="24" y="474">输入位置已按 train 分区统计量归一化；旋转 6D 与 root_local 不归一化。</text>
+          <text class="sub" x="700" y="474">输出位置反归一化；6D 转旋转矩阵后可播放。</text>
+        </svg>
+      </div>
+    </div>
+
+    <div class="grid grid-3" style="margin-top: 16px;">
+      <div class="card card-pad reveal">
+        <div class="tag mint">MAIN</div>
+        <h3 style="margin-top: 8px;">ReferenceGuidedPose</h3>
+        <p class="small muted" style="margin-top: 6px;">GRU 历史编码 + 条件投影 + 3 层 Transformer + 输出头；输出端硬覆盖参考帧。主线训练与推理共用同一个类。</p>
+        <div class="field-list" style="margin-top: 12px;">
+          <div class="field"><code>参数量</code><span>3.09 M</span></div>
+          <div class="field"><code>骨骼</code><span>78</span></div>
+          <div class="field"><code>隐层</code><span>256</span></div>
+          <div class="field"><code>输出</code><span>[24, 702]</span></div>
+        </div>
+      </div>
+      <div class="card card-pad reveal">
+        <div class="tag violet">EXTENSION</div>
+        <h3 style="margin-top: 8px;">StanceGuidedPose</h3>
+        <p class="small muted" style="margin-top: 6px;">继承主线模型，增加逐未来帧站/蹲目标 embedding。当前是扩展设计，不是 v3 主线权重。</p>
+        <div class="callout small" style="margin-top: 12px;">站蹲状态必须逐未来帧给出；数据侧的条件可见性与玩家真实输入仍需区分。</div>
+      </div>
+      <div class="card card-pad reveal">
+        <div class="tag amber">EXTENSION</div>
+        <h3 style="margin-top: 8px;">RootPlanHead</h3>
+        <p class="small muted" style="margin-top: 6px;">从 24 帧历史预测未来 24 帧 Root 变换；输出四元数归一化，末维 bias 初始化为 1。属于后续“模型驱动 Root”方向。</p>
+        <div class="callout warn small" style="margin-top: 12px;">当前 v3 的 Root 轨迹来自源动作，是离线理想条件；不要把 RootPlanHead 当成已上线的运行时能力。</div>
+      </div>
+    </div>
+
+    <div class="grid grid-2" style="margin-top: 16px;">
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Tensor Contract</div>
+        <h3>输入输出逐项对账</h3>
+        <div class="table-wrap" style="margin-top: 12px;">
+          <table>
+            <thead><tr><th>张量</th><th>形状</th><th>说明</th></tr></thead>
+            <tbody>
+              <tr><td><code>history</code></td><td class="mono">[B,24,709]</td><td>78×9 姿态 + 7 Root</td></tr>
+              <tr><td><code>root_plan</code></td><td class="mono">[B,24,7]</td><td>xyz + xyzw</td></tr>
+              <tr><td><code>reference</code></td><td class="mono">[B,24,702]</td><td>未选中帧全 0</td></tr>
+              <tr><td><code>mask</code></td><td class="mono">[B,24,1]</td><td>0 / 1</td></tr>
+              <tr class="highlight"><td><code>joints</code></td><td class="mono">[B,24,702]</td><td>3 位置 + 6 旋转</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Critical Detail</div>
+        <h3>6D 旋转不是“按列拼接”</h3>
+        <p class="small muted" style="margin-top: 8px;">仓库里的 6D 是 <strong>row-major interleaved</strong>：每骨 6 个数按 <code>m00,m01,m10,m11,m20,m21</code> 排列。正确解码：</p>
+        <pre class="code" style="margin-top: 10px; padding: 14px;"><code>col0 = [0, 2, 4]
+col1 = [1, 3, 5]
+col2 = cross(col0, col1)</code></pre>
+        <div class="callout rose small" style="margin-top: 12px;">
+          用错排布时，<code>col2</code> 会退化成近零向量，严重时除零得到 NaN。Root、部分手部叶骨最容易先崩。以 <code>benchmark/manifest/refpose_manifest_v1.json</code> 为准。
+        </div>
+      </div>
+    </div>
+
+    <div class="legacy-block card card-pad reveal" style="margin-top: 16px;">
+      <div class="tag rose">LEGACY / 已否证</div>
+      <h3 style="margin-top: 8px;">VQ-VAE tokenizer + 大主干：为什么不走这条线</h3>
+      <p class="small muted" style="margin-top: 6px;">
+        早期路线用 VQ-VAE 把动作离散成 token，再让主干生成 token。问题不是“训练不够久”，而是码本在 20k 步后塌缩到 <code>perplexity=1.000</code>，
+        每批所有 token 量化到同一码字，分词器退化为自编码器；关节 RMSE 卡在约 96.5 cm。
+        主线因此改为直接回归姿态。VQ 代码仍保留在 <code>model/MotionWeaver/tokenizer/</code> 和 G1 参考演示中，但不再作为主线。
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 5. 训练 ================= -->
+<section id="training">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div>
+        <div class="eyebrow">05 / Training</div>
+        <h2>训练：20 epoch 跑满全库</h2>
+        <p class="lead">主线训练入口是 <code>tools/train_reference_pose.py</code>。它复用 <code>MotionWindows</code>、<code>ReferenceGuidedPose</code> 和 <code>losses</code>，但把“封版清单 + 人工审核”换成契约哈希校验，适合直接复现实验。</p>
+      </div>
+      <div class="section-meta"><span class="level core">主线 · 必读</span><div class="section-num">REF POSE V3</div></div>
+    </div>
+
+    <div class="plain-line reveal"><b>人话</b><span>训练就是拿约 249 万个样本反复做题；验证集用来挑权重，test 只在最后看一次，避免自己骗自己。</span></div>
+
+    <div class="grid grid-2">
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Training Loop</div>
+        <h3>从数据到检查点的执行顺序</h3>
+        <div class="train-flow" style="margin-top: 14px;">
+          <div class="train-row"><div class="n">01</div><div class="body"><strong>读取契约</strong><p>校验 <code>contract.json</code>、24+24 窗口、来源哈希与骨架哈希。</p></div></div>
+          <div class="train-row"><div class="n">02</div><div class="body"><strong>构建 Dataset</strong><p><code>MotionWindows</code> 懒加载 + LRU 256；优先 mmap，缺失时回落 NPZ。</p><div class="meta"><span>mmap p/r/k</span><span>随机参考帧</span><span>接触标签</span></div></div></div>
+          <div class="train-row"><div class="n">03</div><div class="body"><strong>采样与批处理</strong><p><code>ClipShuffleSampler</code> 按 clip 分块，chunk=16；batch 256；workers 8；pin_memory；prefetch 4。</p></div></div>
+          <div class="train-row"><div class="n">04</div><div class="body"><strong>前向 + 损失</strong><p>bf16 autocast；GRU → 条件投影 → Transformer → 输出；计算位置/旋转/速度/接触损失。</p></div></div>
+          <div class="train-row"><div class="n">05</div><div class="body"><strong>反向 + 更新</strong><p>AdamW 3e-4；梯度裁剪 1.0；CosineAnnealingLR，T_max = epochs × steps。</p></div></div>
+          <div class="train-row"><div class="n">06</div><div class="body"><strong>验证 + 存盘</strong><p>每 epoch 算非锚点位置 RMSE；保存 <code>last.pt</code> / <code>best.pt</code> / <code>history.json</code>；续训恢复优化器与调度器。</p></div></div>
+        </div>
+      </div>
+
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Loss</div>
+        <h3>训练目标：精度优先，脚滑作为约束</h3>
+        <div class="formula" style="margin-top: 14px;">
+          total = <span class="hi">10</span> × position_loss<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;+ rotation_loss<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;+ <span class="hi">2</span> × velocity_loss<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;+ <span class="am">contact_weight</span> × contact_loss
+        </div>
+        <div class="detail-box" style="margin-top: 14px;">
+          <div class="lbl">position / rotation</div>
+          <p>只在 <code>visible = 1 - mask</code> 的帧上计算；位置误差乘 <code>pose_std</code> 回到厘米量级，旋转用 6D 差平方。</p>
+        </div>
+        <div class="detail-box" style="margin-top: 8px;">
+          <div class="lbl">velocity</div>
+          <p>预测与目标的帧间位移差，约束运动连续性，避免“每帧都对、连起来抽搐”。</p>
+        </div>
+        <div class="detail-box" style="margin-top: 8px;">
+          <div class="lbl">contact</div>
+          <p>只惩罚“相邻两帧都接触、脚却还在滑”的帧对；脚速 = 世界坐标帧间位移 × 契约 fps。fps 必须取契约值，不能写死 30。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-2" style="margin-top: 16px;">
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Hyperparameters</div>
+        <h3>v3 封盘配置</h3>
+        <div class="field-list" style="margin-top: 10px;">
+          <div class="field"><code>epochs</code><span>20</span></div>
+          <div class="field"><code>batch size</code><span>256</span></div>
+          <div class="field"><code>optimizer</code><span>AdamW · lr 3e-4 · wd 0.01</span></div>
+          <div class="field"><code>precision</code><span>bf16 autocast</span></div>
+          <div class="field"><code>contact_weight</code><span>记录值 0.4；旧实现实际等效 0.025（见下方更正）</span></div>
+          <div class="field"><code>seed</code><span>42</span></div>
+          <div class="field"><code>runtime</code><span>31,474 s / 8.7 h · RTX 4070 Laptop</span></div>
+        </div>
+        <div class="callout warn small" style="margin-top: 12px;">
+          <strong>口径更正（2026-11-14）：</strong>v3 训练时脚速换算把 fps 写死为 30，而契约是 120.0048；脚速进入平方后整项被缩小 16 倍，因此日志中的 <code>contact_weight=0.4</code> 实际只生效 1/16，等效 <strong>0.025</strong>。修复后按同强度复测，损失逐位相同；而新的 <code>w=0.4</code> 会发散、<code>w=0.1</code> 让四档 RMSE 涨 22–36% 只换脚滑降 5–11%。引用旧结果时必须带上这条说明。
+        </div>
+      </div>
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Checkpoint</div>
+        <h3>检查点里不只有权重</h3>
+        <p class="small muted" style="margin-top: 6px;">续训必须恢复优化器一阶/二阶动量、调度器进度、epoch、step、best 与 history。只恢复权重会让学习率与动量重新起步，前面的 epoch 收益被打散。</p>
+        <div class="field-list" style="margin-top: 10px;">
+          <div class="field"><code>model</code><span>state_dict</span></div>
+          <div class="field"><code>optimizer</code><span>AdamW state</span></div>
+          <div class="field"><code>scheduler</code><span>CosineAnnealing state + T_max</span></div>
+          <div class="field"><code>epoch / step</code><span>续训位置</span></div>
+          <div class="field"><code>best / history</code><span>最优值与逐轮记录</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-pad reveal" style="margin-top: 16px;">
+      <div class="eyebrow">Results</div>
+      <h3>v3 正式评测：四档参考</h3>
+      <p class="small muted" style="margin-top: 6px;">test split · 257,171 窗口 · <code>middle_window_per_clip</code> · oracle Root · 每 clip 等权 · 只算非锚点帧。</p>
+      <div class="table-wrap" style="margin-top: 14px;">
+        <table>
+          <thead><tr><th>档位</th><th class="num">GT 帧</th><th class="num">生成帧</th><th class="num">v3 模型</th><th class="num">Lerp</th><th class="num">优于基线</th><th class="num">脚滑（全帧）</th><th class="num">脚滑（纯生成）</th></tr></thead>
+          <tbody>
+            <tr><td><code>no_reference</code></td><td class="num">0</td><td class="num">24</td><td class="num good">5.28 cm</td><td class="num">16.64</td><td class="num good">3.15×</td><td class="num">6.9×</td><td class="num">6.9×</td></tr>
+            <tr><td><code>middle_reference</code></td><td class="num">1</td><td class="num">23</td><td class="num good">3.22 cm</td><td class="num">7.24</td><td class="num good">2.25×</td><td class="num">8.6×</td><td class="num">7.3×</td></tr>
+            <tr><td><code>end_reference</code></td><td class="num">1</td><td class="num">23</td><td class="num good">3.22 cm</td><td class="num">7.46</td><td class="num good">2.32×</td><td class="num">8.6×</td><td class="num">7.3×</td></tr>
+            <tr class="highlight"><td><code>middle_and_end</code></td><td class="num">2</td><td class="num">22</td><td class="num good">2.17 cm</td><td class="num">3.66</td><td class="num good">1.69×</td><td class="num">8.7×</td><td class="num">6.6×</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="grid grid-3" style="margin-top: 14px;">
+        <div class="metric"><div class="v good">3.654 cm</div><div class="k">最佳验证 RMSE（epoch 19）</div></div>
+        <div class="metric"><div class="v">7.046 → 3.654</div><div class="k">20 轮验证曲线</div></div>
+        <div class="metric"><div class="v warn">6.9–8.7×</div><div class="k">脚滑未达 &lt; 5× 目标</div></div>
+      </div>
+      <div class="callout warn small" style="margin-top: 14px;">
+        <strong>已知限制：</strong>Root 轨迹取自源动作，是理想控制输入；硬参考直接来自目标帧；所有指标是离线关节误差，<strong>未做 UE 内实机验证</strong>。验证曲线末轮仍在下降，继续训练仍有收益。
+      </div>
+    </div>
+
+    <div class="grid grid-2" style="margin-top: 16px;">
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Model Generations</div>
+        <h3>v1 → v2 → v3：变化不只在数据量</h3>
+        <div class="table-wrap" style="margin-top: 12px;">
+          <table>
+            <thead><tr><th>版本</th><th>数据 / epoch</th><th class="num">验证 RMSE</th><th class="num">no_reference</th><th class="num">middle_and_end</th><th class="num">脚滑</th></tr></thead>
+            <tbody>
+              <tr><td>v1</td><td>2k / 30 ep</td><td class="num">4.28 cm</td><td class="num">6.74</td><td class="num">2.90</td><td class="num">17–22×</td></tr>
+              <tr><td>v2</td><td>20k / 20 ep</td><td class="num">5.53 cm</td><td class="num">7.68</td><td class="num">3.36</td><td class="num">7.6–10.8×</td></tr>
+              <tr class="highlight"><td><strong>v3</strong></td><td><strong>71k / 20 ep</strong></td><td class="num good">3.65 cm</td><td class="num good">5.28</td><td class="num good">2.17</td><td class="num">6.9–8.7×</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="small muted" style="margin-top: 10px;">v1 与 v2/v3 的测试集不同；v2 与 v3 也各自使用对应规模的 test split。模型数字可以看趋势，基线与脚滑分母不能跨轮直接相减。</p>
+      </div>
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Post-freeze Reproduction</div>
+        <h3>封盘后的复现：能说明什么，不能说明什么</h3>
+        <div class="field-list" style="margin-top: 10px;">
+          <div class="field"><code>full_release_v2</code><span>71,128 clips / 2,490,713 windows；train 1,992,148 / val 247,979 / test 250,586</span></div>
+          <div class="field"><code>v2 20 ep</code><span>test 5.59 / 3.50 / 3.04 / 2.46 cm，val 4.05</span></div>
+          <div class="field"><code>v2 30 ep</code><span>test 5.40 / 3.39 / 2.94 / 2.38 cm，val 3.91；10 个 epoch 只换 0.08–0.19 cm</span></div>
+          <div class="field"><code>contact w0.025</code><span>test 5.65 / 3.52 / 3.09 / 2.49 cm；与旧轮基本等价</span></div>
+          <div class="field"><code>可复现性</code><span>契约/test/选窗/脚滑分母不同；与 v3 相差 0.3 cm 左右，不能直接断言退化</span></div>
+        </div>
+        <div class="callout small" style="margin-top: 12px;">
+          这些复现的价值是<strong>验证训练入口、续训、评测合并与口径解释</strong>，不是替代 v3 封盘成绩。v3 权重与 full_release_v2 不是同一套契约，部分历史产物在本机也不完整，跨契约比较只能做方向性参考。
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 6. 推理 ================= -->
+<section id="inference">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div>
+        <div class="eyebrow">06 / Inference & Export</div>
+        <h2>推理：先把离线数值跑对，再谈 UE</h2>
+        <p class="lead">推理链路的职责很窄：校验封版契约、加载检查点、准备四路输入、前向、反归一化、6D 转矩阵、硬覆盖参考帧。导出链路再负责 ONNX 数值对齐与延迟测量。</p>
+      </div>
+      <div class="section-meta"><span class="level core">主线 · 必读</span><div class="section-num">PYTORCH → ONNX → UE</div></div>
+    </div>
+
+    <div class="plain-line reveal"><b>人话</b><span>推理就是把训练好的模型拿出来，喂一个新窗口，现场算出未来动作；导出则是把同一套计算打包成 ONNX。</span></div>
+
+    <div class="grid grid-2">
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Runtime</div>
+        <h3>单次预测的执行顺序</h3>
+        <div class="train-flow" style="margin-top: 14px;">
+          <div class="train-row"><div class="n">01</div><div class="body"><strong>校验 release</strong><p><code>verify_release</code> 检查封版清单、artifact hash、骨架 hash、24+24 窗口。</p></div></div>
+          <div class="train-row"><div class="n">02</div><div class="body"><strong>加载 checkpoint</strong><p>校验 checkpoint 里的 <code>contract_sha256</code> 与 release 一致；重建模型并 <code>eval()</code>。</p></div></div>
+          <div class="train-row"><div class="n">03</div><div class="body"><strong>准备输入</strong><p>姿态位置用冻结的 mean/std 归一化；旋转转 6D；拼接 root_local；reference 乘 mask。</p></div></div>
+          <div class="train-row"><div class="n">04</div><div class="body"><strong>前向</strong><p>CUDA 时 bf16 autocast；输出 <code>[1,24,702]</code>。</p></div></div>
+          <div class="train-row"><div class="n">05</div><div class="body"><strong>后处理</strong><p>位置反归一化；6D → 旋转矩阵；锚点帧用 reference 精确覆盖。</p></div></div>
+          <div class="train-row"><div class="n">06</div><div class="body"><strong>输出</strong><p>保存 <code>future_pose</code>、<code>future_rotations</code>、<code>future_root_plan_local</code> 为 NPZ。</p></div></div>
+        </div>
+      </div>
+
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Export Gate</div>
+        <h3>ONNX 不是“导出来就算完”</h3>
+        <div class="gate-list" style="margin-top: 14px;">
+          <div class="gate">Manifest：形状、骨骼、窗口、哈希唯一真源</div>
+          <div class="gate">PyTorch → ONNX：静态 batch=1，opset 17</div>
+          <div class="gate">ONNX checker + 输入/输出形状逐项对账</div>
+          <div class="gate">CPU ORT 与 PyTorch 逐元素数值比较</div>
+          <div class="gate">216 个真实窗口，覆盖 split × 位置 × mask</div>
+          <div class="gate">mask 硬覆盖在导出后仍精确成立</div>
+          <div class="gate warn">DML / UE 内性能未验证</div>
+        </div>
+        <div class="metric-row" style="margin-top: 14px;">
+          <div class="metric"><div class="v good">5.41e-6</div><div class="k">最大相对误差</div></div>
+          <div class="metric"><div class="v">257</div><div class="k">ONNX 节点</div></div>
+          <div class="metric"><div class="v">12.39 MB</div><div class="k">模型体积</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-3" style="margin-top: 16px;">
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Latency</div>
+        <h3>单流 CPU 延迟</h3>
+        <div class="field-list" style="margin-top: 10px;">
+          <div class="field"><code>p50</code><span>0.79–0.92 ms</span></div>
+          <div class="field"><code>p95</code><span>1.12–1.18 ms</span></div>
+          <div class="field"><code>60fps 预算</code><span>16.67 ms</span></div>
+        </div>
+        <p class="small muted" style="margin-top: 10px;">这是 CPU EP、真实窗口、单 session 的数字，不代表 UE 内 DirectML 延迟。</p>
+      </div>
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Multi-character</div>
+        <h3>多 session 的坑</h3>
+        <p class="small muted" style="margin-top: 8px;">8 个默认 session 真并发约 95.92 ms（另测 151–164 ms），远超 16.67 ms；每个 session 自带线程池会抢核。</p>
+        <div class="callout small" style="margin-top: 10px;">把每 session 的 <code>intra_op_num_threads=1</code> 后，8 角色并发约 6.13 ms。这个加速比不可直接移植到 UE DML。</div>
+      </div>
+      <div class="card card-pad reveal">
+        <div class="eyebrow">UE Boundary</div>
+        <h3>当前 UE 侧现状</h3>
+        <ul class="small muted" style="margin-top: 8px;">
+          <li><code>unreal-sample/AIMotionSample</code> 是 GASP 副本，无自有 Source/Plugins。</li>
+          <li><code>unreal-script/MotionWeaver</code> 是当前插件副本，尚未接 AnimGraph。</li>
+          <li>无打包、多角色、网络、CMC/Mover 闭环。</li>
+          <li>旧 79 骨推理插件已于 2026-11 移除。</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card card-pad reveal" style="margin-top: 16px;">
+      <div class="eyebrow">Visual Instruments</div>
+      <h3>本地验收工具：看数字，也看动作</h3>
+      <div class="grid grid-4" style="margin-top: 12px;">
+        <div class="detail-box"><div class="lbl">refpose_preview</div><p>单窗口/多窗口姿态预览，检查关节误差与连续性。</p></div>
+        <div class="detail-box"><div class="lbl">refpose_chain_play</div><p>把多个窗口串成连续片段，观察接缝和长期漂移。</p></div>
+        <div class="detail-box"><div class="lbl">refpose_matrix</div><p>场景 × 参考档位矩阵对比，适合汇报。</p></div>
+        <div class="detail-box"><div class="lbl">pose_reference_lab</div><p>手选关键帧，对比软条件与硬约束；离线实验仪器。</p></div>
+      </div>
+      <div class="callout warn small" style="margin-top: 14px;">
+        <strong>坐标提醒：</strong>模型内部是前 +Z、上 +Y、右 −X；UE 转换为 <code>(ours_z, -ours_x, ours_y)</code>。Root 的 <code>k[:,1]</code> 恒为 0，垂直高度留在身体姿态里；它是离线代理，不是已观测的 Actor Root。
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 7. Benchmark ================= -->
+<section id="benchmark">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div>
+        <div class="eyebrow">07 / Benchmark</div>
+        <h2>Benchmark：三件事，别混成一张表</h2>
+        <p class="lead">当前仓库里“Benchmark”承担三类职责：主线 RefPose 的四档评测、refpose 部署门禁（manifest / ONNX / 延迟）、以及历史 VQ tokenizer 的重建评测。它们共享指标原语，但不是同一套结论。</p>
+      </div>
+      <div class="section-meta"><span class="level deep">评测 · 进阶</span><div class="section-num">MEASURE · GATE · LEGACY</div></div>
+    </div>
+
+    <div class="plain-line reveal"><b>人话</b><span>Benchmark 是统一考卷：同样的数据、同样的参考档位、同样的评分规则，才能说“这次真的更好”。</span></div>
+
+    <div class="grid grid-3">
+      <div class="lane reveal">
+        <div class="lane-head"><div><div class="tag mint">MAIN</div><h3 style="margin-top: 8px;">RefPose 四档评测</h3></div><span class="mono tiny faint">training/evaluation</span></div>
+        <ul>
+          <li><code>evaluate_conditioned_baselines.py</code>：Hold / Lerp 基线。</li>
+          <li><code>evaluate_conditioned_quality.py</code>：模型逐 clip 评估。</li>
+          <li>共享 <code>score</code> / <code>aggregate</code>，四档参考。</li>
+          <li>主指标：非锚点位置 RMSE，每 clip 等权。</li>
+        </ul>
+        <div class="out">输出：<code>report.json</code> · <code>scenarios</code> · <code>by_category</code></div>
+      </div>
+      <div class="lane reveal">
+        <div class="lane-head"><div><div class="tag amber">GATE</div><h3 style="margin-top: 8px;">RefPose 部署门禁</h3></div><span class="mono tiny faint">benchmark/manifest</span></div>
+        <ul>
+          <li><code>build_manifest.py</code>：输入契约唯一真源。</li>
+          <li><code>rebuild_inputs.py</code>：从真实窗口重建四路输入。</li>
+          <li><code>export_onnx.py</code>：静态 batch=1 + CPU 数值对齐。</li>
+          <li><code>measure_latency.py</code>：单流 / 串行 / 并发 / thin。</li>
+        </ul>
+        <div class="out">输出：<code>refpose_manifest_v1.json</code> · <code>onnx_manifest.json</code> · <code>latency.json</code></div>
+      </div>
+      <div class="lane reveal">
+        <div class="lane-head"><div><div class="tag rose">LEGACY</div><h3 style="margin-top: 8px;">VQ 重建评测</h3></div><span class="mono tiny faint">benchmark/</span></div>
+        <ul>
+          <li><code>primitives/metrics.py</code>：复用官方 <code>metric()</code> / <code>rms()</code>。</li>
+          <li><code>training_metrics.py</code>：读 <code>metrics.csv</code> 的 10 个官方指标。</li>
+          <li><code>evaluate_recon.py</code>：SOMA 四键 NPZ 重建；自校验 ≤ 0.03 m。</li>
+          <li><code>run.py</code>：一次跑 A/B/C 组，输出统一报告。</li>
+        </ul>
+        <div class="out">用途：历史 tokenizer 路线对照，不作为 refpose v3 主成绩。</div>
+      </div>
+    </div>
+
+    <div class="grid grid-2" style="margin-top: 16px;">
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Metric Rules</div>
+        <h3>统一口径</h3>
+        <div class="field-list" style="margin-top: 10px;">
+          <div class="field"><code>_cm</code><span>所有以 <code>_cm</code> 结尾的指标单位是厘米</span></div>
+          <div class="field"><code>metric()</code><span>返回 <code>mean / p95 / max</code></span></div>
+          <div class="field"><code>summarize()</code><span>额外给 <code>median / count</code></span></div>
+          <div class="field"><code>训练指标</code><span>读 <code>metrics.csv</code>，是训练集口径，不与留出集混报</span></div>
+          <div class="field"><code>重建自校验</code><span>逆变换 RMSE ≤ 0.03 m，不过就拒绝输出</span></div>
+        </div>
+      </div>
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Do Not Mix</div>
+        <h3>三个常见误读</h3>
+        <div class="pitfalls" style="margin-top: 10px;">
+          <div class="pitfall"><div class="n">01</div><div><strong>把旧重建基准当主线成绩</strong><p><code>benchmark/out/recon_bc120.json</code> 是历史 tokenizer 路线的重建结果，不能与 refpose v3 的 2.17 cm 混比。</p></div></div>
+          <div class="pitfall"><div class="n">02</div><div><strong>跨契约比较窗口数</strong><p>不同报告可能使用不同窗口步长/划分。先核对 <code>contract_sha256</code> 与窗口定义。</p></div></div>
+          <div class="pitfall"><div class="n">03</div><div><strong>把 CPU 延迟当 UE 延迟</strong><p>CPU ORT 与 UE 自带 ORT + DirectML 是两套运行时；多角色并发结论不可直接移植。</p></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-pad reveal" style="margin-top: 16px;">
+      <div class="eyebrow">Benchmark Architecture</div>
+      <h3>从指标原语到报告</h3>
+      <pre class="tree" style="margin-top: 12px;"><span class="b">benchmark/</span>
+├── <span class="g">primitives/metrics.py</span>      # 官方 metric / rms 复用；joint_rmse_cm
+├── <span class="g">training_metrics.py</span>         # 10 个官方训练指标，只读 metrics.csv
+├── <span class="g">evaluate_recon.py</span>           # 重建评测库函数（无 argparse）
+├── <span class="g">cli_recon.py</span>                # 重建评测 CLI
+├── <span class="g">run.py</span>                      # A 组训练指标 + B 组重建 + C 组基线
+├── <span class="g">paths.py</span>                    # MW_DATA_ROOT / MW_RELEASE / MW_MMAP ...
+├── <span class="y">manifest/build_manifest.py</span>  # refpose 输入契约唯一真源
+├── <span class="y">manifest/rebuild_inputs.py</span>  # 真实窗口四路输入
+├── <span class="y">manifest/export_onnx.py</span>     # ONNX 导出 + CPU 数值对齐
+├── <span class="y">manifest/measure_latency.py</span> # 单流 / 多角色延迟
+└── <span class="m">out/</span>                        # 小型报告与历史证据</pre>
+      <div class="callout small" style="margin-top: 12px;">
+        <strong>设计原则：</strong>官方已有的指标原语直接复用；没有的补集才写在 <code>benchmark/</code>。库函数与 CLI 分开，避免 import 时解析 argparse。
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 8. 指标、字段与数学口径 ================= -->
+<section id="metrics">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div>
+        <div class="eyebrow">08 / Metrics & Contracts</div>
+        <h2>指标不是一张表：先把口径、字段和数学关系钉死</h2>
+        <p class="lead">同一个 5.28 cm，可能是“每 clip 等权、非锚点、oracle Root、test split”的结果，也可能是“全体关节平均、包含参考帧、不同契约”的结果。下面把可复算所需的字段、公式和不可比边界一次列清。</p>
+      </div>
+      <div class="section-meta"><span class="level deep">口径 · 查阅</span><div class="section-num">CONTRACT → METRIC</div></div>
+    </div>
+
+    <div class="plain-line reveal"><b>人话</b><span>这一章解释分数怎么算。先记住 RMSE 越小越好，而且只有同一套契约下的数字才能直接比。</span></div>
+
+    <div class="math-grid">
+      <div class="card math-card reveal">
+        <div class="eyebrow">Primary Metric</div>
+        <h3>非锚点位置 RMSE</h3>
+        <p>只统计模型真正生成的未来帧；参考帧由 <code>mask</code> 排除。先对每条 clip 求 RMSE，再对所有 clip 等权平均，避免长动作或窗口多的 clip 主导。</p>
+        <div class="eq">
+          visible = 1 − mask<br>
+          rmse_clip = sqrt( mean( (p_pred − p_gt)² × visible ) )<br>
+          metric = mean_over_clips( rmse_clip ) × 100  # cm
+        </div>
+        <p style="margin-top: 10px;">位置误差在归一化域计算，乘 <code>pose_std</code> 回到米制；旋转是 6D 差平方，不参与主 RMSE 排名。主表单位统一为 cm。</p>
+      </div>
+      <div class="card math-card reveal">
+        <div class="eyebrow">Foot Slip</div>
+        <h3>脚滑倍数：两个口径必须分开</h3>
+        <p>只在“相邻两帧都接触”的帧对上统计。脚速 = 世界坐标帧间位移 × 契约 fps。倍数 = 生成脚速 ÷ 源动作同期脚速；源动作基准在 v3 记录中为 0.0261 m/s。</p>
+        <div class="eq">
+          pair_t = contact[t] × contact[t−1]<br>
+          speed_t = || world_foot[t] − world_foot[t−1] || × fps<br>
+          ratio = Σ(speed_pred × pair) / Σ(speed_gt × pair)<br>
+          # pooled：先合后除；逐 clip 均值：先求比再等权
+        </div>
+        <p style="margin-top: 10px;"><strong>pooled</strong> 与 <strong>逐 clip 均值</strong> 可差 50% 以上。引用时必须写清口径；不同源动作分母（0.0261 vs 0.0311）之间也不可直接比较。</p>
+      </div>
+    </div>
+
+    <div class="grid grid-2" style="margin-top: 16px;">
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Window Math</div>
+        <h3>窗口切片与 anchor</h3>
+        <div class="eq" style="margin-top: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: rgba(0,0,0,.16); font-family: monospace; font-size: .76rem; line-height: 1.75; overflow-x: auto;">
+          start = row["start"]<br>
+          middle = start + 24<br>
+          end = start + 48<br>
+          origin = root[middle − 1]<br>
+          history_root = root_local(root[start:middle], origin)<br>
+          future_root = root_local(root[middle:end], origin)
+        </div>
+        <ul class="small muted" style="margin-top: 10px;">
+          <li>历史 24 帧与未来 24 帧都相对“最后一帧历史 Root”表达，避免世界绝对位置泄漏。</li>
+          <li><code>origin</code> 必须是 <code>root[middle−1]</code>；写成 <code>root[middle]</code> 会让整条 <code>root_plan</code> 偏一帧。</li>
+          <li>窗口起点按 24 帧步长推进；窗口之间可以共享历史，但监督目标不重叠到参考泄漏。</li>
+          <li><code>k[:,1]</code> 恒为 0，垂直高度保留在身体姿态中；Root 只承担水平位移与朝向。</li>
+        </ul>
+      </div>
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Root Authority</div>
+        <h3>Root 的权威与 <code>p[:,0]</code></h3>
+        <div class="eq" style="margin-top: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: rgba(0,0,0,.16); font-family: monospace; font-size: .76rem; line-height: 1.75; overflow-x: auto;">
+          world = R(k) · p + k_pos<br>
+          p[:,0] = −R(k)ᵀ · k_pos<br>
+          回代误差由 float32 dtype 决定，实测 ≤ 1.1e−06
+        </div>
+        <ul class="small muted" style="margin-top: 10px;">
+          <li><code>k.npy</code> 是 Root 唯一权威；<code>p[:,0]</code> 不是第二条轨迹，而是它的逆变换。</li>
+          <li>之前判“方向相反、无法对齐”，是比较首尾位移差时被两帧之间的旋转带偏，属于比较量选错。</li>
+          <li>UE 侧应直接读 <code>k</code>，不要试图从 <code>p[:,0]</code> 再推一条轨迹。</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card card-pad reveal" style="margin-top: 16px;">
+      <div class="eyebrow">6D Rotation</div>
+      <h3>最容易写错的一处：row-major 交织</h3>
+      <div class="split-panel" style="margin-top: 12px;">
+        <div class="detail-box">
+          <div class="lbl">正确排布</div>
+          <pre class="tree" style="margin-top: 8px; font-size: .76rem;">v = [m00, m01, m10, m11, m20, m21]
+
+col0 = [v0, v2, v4]
+col1 = [v1, v3, v5]
+col2 = cross(col0, col1)</pre>
+          <p class="small muted" style="margin-top: 8px;">按正确排布解码时，78 根骨的 <code>|col0 × col1|</code> 都约等于 1.0；200 条随机 clip 最小值 0.999999693。</p>
+        </div>
+        <div class="detail-box">
+          <div class="lbl">错误排布</div>
+          <p class="small muted">仓库自带的 <code>matrix_to_cont6d</code> 是“按列拼接”，与本数据不兼容。误用后 Root、LeftHandRingEnd、RightHandIndexEnd、RightHandRingEnd 的叉乘模长会正好为 0，直接除零得到 NaN；另有 19 根骨落在 1e-2 以下。</p>
+          <div class="callout rose small" style="margin-top: 10px;">不要用单列范数判断退化；真正的判据是 <code>|col0 × col1|</code>，因为 <code>col2</code> 由叉乘得到。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-pad reveal" style="margin-top: 16px;">
+      <div class="eyebrow">Field Dictionary</div>
+      <h3>契约、数据、检查点、报告：字段对照</h3>
+      <div class="table-wrap wide-table" style="margin-top: 14px;">
+        <table>
+          <thead><tr><th>对象</th><th>字段</th><th>含义 / 约束</th><th>常见错误</th></tr></thead>
+          <tbody>
+            <tr><td rowspan="7"><code>contract.json</code></td><td><code>fps</code></td><td>120.00480019200768；24 帧≈199.99 ms</td><td>写死 120 或 30；接触损失差 16 倍</td></tr>
+            <tr><td><code>bone_count</code></td><td>78；与 skeleton names/parents 对齐</td><td>用 79 骨旧权重或旧插件</td></tr>
+            <tr><td><code>clips[]</code></td><td>每个 clip 的 split、raw_file、mmap_file、source_frames、contact_bits 等</td><td>把数组下标当 mmap 目录名</td></tr>
+            <tr><td><code>window_split_counts</code></td><td>train / validation / test 窗口数；加载时逐 split 对账</td><td>换契约后仍用旧计数</td></tr>
+            <tr><td><code>stats.pose_m / pose_s</code></td><td>指向 <code>pose_m.npy</code> / <code>pose_s.npy</code>，形状 [78,3]，只来自 train</td><td>在全部数据上重算；分布漂移</td></tr>
+            <tr><td><code>source_dataset</code></td><td>四键 NPZ 视图根目录</td><td>与 mmap 根目录混用</td></tr>
+            <tr><td><code>source_manifest_sha256 / skeleton_sha256</code></td><td>来源与骨架身份；构建/加载/导出都要核验</td><td>只核权重，不核数据</td></tr>
+            <tr><td rowspan="5"><code>四键 NPZ</code></td><td><code>positions</code></td><td>[T,78,3] 米制、root-local 身体位置</td><td>误当世界坐标；重复加 Root 位移</td></tr>
+            <tr><td><code>rotations</code></td><td>[T,78,4] 四元数；训练侧转 6D 时取前两列</td><td>与 r.npy 的 6D 排布混用</td></tr>
+            <tr><td><code>timestamps</code></td><td>[T] 秒；来源帧率与真实帧边界</td><td>按帧号硬算秒数，忽略 fps</td></tr>
+            <tr><td><code>root_track</code></td><td>[T,7] xyz + xyzw；Root 权威</td><td>从 p[:,0] 推轨迹</td></tr>
+            <tr><td><code>contact_bits</code></td><td>contract 中 base64；每帧 4 个脚部候选位</td><td>当物理接触真值；忽略 unknown</td></tr>
+            <tr><td rowspan="5"><code>windows.jsonl</code></td><td><code>clip_index</code></td><td>指向 contract.clips 的下标</td><td>与 mmap 目录编号混为一谈</td></tr>
+            <tr><td><code>start</code></td><td>窗口起点；0–total−48</td><td>只存前 48 帧（tiny 错误）</td></tr>
+            <tr><td><code>raw_file</code></td><td>NPZ 相对路径</td><td>当 mmap 目录使用</td></tr>
+            <tr><td><code>mmap_file</code></td><td>mmap 目录名；新版与 raw_file 分离</td><td>用 clip_index 代替</td></tr>
+            <tr><td><code>split</code></td><td>由 contract.clips 决定；窗口不跨 split</td><td>按窗口随机划分造成泄漏</td></tr>
+            <tr><td rowspan="7"><code>refpose_manifest_v1.json</code></td><td><code>format / purpose</code></td><td><code>refpose_manifest_v1</code>；UE 输入装配唯一真源</td><td>拿训练 <code>__getitem__</code> 当契约</td></tr>
+            <tr><td><code>checksums</code></td><td>checkpoint / contract / pose_mean / pose_std / skeleton 五个 SHA-256</td><td>换权重不更新 manifest</td></tr>
+            <tr><td><code>skeleton</code></td><td>78 个 names、parents、roles</td><td>按名字猜父子关系</td></tr>
+            <tr><td><code>timing</code></td><td>fps、history/future、window_seconds</td><td>把 24 帧当 0.8 s（30 fps 旧口径）</td></tr>
+            <tr><td><code>inputs.history</code></td><td>[24,709]；位置 234 + 6D 468 + root_local 7</td><td>把旋转也归一化</td></tr>
+            <tr><td><code>inputs.root_plan</code></td><td>[24,7]；相对 origin；authority=k.npy</td><td>用世界绝对 Root 直接喂</td></tr>
+            <tr><td><code>inputs.reference / mask</code></td><td>[24,702] / [24,1]；mask 硬覆盖</td><td>把 mask 当软权重</td></tr>
+            <tr><td rowspan="6"><code>checkpoint</code></td><td><code>model</code></td><td>state_dict；3,087,038 参数</td><td>只存权重，缺结构元数据</td></tr>
+            <tr><td><code>width / bones</code></td><td>256 / 78；重建模型必须一致</td><td>用默认 79 骨构造</td></tr>
+            <tr><td><code>optimizer / scheduler</code></td><td>续训完整状态；含 T_max</td><td>只恢复权重，LR 从头开始</td></tr>
+            <tr><td><code>epoch / step</code></td><td>续训位置</td><td>epoch 与 step 错位</td></tr>
+            <tr><td><code>best / history</code></td><td>最优值与逐轮曲线</td><td>用旧 history 覆盖新结果</td></tr>
+            <tr><td><code>contract_sha256</code></td><td>权重与 release 绑定</td><td>换数据后直接复用旧权重</td></tr>
+            <tr><td rowspan="5"><code>evaluation report</code></td><td><code>scenarios</code></td><td>no_reference / middle / end / middle_and_end</td><td>只报最好一档</td></tr>
+            <tr><td><code>non_anchor_pose_rmse_cm</code></td><td>主指标；每 clip 等权</td><td>把所有帧混在一起平均</td></tr>
+            <tr><td><code>foot_slip_ratio</code></td><td>pooled 口径</td><td>与逐 clip 均值混报</td></tr>
+            <tr><td><code>foot_slip_ratio_mean</code></td><td>逐 clip 求比再等权</td><td>当作 pooled 引用</td></tr>
+            <tr><td><code>checkpoint / contract</code></td><td>报告身份；用于追溯</td><td>只保存数字，不保存来源</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid grid-2" style="margin-top: 16px;">
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Comparability</div>
+        <h3>哪些数字能比，哪些不能</h3>
+        <div class="table-wrap" style="margin-top: 10px;">
+          <table>
+            <thead><tr><th>比较</th><th>是否可比</th><th>条件</th></tr></thead>
+            <tbody>
+              <tr><td>v3 四档之间</td><td class="good">可以</td><td>同 test、同选窗、同脚滑分母</td></tr>
+              <tr><td>v2 20ep vs v2 30ep</td><td class="good">可以</td><td>同 full_release_v2、同 test、同分母</td></tr>
+              <tr><td>v2 复现 vs v3 封盘</td><td class="bad">不可直接比</td><td>契约/test/选窗/脚滑分母不同</td></tr>
+              <tr><td>v1 vs v2/v3</td><td class="warn">仅趋势</td><td>v1 使用 169 clips 的 2k 划分</td></tr>
+              <tr><td>模型 vs Lerp / Hold</td><td class="good">可以</td><td>同契约、同窗口、同档位</td></tr>
+              <tr><td>模型 vs VQ 重建</td><td class="bad">不可以</td><td>任务、表示、指标均不同</td></tr>
+              <tr><td>CPU ORT 延迟 vs UE DML</td><td class="bad">不可以</td><td>运行时、线程、算子分配不同</td></tr>
+              <tr><td>v3 主表 vs 6-clip 探针</td><td class="bad">不可以</td><td>样本量与选窗不同；探针只作诊断</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Target Status</div>
+        <h3>目标达成与未达成</h3>
+        <div class="field-list" style="margin-top: 10px;">
+          <div class="field"><code>middle_and_end &lt; 6.59</code><span class="good">达成：2.17 cm</span></div>
+          <div class="field"><code>middle_and_end &lt; 5.00</code><span class="good">达成：2.17 cm</span></div>
+          <div class="field"><code>优于 Lerp</code><span class="good">达成：1.69–3.15×</span></div>
+          <div class="field"><code>脚滑 &lt; 5×</code><span class="bad">未达成：6.9–8.7×</span></div>
+          <div class="field"><code>UE 实机</code><span class="bad">未验证</span></div>
+          <div class="field"><code>Root 预测</code><span class="bad">主表使用 oracle，未接 CMC/Mover</span></div>
+        </div>
+        <div class="callout warn small" style="margin-top: 12px;">脚滑未达标已被明确接受：模型姿态本身不飘，剩余问题更像“Root 轨迹与步幅不匹配”，交由 UE 端 Two-Bone IK / Foot Locking / StrideWarping 补齐。这不是“已经解决”，只是责任转移。</div>
+      </div>
+    </div>
+
+    <div class="card card-pad reveal" style="margin-top: 16px;">
+      <div class="eyebrow">Deployment Numbers</div>
+      <h3>ONNX 与延迟：哪些是实测，哪些是未验证</h3>
+      <div class="table-wrap" style="margin-top: 12px;">
+        <table>
+          <thead><tr><th>项</th><th>结果</th><th>口径 / 边界</th></tr></thead>
+          <tbody>
+            <tr><td>ONNX 大小</td><td>12,393,645 B（12.39 MB / 11.82 MiB）</td><td>opset 17，静态 batch=1</td></tr>
+            <tr><td>图规模</td><td>257 节点，23 种算子，只有 <code>ai.onnx</code></td><td>无自定义算子</td></tr>
+            <tr><td>PyTorch vs ORT CPU</td><td>max relative 5.41e−6；max absolute 1.29e−5</td><td>216 个真实窗口，3 split × 6 clip × 3 位置 × 4 mask</td></tr>
+            <tr><td>mask 硬覆盖</td><td>导出后仍精确成立（&lt;1e−6）</td><td><code>Where</code> 位于输出末端</td></tr>
+            <tr><td>CPU 单流 p50</td><td>0.79–0.92 ms</td><td>真实窗口，200–300 次采样；波动约 ±10%</td></tr>
+            <tr><td>CPU 单流 p95</td><td>1.12–1.18 ms</td><td>60 fps 预算 16.67 ms；不代表 UE</td></tr>
+            <tr><td>8 session 默认并发</td><td>约 95.92 ms；另测 151–164 ms</td><td>每个 session 自带线程池，抢核</td></tr>
+            <tr><td>8 session thin 并发</td><td>约 5–6 ms</td><td><code>intra_op_num_threads=1</code>；仅 CPU EP</td></tr>
+            <tr class="highlight"><td>UE DML / 打包 / 多角色</td><td class="warn">未验证</td><td>必须在 UE 内实测，不可从 Python 推断</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout small" style="margin-top: 12px;">
+        <strong>相对误差判据的边界：</strong>2e−5 是 fp32 舍入地板的最大值约 5.2 倍，实测 5.41e−6 约是地板 3.5 倍，留了约 4 倍余量。它是“导出无损”的门禁，不是模型精度，也不是 DML 性能证明。
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 9. 测试矩阵 ================= -->
+<section id="tests">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div>
+        <div class="eyebrow">09 / Test Matrix</div>
+        <h2>测试矩阵：每条契约由谁守</h2>
+        <p class="lead">这个仓库的测试不是“覆盖率装饰”，而是把数据契约、6D 排布、硬覆盖、ONNX 数值、续训状态和目录边界变成可执行断言。缺数据时 skip 是预期；缺产物时 fail 才是正确行为。</p>
+      </div>
+      <div class="section-meta"><span class="level ref">日常 · 查阅</span><div class="section-num">PYTEST AS CONTRACT</div></div>
+    </div>
+
+    <div class="plain-line reveal"><b>人话</b><span>测试是自动保险丝：改数据、模型或导出后，跑对应测试，确认没有把原来的契约悄悄改坏。</span></div>
+
+    <div class="card card-pad reveal">
+      <div class="gate-list" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));">
+        <div class="gate"><code>test_manifest_rebuild.py</code>：独立重建四输入，max|Δ|=0；反向测试抓 6D 列拼接；禁止 import 训练侧。</div>
+        <div class="gate"><code>test_refpose_release.py</code>：窗口节奏、split 稳定/不相交、fps 组、统计量有限、mmap 6D、raw_file 可读。</div>
+        <div class="gate"><code>test_conditioned_motion_contract.py</code>：真实帧、参考帧、离线基线、缺 Root 拒绝、封版需完整审核 cohort。</div>
+        <div class="gate"><code>test_train_resume.py</code>：权重/优化器/LR 完整恢复；history 优先；宽度或骨数不匹配拒绝；T_max 拉长不回弹。</div>
+        <div class="gate"><code>test_onnx_export.py</code>：产物缺失 fail；hash、checker、数值对齐、mask 硬覆盖、batch=1、四输入均影响输出。</div>
+        <div class="gate"><code>test_refpose_model_boundaries.py</code>：模型/损失/RootHead 可独立 import；forward 形状与单位四元数。</div>
+        <div class="gate"><code>test_refpose_numerical_equivalence.py</code>：重构后的模型、Stance 模型、RootHead、loss 与 legacy fixture 数值等价。</div>
+        <div class="gate"><code>test_clip_shuffle_sampler.py</code>：按 clip 分块打乱仍无放回、无重复、无遗漏。</div>
+        <div class="gate"><code>test_conditioned_pose_training.py</code>：contact loss 随契约 fps 平方缩放；省略 fps 时兼容旧的 30。</div>
+        <div class="gate"><code>test_repository_layout.py</code> / <code>test_package_boundaries.py</code>：目录边界、旧路径、依赖隔离。</div>
+      </div>
+    </div>
+
+    <div class="grid grid-2" style="margin-top: 16px;">
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Commands</div>
+        <h3>按改动范围选测试</h3>
+        <div class="code">
+          <div class="code-top"><span>shell</span><button class="copy" type="button">复制</button></div>
+          <pre><code><span class="cmt"># 环境与基线</span>
+.venv/bin/python tools/dev.py doctor
+.venv/bin/python -m pytest -q
+
+<span class="cmt"># 数据/契约</span>
+.venv/bin/python -m pytest \
+  tests/test_refpose_release.py \
+  tests/test_manifest_rebuild.py -q
+
+<span class="cmt"># 模型/训练/续训</span>
+.venv/bin/python -m pytest \
+  tests/test_refpose_model_boundaries.py \
+  tests/test_refpose_numerical_equivalence.py \
+  tests/test_train_resume.py \
+  tests/test_conditioned_pose_training.py -q
+
+<span class="cmt"># 导出</span>
+.venv/bin/python -m pytest tests/test_onnx_export.py -q
+
+<span class="cmt"># 改完 training / export / model 后再跑</span>
+.venv/bin/python tools/dev.py check</code></pre>
+        </div>
+        <p class="small muted" style="margin-top: 8px;">不要用 <code>unittest discover</code> 作为总入口；它会漏掉 pytest fixture / parametrize 用例。</p>
+      </div>
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Skip Semantics</div>
+        <h3>什么时候可以 skip</h3>
+        <div class="table-wrap" style="margin-top: 10px;">
+          <table>
+            <thead><tr><th>情况</th><th>行为</th><th>解释</th></tr></thead>
+            <tbody>
+              <tr><td>缺封盘数据/权重</td><td class="warn">skip</td><td>换机器本来就没有；测试会明确原因</td></tr>
+              <tr><td>缺 ONNX 输入</td><td class="warn">skip</td><td>manifest 或权重缺失</td></tr>
+              <tr><td>缺 ONNX 产物</td><td class="bad">fail</td><td>导出失败或半成品，不能让整组静默变绿</td></tr>
+              <tr><td>数值超限</td><td class="bad">fail</td><td>真回归，不能用放宽断言解决</td></tr>
+              <tr><td>哈希不一致</td><td class="bad">fail</td><td>权重/契约/骨架身份不对</td></tr>
+              <tr><td>非二进制 mask</td><td class="bad">fail</td><td>证明输出路径不是 lerp，而是硬选择</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout warn small" style="margin-top: 12px;">测试里最危险的不是红，而是“因为缺产物而整组 skip”。<code>test_onnx_export.py</code> 专门把输入缺失和产物缺失分开，后者必须 fail。</div>
+      </div>
+    </div>
+
+    <div class="card card-pad reveal" style="margin-top: 16px;">
+      <div class="eyebrow">Regression Guards</div>
+      <h3>最值得记住的五个反向测试</h3>
+      <div class="grid grid-3" style="margin-top: 12px;">
+        <div class="detail-box"><div class="lbl">6D 误读</div><p>把交织排布换成按列拼接，反解必须不正交、gram 偏差 &gt;1e−2；测试如期变红。</p></div>
+        <div class="detail-box"><div class="lbl">mask 软化</div><p>把 mask 当权重或做 lerp，导出后硬覆盖不再精确；测试必须抓到。</p></div>
+        <div class="detail-box"><div class="lbl">四输入失效</div><p>逐个扰动 history / root_plan / reference / mask，输出必须变化；否则图里丢了输入。</p></div>
+        <div class="detail-box"><div class="lbl">续训回弹</div><p>epochs 拉长后直接 load 旧 scheduler 会把 T_max 覆盖回去，LR 折返；测试要求重建日程。</p></div>
+        <div class="detail-box"><div class="lbl">窗口取错</div><p>tiny 只存前 48 帧时，97.1% 窗口会错；窗口 start 与文件内容必须对账。</p></div>
+        <div class="detail-box"><div class="lbl">产物半成品</div><p>ONNX 缺失不能 skip；hash 与 manifest 必须对得上。</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 10. 实验建议 ================= -->
+<section id="recommendations">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div>
+        <div class="eyebrow">10 / Recommendations</div>
+        <h2>实验建议：下一步该做什么，不该做什么</h2>
+        <p class="lead">当前最稀缺的不是“再堆一个模型”，而是样本质量、Root 条件、脚部工程和 UE 实机证据。下面按优先级给出可执行的实验矩阵，每一项都带成功判据和停止条件，避免又变成“跑完再说”。</p>
+      </div>
+      <div class="section-meta"><span class="level deep">规划 · 进阶</span><div class="section-num">P0 → P1 → P2</div></div>
+    </div>
+
+    <div class="plain-line reveal"><b>人话</b><span>这一章回答“下一步先做什么”。先补数据和脚部链路，再谈更大模型；每项实验都要有成功判据和停止条件。</span></div>
+
+    <div class="priority-grid reveal">
+      <div class="card priority p0">
+        <div class="p">P0 / 现在就该做</div>
+        <h3>把“能复现”变成“能验收”</h3>
+        <ul>
+          <li><strong>样本质量整改：</strong>按 clip RMSE、脚滑、骨长偏差、视觉抽查分层，先修最差 5%。不要继续用全库均值掩盖长尾。</li>
+          <li><strong>30 vs 120 fps 对照：</strong>明确训练/推理/UE 采样网格；这是当前最大的未验证变量之一。</li>
+          <li><strong>UE 内最小闭环：</strong>4 输入 session、row-major 6D、mask 硬覆盖、DML 数值与延迟，先在 UE 内跑通一条动作。</li>
+          <li><strong>证据落盘：</strong>每条结论附 contract/checkpoint hash、命令、样本数、失败计数与截图；禁止只留数字。</li>
+        </ul>
+      </div>
+      <div class="card priority p1">
+        <div class="p">P1 / 主线增强</div>
+        <h3>把 Root 与脚从“理想条件”拉回现实</h3>
+        <ul>
+          <li><strong>Root 来源对照：</strong>oracle、PoseSearch 轨迹、CMC 速度外推、模型自回归 Root，四组同 test 比较。</li>
+          <li><strong>脚部补偿链：</strong>LegIK → FootPlacement（Manual 足速）→ StrideWarping → OffsetRootBone，逐层量骨长与脚滑。</li>
+          <li><strong>接触标签升级：</strong>从启发式脚高/脚速，走向人工复核或物理一致的接触段；当前标签不是物理真值。</li>
+          <li><strong>参考语义扩展：</strong>逐骨 mask、局部参考、事件驱动目标姿态；当前只支持整帧可见/不可见。</li>
+        </ul>
+      </div>
+      <div class="card priority p2">
+        <div class="p">P2 / 研究扩展</div>
+        <h3>在主线稳定后再谈“更大”</h3>
+        <ul>
+          <li><strong>更长未来：</strong>24 → 32/48 帧，量精度、延迟与可见延迟的权衡；不要先改模型再补指标。</li>
+          <li><strong>模型容量：</strong>width、层数、GRU/Transformer 替换；只有在数据与口径固定后才有意义。</li>
+          <li><strong>多人/网络：</strong>session 线程、DML 串行、动画线程预算、打包与 Shipping。</li>
+          <li><strong>产品化：</strong>重定向、LOD、动画蓝图、Motion Matching 共存、版权与资产边界。</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card card-pad reveal" style="margin-top: 16px;">
+      <div class="eyebrow">Experiment Matrix</div>
+      <h3>建议的下一批实验：假设、变量、判据、停止条件</h3>
+      <div class="table-wrap wide-table" style="margin-top: 14px;">
+        <table>
+          <thead><tr><th>实验</th><th>假设</th><th>唯一变量</th><th>成功判据</th><th>停止 / 回退条件</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>E1 帧率对照</strong></td>
+              <td>120 fps 的 200 ms 未来是否真的优于 30 fps 的等效时间窗，或只是训练分布不同。</td>
+              <td>训练/推理采样率；模型、数据、窗口时长、参考密度固定。</td>
+              <td>同 test 四档 RMSE 不退化；UE 端输入装配可稳定在 8.33 ms 网格；可见延迟可接受。</td>
+              <td>30 fps 版本显著更差或 UE 网格无法稳定；回退到 30 fps 重训，不用“上采样补丁”硬撑。</td>
+            </tr>
+            <tr>
+              <td><strong>E2 Root 来源</strong></td>
+              <td>oracle Root 的精度优势有多少能在 PoseSearch/CMC 轨迹下保留。</td>
+              <td>Root 来源：oracle / PoseSearch / 速度外推 / 自回归。</td>
+              <td>PoseSearch 版本的 RMSE 与脚滑在 oracle 的 1.2× 内；无 NaN、无累积漂移。</td>
+              <td>误差爆炸或脚滑翻倍；先修 Root 条件编码，不调姿态损失。</td>
+            </tr>
+            <tr>
+              <td><strong>E3 脚部补偿链</strong></td>
+              <td>模型姿态 + IK/Foot Lock 能把脚滑从 6.9–8.7× 降到可播放区间。</td>
+              <td>补偿节点组合与顺序；姿态权重固定。</td>
+              <td>骨长偏差 &lt;1%；接触脚速比 &lt;1.2× 且不低于 0.8；IK 修正 P95 &lt;5 cm。</td>
+              <td>IK 修正量过大或膝踝误差集中；回退到只修骨长，不强行锁脚。</td>
+            </tr>
+            <tr>
+              <td><strong>E4 未来时长</strong></td>
+              <td>24 帧未来是否过长；缩短到 8–16 帧能否显著降低可见延迟而精度可接受。</td>
+              <td>future_frames：8 / 12 / 16 / 24；history 固定 24。</td>
+              <td>延迟下降 ≥30%；四档 RMSE 退化 ≤10%；急停/转向响应改善。</td>
+              <td>精度退化 &gt;15% 或参考帧语义无法对齐；保留 24 帧，改播放缓冲。</td>
+            </tr>
+            <tr>
+              <td><strong>E5 参考密度与位置</strong></td>
+              <td>参考帧数量/位置对误差的影响是否可预测；随机参考是否比固定中点更难。</td>
+              <td>0/1/2 帧、随机/中点/末帧/均匀分布；同 test。</td>
+              <td>误差随参考强度单调下降；随机分布不出现长尾爆炸；每个档位有分位数。</td>
+              <td>某些位置系统性失败；先查 anchor 与 mask 语义，不加大模型。</td>
+            </tr>
+            <tr>
+              <td><strong>E6 数据分层</strong></td>
+              <td>全库均值提升是否被少数场景/动作长尾拖累。</td>
+              <td>按 A/B/C/D、RMSE 分位、脚滑分位分层；训练配方不变。</td>
+              <td>最差 5% clip 的 RMSE 下降 ≥15%；整体不退化；场景间差距收窄。</td>
+              <td>只改善均值、长尾不变；停止“全库再训一轮”，转数据修复。</td>
+            </tr>
+            <tr>
+              <td><strong>E7 位置 vs 旋转权威</strong></td>
+              <td>UE 骨骼应由位置通道还是旋转通道驱动；两者不严格 FK 一致。</td>
+              <td>输出表示/损失权重；同权重、同 test。</td>
+              <td>骨长偏差下降；视觉连续性不劣于源姿态 1.5 倍；脚部误差不恶化。</td>
+              <td>某一通道系统性崩坏；先修表示与 FK，不接入 UE。</td>
+            </tr>
+            <tr>
+              <td><strong>E8 UE 打包与多角色</strong></td>
+              <td>Python CPU 的单流延迟能否在 UE DML、Shipping、多角色下成立。</td>
+              <td>EP、线程数、session 数、打包配置。</td>
+              <td>单角色 p95 在预算内；8 角色无雪崩；无 CPU 回退；失败/跳过为 0。</td>
+              <td>DML 回退或线程争用严重；回退 CPU EP 或减少并发，不宣称已生产可用。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid grid-2" style="margin-top: 16px;">
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Do</div>
+        <h3>推荐做法</h3>
+        <div class="checklist" style="margin-top: 10px;">
+          <div class="check"><span class="box"></span><div><strong>一次只改一个变量</strong><p>契约、种子、test、选窗、脚滑分母固定；否则数字不可解释。</p></div></div>
+          <div class="check"><span class="box"></span><div><strong>先做最小探针，再跑全量</strong><p>用 <code>--max-steps</code> 或 6–20 条 clip 验证方向；全量只用于确认。</p></div></div>
+          <div class="check"><span class="box"></span><div><strong>训练、评测、可视化三件套</strong><p>只看 loss 会错过脚滑、抖动、穿地和骨长问题。</p></div></div>
+          <div class="check"><span class="box"></span><div><strong>保留负结果</strong><p>失败路线、发散配置、错误口径都要进实验记录；它们比“成功截图”更能防止重复劳动。</p></div></div>
+          <div class="check"><span class="box"></span><div><strong>报告分位数</strong><p>均值 + 中位数 + P95 + 最差 clip；只看均值会掩盖长尾。</p></div></div>
+        </div>
+      </div>
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Don't</div>
+        <h3>明确不建议</h3>
+        <div class="checklist" style="margin-top: 10px;">
+          <div class="check"><span class="box"></span><div><strong>不要再扫 contact_weight</strong><p>修复 fps 后，0.1 已是“位置涨 20–36% 换脚滑降 5–11%”，0.4 发散；继续调这个标量收益极低。</p></div></div>
+          <div class="check"><span class="box"></span><div><strong>不要用更大模型掩盖数据问题</strong><p>VQ 路线的教训是表示层失败；全库均值不涨时，先分层查样本。</p></div></div>
+          <div class="check"><span class="box"></span><div><strong>不要把 CPU ORT 当 UE DML</strong><p>线程模型、算子分配、打包环境都不同；必须在 UE 内重跑。</p></div></div>
+          <div class="check"><span class="box"></span><div><strong>不要混用 raw_file / mmap_file</strong><p>一个是 NPZ，一个是目录；写反会在全量 71k 上读到别的 clip。</p></div></div>
+          <div class="check"><span class="box"></span><div><strong>不要只加 epoch</strong><p>20→30 epoch 只换 0.08–0.19 cm；投入应转向上游数据、Root 与脚部工程。</p></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-pad reveal" style="margin-top: 16px;">
+      <div class="eyebrow">Risk Register</div>
+      <h3>风险台账：哪些结论最容易被误读</h3>
+      <div class="table-wrap wide-table risk-table" style="margin-top: 12px;">
+        <table>
+          <thead><tr><th>风险</th><th>当前证据</th><th>影响</th><th>缓解</th></tr></thead>
+          <tbody>
+            <tr><td><strong>oracle Root 高估</strong></td><td>主表 Root 取自源动作</td><td>真实玩家/CMC 轨迹下精度会降</td><td>E2 Root 来源对照；报告分开写</td></tr>
+            <tr><td><strong>脚滑未达标</strong></td><td>6.9–8.7×，目标 &lt;5×</td><td>视觉上可能仍像滑步</td><td>E3 补偿链；人工视觉验收</td></tr>
+            <tr><td><strong>骨长/FK 不一致</strong></td><td>6-clip 探针骨长偏差 7.71%</td><td>IK/FootPlacement 输入被污染</td><td>先 LegIK/TwoBoneIK，再 Foot Lock</td></tr>
+            <tr><td><strong>验证未走平</strong></td><td>v3 末轮仍降 0.006 cm</td><td>“封盘”不是“收敛”</td><td>报告写清 frozen=交付冻结，不是最优</td></tr>
+            <tr><td><strong>来源语义跨 split</strong></td><td>非 Traversal 语义变体可能跨分区</td><td>泛化数字偏乐观</td><td>按来源家族/会话/镜像组重新划分</td></tr>
+            <tr><td><strong>120 vs 30 fps 未验证</strong></td><td>训练 120，UE 资产常见 30</td><td>上采样/降采样都可能漂移</td><td>E1 专项；不要默认等价</td></tr>
+            <tr><td><strong>6D/坐标系误读</strong></td><td>row-major 交织；UE 轴转换唯一入口</td><td>NaN、姿态翻转、脚部错位</td><td>manifest 断言 + 独立重建测试</td></tr>
+            <tr><td><strong>UE 未闭环</strong></td><td>仅宿主 + 空壳插件</td><td>不能宣称生产可用</td><td>E8；分阶段验收</td></tr>
+            <tr><td><strong>资产许可</strong></td><td>上游 Apache 2.0 + NVIDIA 权重单独许可</td><td>外部动画/网格不能按代码许可使用</td><td>发布前逐项核对 NOTICE/许可</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 11. 执行顺序 ================= -->
+<section id="order">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div>
+        <div class="eyebrow">11 / Run Order</div>
+        <h2>端到端执行顺序：每一步产出什么</h2>
+        <p class="lead">下面是主线的最小可复现顺序。数据盘、权重和 UE 工程不在 Git 里；命令里的路径用占位符，换成自己的 <code>MW_DATA_ROOT</code> 即可。</p>
+      </div>
+      <div class="section-meta"><span class="level start">上手 · 必读</span><div class="section-num">0 → 7</div></div>
+    </div>
+
+    <div class="plain-line reveal"><b>人话</b><span>按顺序做：体检环境 → 准备数据 → 训练 → 评测 → 导出。顺序反了，后面的数字基本没有意义。</span></div>
+
+    <div class="card card-pad reveal">
+      <div class="timeline">
+        <div class="tl-item">
+          <div class="tl-head"><h3>确认环境</h3><span class="phase">PHASE 0</span></div>
+          <p>优先使用仓库 <code>.venv</code>，不要假设系统 Python 已装齐依赖。</p>
+          <div class="code">
+            <div class="code-top"><span>shell</span><button class="copy" type="button">复制</button></div>
+            <pre><code>.venv/bin/python tools/dev.py doctor
+.venv/bin/python -m pytest -q</code></pre>
+          </div>
+          <div class="out"><span>解释器</span><span>依赖</span><span>CUDA</span><span>数据根</span><span>测试基线</span></div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-head"><h3>处理来源数据</h3><span class="phase">PHASE 1</span></div>
+          <p>把 SOMA BVH / UE 来源处理成固定 SOMA 骨架的 processed 运动；保留原始文件与回执。</p>
+          <div class="code">
+            <div class="code-top"><span>data</span><button class="copy" type="button">复制</button></div>
+            <pre><code>python -m data.tools.build.process_soma_dataset \
+  --run-id 20261018-soma-full-v1 --workers 8
+
+# 可选：UE 来源 → SOMA
+python -m data.tools.ingest.retarget_uefn_to_soma \
+  --index &lt;export-index.csv&gt; --run-id &lt;retarget-run&gt;</code></pre>
+          </div>
+          <div class="out"><span>processed 运动</span><span>reports/progress.json</span><span>接触候选</span></div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-head"><h3>构建训练视图</h3><span class="phase">PHASE 2</span></div>
+          <p>产出四键 NPZ、场景分类、帧率组和 <code>dataset.json</code>。先小样本跑通，再放全量。</p>
+          <div class="code">
+            <div class="code-top"><span>data</span><button class="copy" type="button">复制</button></div>
+            <pre><code>python -m data.tools.build.build_soma_training_set \
+  --help
+
+# 全量入口按仓库文档传 index / output / roles / --full</code></pre>
+          </div>
+          <div class="out"><span>clips/fps120/&lt;id&gt;/arrays.npz</span><span>dataset.json</span><span>rejected.jsonl</span></div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-head"><h3>构建 refpose 契约 + mmap</h3><span class="phase">PHASE 3</span></div>
+          <p>一次读完 clip，产出 <code>contract.json</code>、<code>windows.jsonl</code>、train 统计量和 mmap 目录。</p>
+          <div class="code">
+            <div class="code-top"><span>data</span><button class="copy" type="button">复制</button></div>
+            <pre><code>python -m data.tools.build.build_refpose_release \
+  --dataset &lt;DATA_ROOT&gt;/processed/soma_train_v1/full-v1 \
+  --release &lt;DATA_ROOT&gt;/full_release \
+  --mmap   &lt;DATA_ROOT&gt;/full_mmap \
+  --workers 24</code></pre>
+          </div>
+          <div class="out"><span>contract.json</span><span>windows.jsonl</span><span>pose_mean/std</span><span>p/r/k.npy</span></div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-head"><h3>训练 RefPose v3</h3><span class="phase">PHASE 4</span></div>
+          <p>先用 <code>--max-steps</code> 做冒烟，确认损失量级；再跑完整 20 epoch。中断后用 <code>--resume</code>。</p>
+          <div class="code">
+            <div class="code-top"><span>train</span><button class="copy" type="button">复制</button></div>
+            <pre><code>python tools/train_reference_pose.py \
+  --release &lt;DATA_ROOT&gt;/full_release \
+  --mmap-root &lt;DATA_ROOT&gt;/full_mmap \
+  --output &lt;DATA_ROOT&gt;/training_runs/refpose_full71k \
+  --epochs 20 --batch-size 256 --workers 8 \
+  --contact-weight 0.4 --log-every 500</code></pre>
+          </div>
+          <div class="out"><span>best.pt</span><span>last.pt</span><span>history.json</span><span>验证 RMSE</span></div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-head"><h3>评测：四档参考</h3><span class="phase">PHASE 5</span></div>
+          <p>validation 用于调参和观察；test 只在方案确定后跑。主指标是非锚点位置 RMSE，每 clip 等权。</p>
+          <div class="code">
+            <div class="code-top"><span>eval</span><button class="copy" type="button">复制</button></div>
+            <pre><code>python -m training.evaluation.evaluate_conditioned_quality \
+  --checkpoint &lt;best.pt&gt; \
+  --release    &lt;DATA_ROOT&gt;/full_release \
+  --lock       &lt;freeze-lock.json&gt; \
+  --split      test \
+  --output     &lt;DATA_ROOT&gt;/reports/refpose_v3_test.json</code></pre>
+          </div>
+          <div class="out"><span>四档 RMSE</span><span>旋转/速度</span><span>脚滑</span><span>by_category</span></div>
+        </div>
+
+        <div class="tl-item">
+          <div class="tl-head"><h3>生成 manifest + 导出 ONNX</h3><span class="phase">PHASE 6</span></div>
+          <p>manifest 是输入契约唯一真源；导出必须在临时目录完成全部校验后再替换正式产物。</p>
+          <div class="code">
+            <div class="code-top"><span>export</span><button class="copy" type="button">复制</button></div>
+            <pre><code>python benchmark/manifest/build_manifest.py \
+  --release &lt;full_release&gt; --mmap &lt;full_mmap&gt; \
+  --checkpoint &lt;best.pt&gt; --out refpose_manifest_v1.json
+
+python benchmark/manifest/export_onnx.py \
+  --manifest refpose_manifest_v1.json \
+  --checkpoint &lt;best.pt&gt; --output &lt;export-dir&gt;</code></pre>
+          </div>
+          <div class="out"><span>refpose_manifest_v1.json</span><span>model.onnx</span><span>onnx_manifest.json</span></div>
+        </div>
+
+        <div class="tl-item warn">
+          <div class="tl-head"><h3>延迟测量与 UE 接线</h3><span class="phase">PHASE 7</span></div>
+          <p>先量 CPU 单流/多角色延迟，再做 UE 内 DML、AnimGraph、打包、多角色与网络验证。后者尚未完成。</p>
+          <div class="code">
+            <div class="code-top"><span>latency</span><button class="copy" type="button">复制</button></div>
+            <pre><code>python benchmark/manifest/measure_latency.py \
+  --onnx &lt;export-dir&gt;/model.onnx \
+  --manifest refpose_manifest_v1.json \
+  --output &lt;export-dir&gt;/latency.json</code></pre>
+          </div>
+          <div class="out"><span>p50/p95</span><span>多 session 串行/并发</span><span>60fps 预算</span><span>UE 待办</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-2" style="margin-top: 16px;">
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Artifacts</div>
+        <h3>产物落点</h3>
+        <div class="field-list" style="margin-top: 10px;">
+          <div class="field"><code>processed/</code><span>固定 SOMA 骨架的动画与来源报告</span></div>
+          <div class="field"><code>full-v1-f32/</code><span>四键 NPZ 训练视图</span></div>
+          <div class="field"><code>full_release/</code><span>contract + windows + stats</span></div>
+          <div class="field"><code>full_mmap/</code><span>p/r/k(.c).npy + skeleton.json</span></div>
+          <div class="field"><code>training_runs/</code><span>best/last/history</span></div>
+          <div class="field"><code>reports/</code><span>评测 JSON 与对比报告</span></div>
+          <div class="field"><code>model_weight/</code><span>封版权重、ONNX、latency</span></div>
+        </div>
+      </div>
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Verification</div>
+        <h3>每步至少验证什么</h3>
+        <ul class="small muted" style="margin-top: 8px;">
+          <li>数据：形状、时间轴、Root 四元数、哈希、接触标签复算。</li>
+          <li>契约：24+24、split 计数、统计量只来自 train。</li>
+          <li>训练：先 <code>--max-steps</code> 看损失量级，再全量；中断后续训要对比 LR/动量。</li>
+          <li>评测：核对 contract hash、split、selection、oracle root。</li>
+          <li>导出：ONNX checker、形状、CPU ORT 数值、mask 硬覆盖。</li>
+          <li>性能：单流 p50/p95 与多 session 串行/并发分开报。</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 12. 故障排查 ================= -->
+<section id="troubleshooting">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div>
+        <div class="eyebrow">12 / Troubleshooting</div>
+        <h2>故障排查：先定位层，再改代码</h2>
+        <p class="lead">这个项目的大多数“模型不行”其实发生在数据、口径、路径或线程层。下面按症状给出第一检查点，避免一上来就换模型、加损失或重训全库。</p>
+      </div>
+      <div class="section-meta"><span class="level ref">按需 · 查阅</span><div class="section-num">SYMPTOM → LAYER</div></div>
+    </div>
+
+    <div class="plain-line reveal"><b>人话</b><span>出问题先定位在哪一层：数据、模型、训练、推理还是 UE。不要一上来就换模型或重训全库。</span></div>
+
+    <div class="table-wrap wide-table reveal">
+      <table>
+        <thead><tr><th>症状</th><th>最可能层</th><th>第一检查</th><th>修复方向</th></tr></thead>
+        <tbody>
+          <tr><td>import 失败 / 测试一开始就红</td><td>环境</td><td><code>.venv/bin/python tools/dev.py doctor</code></td><td>用仓库 venv；不要用系统 Python</td></tr>
+          <tr><td>大量测试 skip</td><td>数据/权重</td><td>看 skip 原因；确认 <code>MW_DATA_ROOT</code> 与 release</td><td>缺数据是预期；缺产物应 fail，不应 skip</td></tr>
+          <tr><td>数据路径找不到</td><td>路径</td><td><code>AIANIMATION_ROOT</code>、<code>MW_DATA_ROOT</code></td><td>不要新增盘符硬编码</td></tr>
+          <tr><td>CUDA OOM / 训练被杀</td><td>资源</td><td>batch、workers、内存、OOM killer</td><td>降 batch/workers；长任务用独立 systemd unit</td></tr>
+          <tr><td>训练进程无声消失</td><td>进程托管</td><td><code>journalctl -k</code>、scope/OOM</td><td>用 <code>tools/run_detached.sh</code>，不要 nohup 挂在 Agent bash 下</td></tr>
+          <tr><td>loss 突然 NaN</td><td>6D / 数值</td><td>检查 <code>|col0×col1|</code> 与 dtype</td><td>修正 row-major 解码；不要先调 LR</td></tr>
+          <tr><td>评测 RMSE 异常高</td><td>归一化/口径</td><td>训练与评测是否同一 mean/std、同一 split</td><td>对齐口径；不要重算统计量</td></tr>
+          <tr><td>全量 71k 读到别的 clip</td><td>索引</td><td><code>raw_file</code> vs <code>mmap_file</code></td><td>按契约字段取目录，不用数组下标</td></tr>
+          <tr><td>脚滑数字忽大忽小</td><td>指标口径</td><td>pooled vs 逐 clip 均值；分母是否相同</td><td>报告写清口径；不要跨分母比较</td></tr>
+          <tr><td>ONNX 数值对不上</td><td>导出/形状</td><td>manifest 四输入、mask 语义、6D 排布</td><td>先跑 <code>test_onnx_export.py</code>；不要放宽阈值</td></tr>
+          <tr><td>UE 里 DML 慢 / 回退</td><td>运行时</td><td>UE 内 ORT 版本、线程、算子分配</td><td>在 UE 内 profile；不能拿 Python pip 包推断</td></tr>
+          <tr><td>续训后 LR 反弹</td><td>调度器</td><td><code>T_max</code> 与已跑 step</td><td>重建余弦日程，保持同一进度位置</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="faq reveal" style="margin-top: 16px;">
+      <details>
+        <summary>Q1：为什么 <code>doctor</code> 过了，测试还是大量 skip？</summary>
+        <div class="answer">
+          <p><code>doctor</code> 检查解释器、依赖与基础环境，不保证大权重、训练视图和 UE Content 存在。这个仓库刻意把大数据留在 Git 外，所以缺数据时测试 skip 是预期行为。</p>
+          <p>真正要区分的是“缺输入”与“缺产物”：缺 manifest/权重可以 skip；缺导出的 <code>model.onnx</code> / <code>onnx_manifest.json</code> 必须 fail，否则半成品会被静默放过。</p>
+        </div>
+      </details>
+      <details>
+        <summary>Q2：为什么不能重算 <code>pose_mean / pose_std</code>？</summary>
+        <div class="answer">
+          <p>统计量绑定训练分区、骨架与数据版本，训练和推理都依赖同一组值。用全库或当前样本重算会改变输入分布，且这种漂移不会立刻报错。</p>
+          <p>实测用 3 条 clip 反推，与契约统计量最大差可达 43.02 cm（均值）/ 146.83 cm（标准差）；换 3 条 clip 又得到 34.12 / 100.00 cm。这是“重算会坏”的证据，不是全库上界。正确做法是重新构建 release，并让 manifest/hash 一起更新。</p>
+        </div>
+      </details>
+      <details>
+        <summary>Q3：6D 旋转为什么会得到 NaN？</summary>
+        <div class="answer">
+          <p>本仓库数据是 row-major 交织：<code>m00,m01,m10,m11,m20,m21</code>。正确解码是 <code>col0=(v0,v2,v4)</code>、<code>col1=(v1,v3,v5)</code>、<code>col2=cross(col0,col1)</code>。</p>
+          <p>如果按“前三个为第一列、后三个为第二列”的列拼接方式解码，某些骨的 <code>|col0×col1|</code> 会正好为 0，<code>col2</code> 除零后得到 NaN。先跑 <code>tests/test_manifest_rebuild.py</code> 的 6D 反向测试，不要靠肉眼猜。</p>
+        </div>
+      </details>
+      <details>
+        <summary>Q4：<code>raw_file</code> 和 <code>mmap_file</code> 到底有什么区别？</summary>
+        <div class="answer">
+          <p><code>raw_file</code> 指向四键 NPZ；<code>mmap_file</code> 是逐字段 <code>p.npy / r.npy / k.npy</code> 的目录。旧契约可能只有 <code>raw_file</code> 且恰好写成目录名，所以代码保留回落，但新契约是两个独立字段。</p>
+          <p>全量 71k 的 clips 顺序与 mmap 目录命名顺序不一致；用 <code>clip_index</code> 代替 <code>mmap_file</code> 会读到别的 clip。这个坑在 <code>MotionWindows._ensure_loaded</code> 里有明确注释。</p>
+        </div>
+      </details>
+      <details>
+        <summary>Q5：为什么接触损失里的 fps 错 4 倍，结果会差 16 倍？</summary>
+        <div class="answer">
+          <p>脚速 = 帧间位移 × fps，进入 contact loss 后又平方，所以缩放是 <code>(fps_true / fps_used)²</code>。120.0048 / 30 ≈ 4，平方就是 16。</p>
+          <p>旧实现写死 30，导致日志里的 <code>contact_weight=0.4</code> 实际等效 0.025。修复后必须用契约 fps；测试 <code>test_contact_loss_scales_with_contract_fps_squared</code> 已锁定该关系。</p>
+        </div>
+      </details>
+      <details>
+        <summary>Q6：续训为什么不能只 load <code>model</code>？</summary>
+        <div class="answer">
+          <p>只恢复权重会让 AdamW 一阶/二阶动量、学习率、scheduler 进度、epoch/step、best/history 全部重新开始，训练会先“退一步”再爬。完整续训要恢复优化器、调度器、进度与历史。</p>
+          <p>把 20 epoch 拉到 30 epoch 时，不能直接 load 旧 scheduler：它会把 <code>T_max</code> 覆盖回旧值，余弦折返、LR 回升。正确做法是按“同一进度位置”重建日程，例如 20ep 的 155,620 步在 30ep 的新余弦上对应 7.50e-05。测试 <code>test_larger_t_max_rebuilds_schedule_instead_of_rebounding</code> 守着这一点。</p>
+        </div>
+      </details>
+      <details>
+        <summary>Q7：训练进程为什么会在 Agent 调用结束后消失？</summary>
+        <div class="answer">
+          <p>用 <code>nohup</code> 或普通后台命令挂在 Agent 的 bash 调用下，调用结束 systemd 可能停掉对应 scope，训练收到 SIGTERM。另一种情况是 OOM killer 命中 harness，连带杀掉同一 scope 的训练。</p>
+          <p>长任务用 <code>tools/run_detached.sh</code> 跑成独立 user unit，设置 <code>MemoryHigh/MemoryMax/MemorySwapMax</code> 和 <code>OOMScoreAdjust</code>，再用 <code>systemctl --user status</code> / 日志观察。具体流程见 <code>.agents/skills/run-detached-jobs/SKILL.md</code>。</p>
+        </div>
+      </details>
+      <details>
+        <summary>Q8：ONNX 导出成功，为什么还不能说 UE 能跑？</summary>
+        <div class="answer">
+          <p>阶段 1 只证明同一输入下 PyTorch 与 ONNX Runtime CPU 数值一致，以及 mask 硬覆盖仍在。它不证明 DirectML、UE 自带 ORT、打包、Shipping、多角色或动画线程预算。</p>
+          <p>UE 里用的是引擎自带的 ORT 1.24.1 + DirectML 1.15.4，与 pip 的 <code>onnxruntime-directml</code> 是两套运行时。必须在 UE 内重新做数值校验与 profiling，并确认 GRU 没有回退 CPU。</p>
+        </div>
+      </details>
+      <details>
+        <summary>Q9：脚滑 6.9× 是不是说明模型完全不能用？</summary>
+        <div class="answer">
+          <p>不能这样下结论。模型位置精度优于 Lerp 1.69–3.15 倍，脚滑从 17–22× 降到 6.9–8.7×，但确实未达 &lt;5× 目标。剩余问题更像 Root 轨迹与步幅不匹配，以及位置/旋转通道不严格 FK 一致。</p>
+          <p>正确表述是“离线姿态精度达标，脚滑未达标，需 UE 端 IK/Foot Locking/步幅匹配补齐，尚未实机验证”。不能写成“已经解决脚滑”，也不能因为脚滑就否定整个姿态模型。</p>
+        </div>
+      </details>
+      <details>
+        <summary>Q10：为什么同一个 5.28 cm，别人的报告对不上？</summary>
+        <div class="answer">
+          <p>先核对六件事：contract hash、split、选窗策略（是否每 clip 中心窗口）、是否 oracle Root、是否只算非锚点帧、每 clip 等权还是全体平均。任何一项不同，数字都不可直接比。</p>
+          <p>再核对脚滑口径：pooled 还是逐 clip 均值、源动作分母是多少。v3 的 0.0261 m/s 与 full_release_v2 的 0.0311 m/s 相差 19%，直接比会得到错误结论。</p>
+        </div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 13. 新人路线 ================= -->
+<section id="onboarding">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div>
+        <div class="eyebrow">13 / Onboarding</div>
+        <h2>新人路线：先建立地图，再读代码</h2>
+        <p class="lead">不要从 145 个数据工具文件开始。按“主线契约 → 模型 → 训练 → 评测 → 导出”的顺序读，遇到历史分支先跳过。</p>
+      </div>
+      <div class="section-meta"><span class="level start">新人 · 必读</span><div class="section-num">30 MIN → 1 DAY</div></div>
+    </div>
+
+    <div class="plain-line reveal"><b>人话</b><span>新人不要从 145 个文件开始。先按 30 分钟路线建立直觉，再用 2 小时读主线代码，最后跑一次最小闭环。</span></div>
+
+    <div class="route-grid">
+      <div class="card route reveal">
+        <div class="time">30 MINUTES</div>
+        <h3>建立正确直觉</h3>
+        <ol>
+          <li><a href="../README.md">README 当前进度与主线结果</a></li>
+          <li><a href="project-tour.html">本页：全局地图 + 数据链路</a></li>
+          <li><a href="refpose-v3-training-evaluation.md">RefPose v3 训练与评测记录</a></li>
+          <li>记住：这是补间生成，不是重建；Root 是理想条件。</li>
+        </ol>
+      </div>
+      <div class="card route reveal">
+        <div class="time">2 HOURS</div>
+        <h3>读主线代码</h3>
+        <ol>
+          <li><a href="../data/runtime/refpose_windows.py">MotionWindows / 采样</a></li>
+          <li><a href="../model/MotionWeaver/refpose/model.py">ReferenceGuidedPose</a></li>
+          <li><a href="../model/MotionWeaver/refpose/losses.py">losses</a></li>
+          <li><a href="../tools/train_reference_pose.py">训练入口</a></li>
+          <li><a href="../inference/runtime/conditioned_pose.py">推理入口</a></li>
+          <li><a href="../training/evaluation/evaluate_conditioned_baselines.py">评测 score / aggregate</a></li>
+        </ol>
+      </div>
+      <div class="card route reveal">
+        <div class="time">1 DAY</div>
+        <h3>跑通最小闭环</h3>
+        <ol>
+          <li><code>doctor</code> + <code>pytest</code>，确认环境与基线。</li>
+          <li>拿一份小契约，跑 <code>--max-steps 20</code> 冒烟。</li>
+          <li>看 <code>history.json</code> 与验证 RMSE。</li>
+          <li>跑一次四档评测，核对 report 字段。</li>
+          <li>若数据/权重齐全，跑 manifest + ONNX 导出。</li>
+          <li>最后再看 UE 宿主与可视化工具。</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="card card-pad reveal" style="margin-top: 16px;">
+      <div class="eyebrow">Code Reading Path</div>
+      <h3>逐层阅读：从契约到运行时，每一层看什么</h3>
+      <div class="table-wrap wide-table" style="margin-top: 12px;">
+        <table>
+          <thead><tr><th>层</th><th>先看文件</th><th>要回答的问题</th><th>验证方式</th></tr></thead>
+          <tbody>
+            <tr><td><strong>数据契约</strong></td><td><code>docs/refpose-stage0-input-contract.md</code><br><code>benchmark/manifest/refpose_manifest_v1.json</code><br><code>data/runtime/refpose_windows.py</code></td><td>四路输入怎么拼？窗口/anchor/mask 是什么？为什么统计量不能重算？</td><td>独立重建四输入，max|Δ|=0；6D 反向测试</td></tr>
+            <tr><td><strong>数据构建</strong></td><td><code>data/tools/build/build_refpose_release.py</code><br><code>data/runtime/refpose_contract.py</code><br><code>data/runtime/motion_processing.py</code></td><td>从四键 NPZ 到 contract/windows/mmap 的产物是什么？split 如何稳定？</td><td>窗口计数、split 不相交、stats 只来自 train</td></tr>
+            <tr><td><strong>模型</strong></td><td><code>model/MotionWeaver/refpose/model.py</code><br><code>model/MotionWeaver/refpose/losses.py</code></td><td>GRU、条件投影、Transformer、硬覆盖如何组合？输出维度怎么来？</td><td>forward 形状、单位四元数、loss 数值等价</td></tr>
+            <tr><td><strong>训练</strong></td><td><code>tools/train_reference_pose.py</code><br><code>training/pretrain/train_conditioned_pose.py</code><br><code>tests/test_train_resume.py</code></td><td>采样、优化器、bf16、验证、检查点、续训如何串起来？</td><td><code>--max-steps</code> 冒烟；恢复后 LR/动量一致</td></tr>
+            <tr><td><strong>评测</strong></td><td><code>training/evaluation/evaluate_conditioned_baselines.py</code><br><code>training/evaluation/evaluate_conditioned_quality.py</code></td><td>四档参考、非锚点、每 clip 等权、脚滑两个口径如何实现？</td><td>同 report 复算；核对 split/selection/oracle</td></tr>
+            <tr><td><strong>推理</strong></td><td><code>inference/runtime/conditioned_pose.py</code></td><td>加载、归一化、前向、反归一化、6D 解码、硬覆盖的顺序是什么？</td><td>单窗口输出与训练侧对齐；mask 误差 0</td></tr>
+            <tr><td><strong>导出</strong></td><td><code>benchmark/manifest/export_onnx.py</code><br><code>benchmark/manifest/measure_latency.py</code></td><td>ONNX 输入名/形状、opset、mask 节点、CPU 对齐与延迟怎么测？</td><td><code>test_onnx_export.py</code>；216 窗口数值</td></tr>
+            <tr><td><strong>UE</strong></td><td><code>docs/refpose-ue-runtime-integration-research.md</code><br><code>unreal-script/README.md</code></td><td>新 AnimNode、四输入 session、PoseBuffer、IK/Foot Lock 的边界是什么？</td><td>UE 内 DML/数值/线程/打包，未完成</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid grid-2" style="margin-top: 16px;">
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Glossary</div>
+        <h3>术语表</h3>
+        <dl class="glossary" style="margin-top: 10px;">
+          <div class="term"><dt>窗口 / window</dt><dd>48 帧：24 历史 + 24 未来；窗口起点按 24 帧步长推进。</dd></div>
+          <div class="term"><dt>锚点 / anchor</dt><dd>被 mask 选中的未来帧，作为硬参考；输出精确覆盖。</dd></div>
+          <div class="term"><dt>oracle Root</dt><dd>未来 Root 轨迹直接取自源动作；离线理想条件，不是控制器预测。</dd></div>
+          <div class="term"><dt>四键 NPZ</dt><dd>positions / rotations / timestamps / root_track。</dd></div>
+          <div class="term"><dt>契约 / contract</dt><dd>窗口、骨骼、fps、划分、统计量与哈希的冻结描述。</dd></div>
+          <div class="term"><dt>release</dt><dd>contract + windows + stats 的发布目录。</dd></div>
+          <div class="term"><dt>mmap</dt><dd>逐字段 .npy 内存映射，按页读取，不整包解压。</dd></div>
+          <div class="term"><dt>非锚点 RMSE</dt><dd>只统计模型真正生成的帧，排除硬参考帧。</dd></div>
+          <div class="term"><dt>脚滑倍数</dt><dd>生成接触期脚速 ÷ 源动作接触期脚速。</dd></div>
+          <div class="term"><dt>每 clip 等权</dt><dd>先算每条 clip 的均值，再对 clip 均值求平均，避免长动作主导。</dd></div>
+          <div class="term"><dt>6D 旋转</dt><dd>用旋转矩阵前两列表示旋转；本仓库是 row-major interleaved。</dd></div>
+          <div class="term"><dt>DML</dt><dd>DirectML；UE 内的 ORT 执行后端，当前尚未验证。</dd></div>
+        </dl>
+      </div>
+      <div class="card card-pad reveal">
+        <div class="eyebrow">Pitfalls</div>
+        <h3>十个容易踩的坑</h3>
+        <div class="pitfalls" style="margin-top: 10px;">
+          <div class="pitfall"><div class="n">01</div><div><strong>统计量不能重算</strong><p>mean/std 绑定 train 分区与权重；重算会悄悄改变输入分布。</p></div></div>
+          <div class="pitfall"><div class="n">02</div><div><strong>6D 排布不能猜</strong><p>以 manifest 为准；按列拼接会导致 col2 近零甚至 NaN。</p></div></div>
+          <div class="pitfall"><div class="n">03</div><div><strong>fps 不能写死 30</strong><p>主库是 120.0048 fps；接触损失里 fps 进平方，错了会放大/缩小 16 倍。</p></div></div>
+          <div class="pitfall"><div class="n">04</div><div><strong>raw_file 与 mmap_file 不能混</strong><p>前者是 NPZ，后者是 mmap 目录；写反会让评测/推理读不到数据。</p></div></div>
+          <div class="pitfall"><div class="n">05</div><div><strong>不要只存前 48 帧</strong><p>窗口起点分布很广，tiny 方案会让 97.1% 的窗口取错数据。</p></div></div>
+          <div class="pitfall"><div class="n">06</div><div><strong>不要跨契约比数字</strong><p>窗口步长、划分、来源版本不同，数字不可直接比。</p></div></div>
+          <div class="pitfall"><div class="n">07</div><div><strong>VQ 路线已否证</strong><p>码本塌缩到 perplexity=1.000；不要因为“结构更大”就回到主线。</p></div></div>
+          <div class="pitfall"><div class="n">08</div><div><strong>Root 是离线代理</strong><p>不是 CMC/Mover 的实际轨迹，也不是已观测 Actor Root。</p></div></div>
+          <div class="pitfall"><div class="n">09</div><div><strong>UE 未闭环</strong><p>没有 AnimGraph、打包、多角色、网络和实机验收，不要对外宣称运行时能力。</p></div></div>
+          <div class="pitfall"><div class="n">10</div><div><strong>.build 不要整目录删</strong><p>混有可重建产物和历史证据；按文件判断，先核对用途。</p></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-pad reveal" style="margin-top: 16px;">
+      <div class="eyebrow">Evidence Index</div>
+      <h3>实验证据地图：先看结论，再追原始记录</h3>
+      <div class="evidence-list" style="margin-top: 10px;">
+        <div class="evidence-row">
+          <div class="kind">Frozen result</div>
+          <div class="what"><a href="refpose-v3-training-evaluation.md">RefPose v3 训练与评测（封盘）</a><span>v3 主成绩、20 轮曲线、四档结果、脚滑、已知限制、被否定路线。</span></div>
+          <span class="tag mint">主证据</span>
+        </div>
+        <div class="evidence-row">
+          <div class="kind">Contract</div>
+          <div class="what"><a href="refpose-stage0-input-contract.md">阶段 0：输入契约</a><span>四路输入、fps、6D、anchor、Root 权威、mask 硬覆盖、独立重建判据。</span></div>
+          <span class="tag sky">必读</span>
+        </div>
+        <div class="evidence-row">
+          <div class="kind">Export</div>
+          <div class="what"><a href="refpose-stage1-onnx-export.md">阶段 1：ONNX 导出与 CPU 对齐</a><span>12.39 MB、257 节点、216 样本、相对误差、mask Where、CPU 延迟与并发。</span></div>
+          <span class="tag sky">必读</span>
+        </div>
+        <div class="evidence-row">
+          <div class="kind">UE research</div>
+          <div class="what"><a href="refpose-ue-runtime-integration-research.md">RefPose 接入 UE 5.8 调研</a><span>四输入 session、DML、120 fps、270–335 ms 可见延迟、IK/Foot Lock 顺序。</span></div>
+          <span class="tag amber">未实机</span>
+        </div>
+        <div class="evidence-row">
+          <div class="kind">Experiment</div>
+          <div class="what"><a href="experiments/2026-11-14-refpose-contact-fps.md">接触损失 fps 缺陷与权重性价比</a><span>0.4 实际等效 0.025；修复中性；0.1 不划算；0.4 发散。</span></div>
+          <span class="tag rose">口径更正</span>
+        </div>
+        <div class="evidence-row">
+          <div class="kind">Experiment</div>
+          <div class="what"><a href="experiments/2026-11-14-refpose-v2-20ep.md">full_release_v2 20 epoch 复现</a><span>71,128 clips；test 5.59/3.50/3.04/2.46；两次中断与续训根因。</span></div>
+          <span class="tag amber">复现</span>
+        </div>
+        <div class="evidence-row">
+          <div class="kind">Experiment</div>
+          <div class="what"><a href="experiments/2026-11-14-refpose-v2-30ep.md">full_release_v2 30 epoch</a><span>20→30 epoch 只换 0.08–0.19 cm；续训 LR 衔接与中末档最差 clip 恶化。</span></div>
+          <span class="tag amber">边际收益</span>
+        </div>
+        <div class="evidence-row">
+          <div class="kind">Archive</div>
+          <div class="what"><a href="../paper/main.html">技术报告</a> · <a href="../docs/archive.md">归档结论</a><span>归一化口径缺陷、17 组损失对照、码本塌缩、论文口径与更完整背景。</span></div>
+          <span class="tag violet">背景</span>
+        </div>
+      </div>
+      <div class="callout warn small" style="margin-top: 12px;">
+        <strong>证据分级：</strong>“frozen result”是交付基线；“experiment”是可复现的单次实验；“probe”是小样本诊断，只能看方向；“research”是资料调研，未在本机实机验证。不要把四类混成一个结论。
+      </div>
+    </div>
+
+    <div class="card card-pad reveal" style="margin-top: 16px;">
+      <div class="eyebrow">Experiment Record</div>
+      <h3>新增实验时，最少记录这些字段</h3>
+      <div class="grid grid-2" style="margin-top: 10px;">
+        <div class="field-list">
+          <div class="field"><code>ID / 状态</code><span>日期-slug；进行中 / 完成 / 失败 / 中止</span></div>
+          <div class="field"><code>研究问题</code><span>这次到底验证什么；不要写“试试看”</span></div>
+          <div class="field"><code>唯一变量</code><span>相对哪个基线、只改了什么</span></div>
+          <div class="field"><code>数据身份</code><span>release、contract SHA、split、clips/windows</span></div>
+          <div class="field"><code>代码身份</code><span>commit SHA；工作区是否 dirty</span></div>
+          <div class="field"><code>权重身份</code><span>checkpoint SHA、epoch、val、参数量</span></div>
+        </div>
+        <div class="field-list">
+          <div class="field"><code>命令</code><span>完整可复跑；环境变量显式写出</span></div>
+          <div class="field"><code>结果</code><span>均值 / 中位数 / P95 / 最差 clip / 脚滑两口径</span></div>
+          <div class="field"><code>对照</code><span>Hold / Lerp / 旧轮 / 同种子抖动</span></div>
+          <div class="field"><code>失败与异常</code><span>中断、OOM、发散、错评权重、修复过程</span></div>
+          <div class="field"><code>视觉复核</code><span>是否做、看了哪些 clip、结论</span></div>
+          <div class="field"><code>边界</code><span>不能宣称什么；证据等级</span></div>
+        </div>
+      </div>
+      <div class="callout warn small" style="margin-top: 12px;">
+        <strong>只写“成功”的实验没有复用价值。</strong>失败配置、异常处置和“为什么停止”往往比最终数字更重要；至少要让下一个人能复现你的否定结论。
+      </div>
+    </div>
+
+    <div class="card card-pad reveal" style="margin-top: 16px;">
+      <div class="eyebrow">Source of Truth</div>
+      <h3>需要追根时看这些文件</h3>
+      <div class="grid grid-3" style="margin-top: 12px;">
+        <div class="detail-box"><div class="lbl">总览</div><p><a href="../README.md">README.md</a><br><a href="refpose-v3-training-evaluation.md">docs/refpose-v3-training-evaluation.md</a><br><a href="repository-layout.md">docs/repository-layout.md</a></p></div>
+        <div class="detail-box"><div class="lbl">数据契约</div><p><a href="../data/runtime/refpose_windows.py">refpose_windows.py</a><br><a href="../data/tools/build/build_refpose_release.py">build_refpose_release.py</a><br><a href="../data/runtime/refpose_contract.py">refpose_contract.py</a></p></div>
+        <div class="detail-box"><div class="lbl">模型 / 训练</div><p><a href="../model/MotionWeaver/refpose/model.py">refpose/model.py</a><br><a href="../model/MotionWeaver/refpose/losses.py">refpose/losses.py</a><br><a href="../tools/train_reference_pose.py">tools/train_reference_pose.py</a></p></div>
+        <div class="detail-box"><div class="lbl">推理 / 导出</div><p><a href="../inference/runtime/conditioned_pose.py">conditioned_pose.py</a><br><a href="../benchmark/manifest/build_manifest.py">build_manifest.py</a><br><a href="../benchmark/manifest/export_onnx.py">export_onnx.py</a></p></div>
+        <div class="detail-box"><div class="lbl">评测</div><p><a href="../training/evaluation/evaluate_conditioned_baselines.py">evaluate_conditioned_baselines.py</a><br><a href="../training/evaluation/evaluate_conditioned_quality.py">evaluate_conditioned_quality.py</a><br><a href="../benchmark/README.md">benchmark/README.md</a></p></div>
+        <div class="detail-box"><div class="lbl">UE 边界</div><p><a href="../unreal-script/README.md">unreal-script/README.md</a><br><a href="../unreal-sample/README.md">unreal-sample/README.md</a><br><a href="../docs/refpose-stage1-onnx-export.md">refpose 阶段 1</a></p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap footer-grid">
+    <div>
+      <div class="brand" style="margin-bottom: 10px;">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>MotionWeaver<small>PROJECT TOUR · 2026-11-16</small></span>
+      </div>
+      <p>本页是本地项目导览，不替代权威文档与实验记录。数字来自仓库内 README、RefPose v3 训练记录、ONNX 阶段 1 记录与代码契约；路径与权重需按本机环境准备。</p>
+      <p class="tiny" style="margin-top: 8px;">本文件未提交 Git。打开方式：直接用浏览器打开 <code>docs/project-tour.html</code>。</p>
+    </div>
+    <div class="links">
+      <a href="../README.md">README</a>
+      <a href="#history">路线复盘</a>
+      <a href="refpose-v3-training-evaluation.md">RefPose v3</a>
+      <a href="#metrics">指标口径</a>
+      <a href="repository-layout.md">目录说明</a>
+      <a href="refpose-stage1-onnx-export.md">ONNX 阶段 1</a>
+      <a href="#recommendations">实验建议</a>
+      <a href="../benchmark/README.md">Benchmark</a>
+      <a href="../docs/experiments/README.md">实验记录</a>
+    </div>
+  </div>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite">已复制</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const root = document.documentElement;
+  const body = document.body;
+  root.classList.add("js");
+  // 兜底：即使后续某个浏览器 API 不可用，内容也不会一直隐藏。
+  setTimeout(() => document.querySelectorAll(".reveal").forEach((el) => el.classList.add("in")), 2200);
+  const progress = document.getElementById("progress");
+  const toast = document.getElementById("toast");
+
+  /* ---------- theme ---------- */
+  const themeToggle = document.getElementById("themeToggle");
+  let storedTheme = null;
+  try {
+    storedTheme = localStorage.getItem("mw-tour-theme");
+  } catch (error) {
+    storedTheme = null;
+  }
+  if (storedTheme === "light" || storedTheme === "dark") {
+    root.dataset.theme = storedTheme;
+  }
+  function refreshThemeIcon() {
+    themeToggle.textContent = root.dataset.theme === "light" ? "☾" : "◐";
+    themeToggle.title = root.dataset.theme === "light" ? "切换到深色" : "切换到浅色";
+  }
+  refreshThemeIcon();
+  themeToggle.addEventListener("click", () => {
+    root.dataset.theme = root.dataset.theme === "light" ? "dark" : "light";
+    try {
+      localStorage.setItem("mw-tour-theme", root.dataset.theme);
+    } catch (error) {
+      // file:// 或隐私模式下可能不可写；不影响主题切换本身。
+    }
+    refreshThemeIcon();
+  });
+
+  /* ---------- nav ---------- */
+  const navLinks = document.getElementById("navLinks");
+  const menuToggle = document.getElementById("menuToggle");
+  menuToggle.addEventListener("click", () => navLinks.classList.toggle("open"));
+  navLinks.addEventListener("click", (event) => {
+    if (event.target.closest("a")) navLinks.classList.remove("open");
+  });
+
+  const sections = [...document.querySelectorAll("main section[id], #start")];
+  const linkMap = new Map(
+    [...navLinks.querySelectorAll("a")].map((a) => [a.getAttribute("href").slice(1), a])
+  );
+  if ("IntersectionObserver" in window) {
+    const navObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        linkMap.forEach((link) => link.classList.remove("active"));
+        const link = linkMap.get(entry.target.id);
+        if (link) link.classList.add("active");
+      });
+    }, { rootMargin: "-18% 0px -68% 0px", threshold: 0 });
+    sections.forEach((section) => navObserver.observe(section));
+  }
+
+  /* ---------- progress ---------- */
+  let ticking = false;
+  function updateProgress() {
+    const max = document.documentElement.scrollHeight - window.innerHeight;
+    const pct = max > 0 ? Math.min(100, Math.max(0, (window.scrollY / max) * 100)) : 0;
+    progress.style.width = pct + "%";
+    ticking = false;
+  }
+  window.addEventListener("scroll", () => {
+    if (!ticking) {
+      requestAnimationFrame(updateProgress);
+      ticking = true;
+    }
+  }, { passive: true });
+  updateProgress();
+
+  /* ---------- reveal ---------- */
+  const reveals = document.querySelectorAll(".reveal");
+  if ("IntersectionObserver" in window) {
+    const revealObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("in");
+          revealObserver.unobserve(entry.target);
+        }
+      });
+    }, { rootMargin: "0px 0px -8% 0px", threshold: .06 });
+    reveals.forEach((el) => revealObserver.observe(el));
+  } else {
+    reveals.forEach((el) => el.classList.add("in"));
+  }
+
+  /* ---------- legacy toggle ---------- */
+  const legacyToggle = document.getElementById("legacyToggle");
+  legacyToggle.addEventListener("click", () => {
+    body.classList.toggle("show-legacy");
+    legacyToggle.textContent = body.classList.contains("show-legacy")
+      ? "隐藏历史对照"
+      : "显示历史对照";
+    if (body.classList.contains("show-legacy")) {
+      const block = document.querySelector(".legacy-block");
+      if (block) block.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  });
+
+  /* ---------- data step tabs ---------- */
+  const stepButtons = [...document.querySelectorAll(".step-btn")];
+  const stepPanels = [...document.querySelectorAll(".step-detail")];
+  function activateStep(key) {
+    stepButtons.forEach((btn) => btn.classList.toggle("active", btn.dataset.step === key));
+    stepPanels.forEach((panel) => panel.classList.toggle("active", panel.dataset.panel === key));
+  }
+  stepButtons.forEach((btn) => btn.addEventListener("click", () => activateStep(btn.dataset.step)));
+
+  /* ---------- window visualization ---------- */
+  const grid = document.getElementById("windowGrid");
+  if (grid) {
+    for (let i = 0; i < 48; i++) {
+      const cell = document.createElement("i");
+      const isHistory = i < 24;
+      cell.className = isHistory ? "hist" : "future";
+      if (i === 23) cell.classList.add("origin");
+      if (i === 36 || i === 47) cell.classList.add("anchor");
+      cell.title = isHistory
+        ? `history frame ${i}`
+        : `future frame ${i - 24}${(i === 36 || i === 47) ? " · anchor" : ""}`;
+      grid.appendChild(cell);
+    }
+  }
+
+  /* ---------- copy ---------- */
+  function showToast(text) {
+    toast.textContent = text;
+    toast.classList.add("show");
+    clearTimeout(showToast._timer);
+    showToast._timer = setTimeout(() => toast.classList.remove("show"), 1400);
+  }
+  async function copyText(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast("已复制");
+    } catch (error) {
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      try {
+        document.execCommand("copy");
+        showToast("已复制");
+      } catch (err) {
+        showToast("复制失败，请手动选择");
+      }
+      document.body.removeChild(area);
+    }
+  }
+  document.querySelectorAll(".copy").forEach((button) => {
+    button.addEventListener("click", () => {
+      const pre = button.closest(".code").querySelector("pre");
+      if (pre) copyText(pre.innerText);
+    });
+  });
+
+  /* ---------- external links in new tab (relative repo files stay same tab) ---------- */
+  document.querySelectorAll("a[href^='http']").forEach((link) => {
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+  });
+})();
+</script>
+</body>
+</html>
