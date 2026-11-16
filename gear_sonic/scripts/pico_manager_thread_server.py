@@ -37,6 +37,7 @@ import torch
 import zmq
 
 from gear_sonic.utils.teleop import input_readers
+from gear_sonic.utils.teleop.keyboard_input import KeyboardControlSource
 from gear_sonic.utils.teleop.zmq.zmq_poller import ZMQPoller
 from gear_sonic.trl.utils.rotation_conversion import decompose_rotation_aa
 from gear_sonic.trl.utils.torch_transform import (
@@ -615,8 +616,17 @@ def init_hand_ik_solvers():
 _ISAAC_TELEOP_READERS = (input_readers.IsaacTeleopReader,)
 
 
-def get_controller_inputs(reader=None):
+def get_controller_inputs(reader=None, keyboard=None):
     """Fetch controller button/trigger states from XRoboToolkit or IsaacCapture."""
+    if keyboard is not None:
+        ctrl = keyboard.get_controller_data()
+        return (
+            bool(ctrl.get("left_menu_button", False)),
+            float(ctrl.get("left_trigger_value", 0.0)),
+            float(ctrl.get("right_trigger_value", 0.0)),
+            float(ctrl.get("left_squeeze_value", 0.0)),
+            float(ctrl.get("right_squeeze_value", 0.0)),
+        )
     if isinstance(reader, _ISAAC_TELEOP_READERS):
         ctrl = reader.get_controller_data()
         if ctrl is None:
@@ -636,8 +646,10 @@ def get_controller_inputs(reader=None):
     return left_menu_button, left_trigger, right_trigger, left_grip, right_grip
 
 
-def get_controller_axes(reader=None):
+def get_controller_axes(reader=None, keyboard=None):
     """Fetch joystick axes (lx, ly, rx, ry). Falls back to zeros if not available."""
+    if keyboard is not None:
+        return 0.0, 0.0, 0.0, 0.0
     if isinstance(reader, _ISAAC_TELEOP_READERS):
         ctrl = reader.get_controller_data()
         if ctrl is None:
@@ -664,8 +676,11 @@ def get_controller_axes(reader=None):
         return 0.0, 0.0, 0.0, 0.0
 
 
-def get_menu_buttons(reader=None):
+def get_menu_buttons(reader=None, keyboard=None):
     """Fetch both menu buttons (left, right). Falls back to False if not available."""
+    if keyboard is not None:
+        ctrl = keyboard.get_controller_data()
+        return bool(ctrl.get("left_menu_button", False)), False
     if isinstance(reader, _ISAAC_TELEOP_READERS):
         return False, False
     if xrt is None:
@@ -683,8 +698,14 @@ def get_menu_buttons(reader=None):
     return left, right
 
 
-def get_axis_clicks(reader=None):
+def get_axis_clicks(reader=None, keyboard=None):
     """Fetch both axis click buttons (left, right). Falls back to False if not available."""
+    if keyboard is not None:
+        ctrl = keyboard.get_controller_data()
+        return (
+            float(ctrl.get("left_thumbstick_click", 0.0)) > 0.5,
+            float(ctrl.get("right_thumbstick_click", 0.0)) > 0.5,
+        )
     if isinstance(reader, _ISAAC_TELEOP_READERS):
         ctrl = reader.get_controller_data()
         if ctrl is None:
@@ -708,8 +729,14 @@ def get_axis_clicks(reader=None):
     return left, right
 
 
-def get_face_buttons(reader=None):
+def get_face_buttons(reader=None, keyboard=None):
     """Fetch primary face buttons A and X. Returns (a_pressed, x_pressed)."""
+    if keyboard is not None:
+        ctrl = keyboard.get_controller_data()
+        return (
+            float(ctrl.get("right_primary_click", 0.0)) > 0.5,
+            float(ctrl.get("left_primary_click", 0.0)) > 0.5,
+        )
     if isinstance(reader, _ISAAC_TELEOP_READERS):
         ctrl = reader.get_controller_data()
         if ctrl is None:
@@ -728,8 +755,16 @@ def get_face_buttons(reader=None):
         return False, False
 
 
-def get_abxy_buttons(reader=None):
+def get_abxy_buttons(reader=None, keyboard=None):
     """Fetch A,B,X,Y face buttons as booleans (a,b,x,y)."""
+    if keyboard is not None:
+        ctrl = keyboard.get_controller_data()
+        return (
+            float(ctrl.get("right_primary_click", 0.0)) > 0.5,
+            float(ctrl.get("right_secondary_click", 0.0)) > 0.5,
+            float(ctrl.get("left_primary_click", 0.0)) > 0.5,
+            float(ctrl.get("left_secondary_click", 0.0)) > 0.5,
+        )
     if isinstance(reader, _ISAAC_TELEOP_READERS):
         ctrl = reader.get_controller_data()
         if ctrl is None:
@@ -1250,9 +1285,11 @@ class PoseStreamer:
         record_dir: str,
         record_format: str,
         log_prefix: str = "PoseLoop",
+        keyboard=None,
     ):
         self.socket = socket
         self.reader = reader
+        self.keyboard = keyboard
         self.num_frames_to_send = num_frames_to_send
         self.target_fps = target_fps
         self.record_dir = record_dir
@@ -1350,10 +1387,12 @@ class PoseStreamer:
             self.parent_indices, self.device, sample["body_poses_np"]
         )
         left_menu_button, left_trigger, right_trigger, left_grip, right_grip = get_controller_inputs(
-            self.reader
+            self.reader, keyboard=self.keyboard
         )
         # Get A and B button states for data collection control
-        a_pressed, b_pressed, x_pressed, y_pressed = get_abxy_buttons(self.reader)
+        a_pressed, b_pressed, x_pressed, y_pressed = get_abxy_buttons(
+            self.reader, keyboard=self.keyboard
+        )
 
         # Data collection toggle logic (edge-triggered)
         # Left grip + A = toggle_data_collection
@@ -1504,7 +1543,7 @@ class PoseStreamer:
             self.buffer_cleared = False
 
         # Get joystick axes for yaw accumulation
-        _, _, rx, _ = get_controller_axes(self.reader)
+        _, _, rx, _ = get_controller_axes(self.reader, keyboard=self.keyboard)
         self.yaw_accumulator.update(rx, self.frame_time)
 
         # Only send if buffer is full and we're not waiting for fresh data
@@ -1732,9 +1771,11 @@ class PlannerStreamer:
         poll_hz: int = 20,
         zmq_feedback_host: str = "localhost",
         zmq_feedback_port: int = 5557,
+        keyboard=None,
     ):
         self.socket = socket
         self.reader = reader
+        self.keyboard = keyboard
         self.three_point = three_point
         self.feedback_reader = FeedbackReader(
             zmq_feedback_host=zmq_feedback_host, zmq_feedback_port=zmq_feedback_port
@@ -1791,7 +1832,9 @@ class PlannerStreamer:
             self.last_xrt_timestamp = xrt_timestamp
 
             # A+B => next mode; X+Y => previous mode (rising edges)
-            a_pressed, b_pressed, x_pressed, y_pressed = get_abxy_buttons(self.reader)
+            a_pressed, b_pressed, x_pressed, y_pressed = get_abxy_buttons(
+                self.reader, keyboard=self.keyboard
+            )
             ab_now = bool(a_pressed) and bool(b_pressed)
             xy_now = bool(x_pressed) and bool(y_pressed)
             if ab_now and not self.prev_ab:
@@ -1804,7 +1847,7 @@ class PlannerStreamer:
             self.prev_xy = xy_now
 
             # Read axes/joysticks to control movement, facing, speed and mode
-            lx, ly, rx, ry = get_controller_axes(self.reader)
+            lx, ly, rx, ry = get_controller_axes(self.reader, keyboard=self.keyboard)
 
             # Facing from RIGHT stick: continuous yaw based on rx (right = turn right, left = turn left)
             facing = self.yaw_accumulator.update(rx, self.dt)
@@ -1866,7 +1909,7 @@ class PlannerStreamer:
                     right_trigger,
                     left_grip,
                     right_grip,
-                ) = get_controller_inputs(self.reader)
+                ) = get_controller_inputs(self.reader, keyboard=self.keyboard)
                 lh_joints, rh_joints = compute_hand_joints_from_inputs(
                     self.left_hand_ik_solver,
                     self.right_hand_ik_solver,
@@ -1922,6 +1965,20 @@ def run_pico_manager(
     enable_waist_tracking: bool = False,
     enable_smpl_vis: bool = False,
     input_source: str = "xrt",
+    control_source: str = "controller",
+    keyboard_ttl_sec: float = 0.32,
+    keyboard_a: str = "a",
+    keyboard_b: str = "b",
+    keyboard_x: str = "x",
+    keyboard_y: str = "y",
+    keyboard_grip: str = "g",
+    keyboard_start_stop: str = "s",
+    keyboard_mode: str = "m",
+    keyboard_frozen_mode: str = "f",
+    keyboard_record: str = "c",
+    keyboard_discard: str = "d",
+    keyboard_menu: str = "p",
+    keyboard_axis_click: str = "v",
 ):
     """
     Manager: creates shared PUB socket and runs pose/planner streamers based on current mode.
@@ -1929,7 +1986,36 @@ def run_pico_manager(
       A+X: Toggle between planner and pose mode
       A+B+X+Y: Toggle policy start/stop
     """
+    if control_source not in {"controller", "keyboard"}:
+        raise ValueError("control_source must be 'controller' or 'keyboard'")
+
     reader = _init_input_source(input_source, buffer_size)
+    keyboard = None
+    if control_source == "keyboard":
+        keyboard = KeyboardControlSource(
+            ttl_sec=keyboard_ttl_sec,
+            key_mapping={
+                "a": keyboard_a,
+                "b": keyboard_b,
+                "x": keyboard_x,
+                "y": keyboard_y,
+                "grip": keyboard_grip,
+            },
+            action_mapping={
+                "start_stop": keyboard_start_stop,
+                "mode": keyboard_mode,
+                "frozen_mode": keyboard_frozen_mode,
+                "record": keyboard_record,
+                "discard": keyboard_discard,
+                "menu": keyboard_menu,
+                "axis_click": keyboard_axis_click,
+            },
+        )
+        try:
+            keyboard.start()
+        except Exception:
+            reader.stop()
+            raise
 
     context = zmq.Context()
     socket = context.socket(zmq.PUB)
@@ -1963,6 +2049,7 @@ def run_pico_manager(
         record_dir=record_dir,
         record_format=record_format,
         log_prefix="PoseLoop",
+        keyboard=keyboard,
     )
     planner_streamer = PlannerStreamer(
         socket=socket,
@@ -1971,6 +2058,7 @@ def run_pico_manager(
         poll_hz=20,
         zmq_feedback_host=zmq_feedback_host,
         zmq_feedback_port=zmq_feedback_port,
+        keyboard=keyboard,
     )
 
     # State machine diagram:
@@ -2002,11 +2090,15 @@ def run_pico_manager(
         prev_left_axis_click = False
         while True:
             # Poll Pico controller for buttons/axes
-            a_pressed, b_pressed, x_pressed, y_pressed = get_abxy_buttons(reader)
+            a_pressed, b_pressed, x_pressed, y_pressed = get_abxy_buttons(
+                reader, keyboard=keyboard
+            )
 
-            left_menu_button, _, _, left_grip_mgr, _ = get_controller_inputs(reader)
+            left_menu_button, _, _, left_grip_mgr, _ = get_controller_inputs(
+                reader, keyboard=keyboard
+            )
 
-            left_axis_click, _ = get_axis_clicks(reader)
+            left_axis_click, _ = get_axis_clicks(reader, keyboard=keyboard)
 
             # Rising edge: A+X pressed together -> toggle POSE/PLANNER mode
             ax_pressed = (a_pressed) and (x_pressed)
@@ -2165,6 +2257,8 @@ def run_pico_manager(
                 cleanup.callback(socket.close)
                 cleanup.callback(three_point.close)
                 cleanup.callback(_close_xrt_sdk, input_source)
+                if keyboard is not None:
+                    cleanup.callback(keyboard.stop)
                 cleanup.callback(reader.stop)
         finally:
             print("[Manager] Shutdown complete")
@@ -2264,6 +2358,51 @@ if __name__ == "__main__":
             "'isaac-teleop' for in-process IsaacCapture / CloudXR DeviceIO"
         ),
     )
+    parser.add_argument(
+        "--control-source",
+        type=str,
+        default="controller",
+        choices=["controller", "keyboard"],
+        help=(
+            "Control buttons: 'controller' preserves the PICO ABXY/grip path; "
+            "'keyboard' replaces those buttons while keeping the same manager protocol"
+        ),
+    )
+    parser.add_argument(
+        "--keyboard-ttl-sec",
+        type=float,
+        default=0.32,
+        help="How long a terminal key press remains active for chord detection",
+    )
+    parser.add_argument("--keyboard-a", type=str, default="a", help="Keyboard key mapped to A")
+    parser.add_argument("--keyboard-b", type=str, default="b", help="Keyboard key mapped to B")
+    parser.add_argument("--keyboard-x", type=str, default="x", help="Keyboard key mapped to X")
+    parser.add_argument("--keyboard-y", type=str, default="y", help="Keyboard key mapped to Y")
+    parser.add_argument(
+        "--keyboard-grip", type=str, default="g", help="Keyboard key mapped to left Grip"
+    )
+    parser.add_argument(
+        "--keyboard-start-stop", type=str, default="s", help="Atomic A+B+X+Y action key"
+    )
+    parser.add_argument("--keyboard-mode", type=str, default="m", help="Atomic A+X action key")
+    parser.add_argument(
+        "--keyboard-frozen-mode", type=str, default="f", help="Atomic B+Y action key"
+    )
+    parser.add_argument(
+        "--keyboard-record", type=str, default="c", help="Atomic left Grip+A action key"
+    )
+    parser.add_argument(
+        "--keyboard-discard", type=str, default="d", help="Atomic left Grip+B action key"
+    )
+    parser.add_argument(
+        "--keyboard-menu", type=str, default="p", help="Keyboard key mapped to left Menu/Pause"
+    )
+    parser.add_argument(
+        "--keyboard-axis-click",
+        type=str,
+        default="v",
+        help="Keyboard key mapped to left thumbstick click",
+    )
     args = parser.parse_args()
 
     # Standalone VR3Pt test modes (exit after finishing)
@@ -2305,6 +2444,20 @@ if __name__ == "__main__":
             enable_waist_tracking=args.waist_tracking,
             enable_smpl_vis=args.vis_smpl,
             input_source=args.input_source,
+            control_source=args.control_source,
+            keyboard_ttl_sec=args.keyboard_ttl_sec,
+            keyboard_a=args.keyboard_a,
+            keyboard_b=args.keyboard_b,
+            keyboard_x=args.keyboard_x,
+            keyboard_y=args.keyboard_y,
+            keyboard_grip=args.keyboard_grip,
+            keyboard_start_stop=args.keyboard_start_stop,
+            keyboard_mode=args.keyboard_mode,
+            keyboard_frozen_mode=args.keyboard_frozen_mode,
+            keyboard_record=args.keyboard_record,
+            keyboard_discard=args.keyboard_discard,
+            keyboard_menu=args.keyboard_menu,
+            keyboard_axis_click=args.keyboard_axis_click,
         )
     else:
         # Run legacy single-thread pose streaming
