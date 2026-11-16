@@ -154,7 +154,13 @@ cython_debug/
 
 # IDE
 .idea/
-.vscode/
+# Shared VSCode project configuration; machine-specific files stay ignored.
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/experiments.code-snippets
 .codex/
 
 # log

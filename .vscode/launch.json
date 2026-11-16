@@ -1,0 +1,49 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug pytest: current file",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["${relativeFile}", "-q"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "env": {
+        "AIANIMATION_ROOT": "${workspaceFolder}",
+        "PYTHONPATH": "${workspaceFolder}",
+        "PYTHONUTF8": "1"
+      }
+    },
+    {
+      "name": "Debug pytest: tests",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["tests", "-q"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "env": {
+        "AIANIMATION_ROOT": "${workspaceFolder}",
+        "PYTHONPATH": "${workspaceFolder}",
+        "PYTHONUTF8": "1"
+      }
+    },
+    {
+      "name": "Debug Python: current file",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "env": {
+        "AIANIMATION_ROOT": "${workspaceFolder}",
+        "PYTHONPATH": "${workspaceFolder}",
+        "PYTHONUTF8": "1"
+      }
+    }
+  ]
+}

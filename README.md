@@ -93,7 +93,9 @@ python3 -m venv .venv
 
 Windows 将 `.venv/bin/python` 换成 `.venv\Scripts\python.exe`。`setup` 默认安装
 `.[training,dev]`；另加 `--demo` / `--export` 可补 MuJoCo 与 ONNX 依赖。
-完整搭建、测试分类、Lint 策略和数据路径见 [开发环境](docs/development.md)。
+仓库已带共享 VSCode 配置，打开后安装推荐扩展即可使用 Python/Pytest、Ruff、
+调试任务和 UE clangd 索引。完整搭建、测试分类、Lint 策略和数据路径见
+[开发环境](docs/development.md)。
 
 ### Unreal 侧范围
 

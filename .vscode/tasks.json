@@ -1,0 +1,252 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Dev: doctor",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "windows": {
+        "command": "${workspaceFolder}/.venv/Scripts/python.exe"
+      },
+      "args": ["tools/dev.py", "doctor"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      }
+    },
+    {
+      "label": "Dev: doctor (strict)",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "windows": {
+        "command": "${workspaceFolder}/.venv/Scripts/python.exe"
+      },
+      "args": ["tools/dev.py", "doctor", "--strict"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      }
+    },
+    {
+      "label": "Dev: test",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "windows": {
+        "command": "${workspaceFolder}/.venv/Scripts/python.exe"
+      },
+      "args": ["-m", "pytest", "tests", "-q"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      }
+    },
+    {
+      "label": "Dev: test current file",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "windows": {
+        "command": "${workspaceFolder}/.venv/Scripts/python.exe"
+      },
+      "args": ["-m", "pytest", "${relativeFile}", "-q"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "test"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      }
+    },
+    {
+      "label": "Dev: lint",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "windows": {
+        "command": "${workspaceFolder}/.venv/Scripts/python.exe"
+      },
+      "args": ["tools/dev.py", "lint"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      }
+    },
+    {
+      "label": "Dev: check",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "windows": {
+        "command": "${workspaceFolder}/.venv/Scripts/python.exe"
+      },
+      "args": ["tools/dev.py", "check"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      }
+    },
+    {
+      "label": "Dev: setup (full)",
+      "type": "process",
+      "command": "python3",
+      "windows": {
+        "command": "python"
+      },
+      "args": ["tools/dev.py", "setup", "--demo", "--export"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      }
+    },
+    {
+      "label": "Dev: setup (minimal)",
+      "type": "process",
+      "command": "python3",
+      "windows": {
+        "command": "python"
+      },
+      "args": ["tools/dev.py", "setup", "--minimal"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      }
+    },
+    {
+      "label": "Dev: bootstrap",
+      "type": "process",
+      "command": "python3",
+      "windows": {
+        "command": "python"
+      },
+      "args": ["tools/dev.py", "bootstrap"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      }
+    },
+    {
+      "label": "UE: generate clangd compile database",
+      "type": "process",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "windows": {
+        "command": "${workspaceFolder}/.venv/Scripts/python.exe"
+      },
+      "args": ["unreal-script/gen_compile_commands.py"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      }
+    },
+    {
+      "label": "UE: sync plugin mirror",
+      "type": "process",
+      "command": "pwsh",
+      "windows": {
+        "command": "powershell",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "${workspaceFolder}/unreal-script/Tools/Sync-MotionWeaver.ps1"
+        ]
+      },
+      "args": [
+        "-NoProfile",
+        "-File",
+        "${workspaceFolder}/unreal-script/Tools/Sync-MotionWeaver.ps1"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      }
+    },
+    {
+      "label": "UE: check plugin mirror",
+      "type": "process",
+      "command": "pwsh",
+      "windows": {
+        "command": "powershell",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "${workspaceFolder}/unreal-script/Tools/Sync-MotionWeaver.ps1",
+          "-Check"
+        ]
+      },
+      "args": [
+        "-NoProfile",
+        "-File",
+        "${workspaceFolder}/unreal-script/Tools/Sync-MotionWeaver.ps1",
+        "-Check"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      }
+    }
+  ]
+}

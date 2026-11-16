@@ -1,0 +1,105 @@
+{
+  // 共享项目配置。个人机器差异请放在 VSCode User Settings，不要改这里的公共默认值。
+  // Windows 用户若自动发现失败，手动选择 .venv\\Scripts\\python.exe。
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+  "python.venvPath": "${workspaceFolder}",
+  "python.terminal.activateEnvironment": true,
+  "python.terminal.activateEnvInCurrentTerminal": true,
+  "python.analysis.extraPaths": ["${workspaceFolder}"],
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.diagnosticMode": "openFilesOnly",
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.exclude": [
+    "**/.venv/**",
+    "**/.build/**",
+    "**/__pycache__/**",
+    "**/.pytest_cache/**",
+    "**/.ruff_cache/**",
+    "**/data/raw/**",
+    "**/data/prepared/**",
+    "**/training/runs/**",
+    "**/model-weight/**",
+    "**/unreal-sample/**/Content/**",
+    "**/unreal-sample/**/Binaries/**",
+    "**/unreal-sample/**/Intermediate/**"
+  ],
+  // pytest 是唯一测试入口；测试已统一在 tests/ 下。
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.cwd": "${workspaceFolder}",
+  "python.testing.pytestArgs": ["tests"],
+  "python.testing.autoTestDiscoverOnSaveEnabled": true,
+  // 仓库尚未统一历史格式，禁止保存时自动格式化/整理 import。
+  "editor.formatOnSave": false,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.ruff": "never",
+    "source.organizeImports.ruff": "never"
+  },
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true,
+    "editor.formatOnSave": false
+  },
+  "[markdown]": {
+    "editor.wordWrap": "on",
+    "editor.tabSize": 2
+  },
+  "files.eol": "\n",
+  "files.insertFinalNewline": true,
+  "files.trimTrailingWhitespace": true,
+  "files.associations": {
+    "*.uproject": "json",
+    "*.uplugin": "json",
+    "*.usf": "cpp",
+    "*.ush": "cpp"
+  },
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/.pytest_cache": true,
+    "**/.ruff_cache": true,
+    "**/.mypy_cache": true,
+    "**/*.egg-info": true
+  },
+  "search.exclude": {
+    "**/.venv": true,
+    "**/.build": true,
+    "**/__pycache__": true,
+    "**/.pytest_cache": true,
+    "**/.ruff_cache": true,
+    "**/data/raw": true,
+    "**/data/prepared": true,
+    "**/training/runs": true,
+    "**/unreal-sample/**/Content": true,
+    "**/unreal-sample/**/Binaries": true,
+    "**/unreal-sample/**/Intermediate": true,
+    "**/node_modules": true
+  },
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/.venv/**": true,
+    "**/.build/**": true,
+    "**/__pycache__/**": true,
+    "**/.pytest_cache/**": true,
+    "**/.ruff_cache/**": true,
+    "**/data/raw/**": true,
+    "**/data/prepared/**": true,
+    "**/training/runs/**": true,
+    "**/model-weight/**": true,
+    "**/unreal-sample/**/Content/**": true,
+    "**/unreal-sample/**/Binaries/**": true,
+    "**/unreal-sample/**/Intermediate/**": true
+  },
+  "terminal.integrated.cwd": "${workspaceFolder}",
+  "terminal.integrated.env.linux": {
+    "PYTHONUTF8": "1"
+  },
+  "terminal.integrated.env.windows": {
+    "PYTHONUTF8": "1"
+  },
+  "ruff.enable": true,
+  "ruff.organizeImports": false,
+  "ruff.fixAll": false,
+  "git.ignoreLimitWarning": true
+}
