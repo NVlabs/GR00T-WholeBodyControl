@@ -1,12 +1,19 @@
+import sys
 import threading
 import time
 from types import SimpleNamespace
 from unittest import mock
 
 import numpy as np
+import pytest
 
 from gear_sonic.utils.teleop import input_readers
 from gear_sonic.utils.teleop.input_readers import _body_data_to_24x7
+from gear_sonic.utils.teleop.skeleton_guards import (
+    FROZEN_WINDOW,
+    ConventionMatch,
+    MatchOutcome,
+)
 
 
 class MockBodyJoints:
@@ -155,3 +162,195 @@ def test_clear_latest_is_not_undone_by_a_frame_already_in_flight():
             in_flight.set()
             stop_reading.set()
             thread.join(timeout=2.0)
+
+
+_IDENTITY_POSES = np.tile(np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]), (24, 1))
+
+
+class _ScriptedClient:
+    """Stands in for IsaacTeleopClient: replays one snapshot per poll.
+
+    Each frame is the (24, 7) array the patched _body_data_to_24x7 returns for
+    that poll, or None for a poll with no body data. The reader is stopped
+    once the frames run out.
+    """
+
+    def __init__(self, reader_ref, frames, full_body_source="pico"):
+        self._reader_ref = reader_ref
+        self._frames = list(frames)
+        self._source = full_body_source
+        self.polls = 0
+
+    def _get_tracker_data(self):
+        if self.polls >= len(self._frames):
+            self._reader_ref[0]._stop.set()
+            return None
+        frame = self._frames[self.polls]
+        self.polls += 1
+        return SimpleNamespace(
+            left_controller=None,
+            right_controller=None,
+            full_body=frame,
+            full_body_source=self._source,
+        )
+
+    def get_timestamp_ns(self):
+        return time.monotonic_ns()
+
+    def close(self):
+        pass
+
+
+def _run_reader(monkeypatch, frames, skeleton_profile="pico", full_body_source="pico"):
+    """Run IsaacTeleopReader._run synchronously over ``frames``; return the reader."""
+    reader_ref = [None]
+    client = _ScriptedClient(reader_ref, frames, full_body_source)
+    monkeypatch.setattr(input_readers, "IsaacTeleopClient", lambda **kw: client)
+    monkeypatch.setattr(
+        input_readers,
+        "_body_data_to_24x7",
+        lambda data: None if data is None else np.array(data, copy=True),
+    )
+    reader = input_readers.IsaacTeleopReader(poll_hz=1000.0, skeleton_profile=skeleton_profile)
+    reader_ref[0] = reader
+    reader._run()
+    return reader
+
+
+def _live_frames(n, seed=0):
+    """``n`` frames with ~1 cm of natural sway, so none of them reads as frozen."""
+    rng = np.random.default_rng(seed)
+    frames = []
+    for _ in range(n):
+        f = _IDENTITY_POSES.copy()
+        f[:, :3] += rng.normal(scale=0.01, size=(24, 3))
+        frames.append(f)
+    return frames
+
+
+def _decided(source):
+    return ConventionMatch(MatchOutcome.DECIDED, source, {"pico": 0.0, "quest": 60.0}, 60.0)
+
+
+def _patch_correction(monkeypatch, correct):
+    monkeypatch.setitem(
+        sys.modules,
+        "isaacteleop.retargeting_engine.utilities",
+        SimpleNamespace(correct_body_orientations=correct),
+    )
+
+
+def test_reader_forwards_a_live_pico_skeleton(monkeypatch):
+    monkeypatch.setattr(input_readers, "match_orientation_convention", lambda *a: _decided("pico"))
+    reader = _run_reader(monkeypatch, _live_frames(40))
+    assert reader.get_latest() is not None
+    assert reader.refusal_count == 0
+
+
+def test_a_frozen_pico_skeleton_is_refused_and_counted(monkeypatch):
+    monkeypatch.setattr(input_readers, "match_orientation_convention", lambda *a: _decided("pico"))
+    reader = _run_reader(monkeypatch, [*_live_frames(40), *[_IDENTITY_POSES] * 40])
+    assert reader.get_latest() is None
+    assert reader.refusal_count > 0
+
+
+def test_a_contradicting_convention_is_refused_and_counted(monkeypatch):
+    monkeypatch.setattr(input_readers, "match_orientation_convention", lambda *a: _decided("quest"))
+    reader = _run_reader(monkeypatch, _live_frames(5))
+    assert reader.get_latest() is None
+    assert reader.refusal_count == 5
+
+
+def test_clear_latest_is_not_counted_as_a_refusal(monkeypatch):
+    """Calibration clears the cache; that must not throw the manager out of POSE."""
+    monkeypatch.setattr(input_readers, "match_orientation_convention", lambda *a: _decided("pico"))
+    reader = _run_reader(monkeypatch, _live_frames(40))
+    reader.clear_latest()
+    assert reader.get_latest() is None
+    assert reader.refusal_count == 0
+
+
+def test_a_dropped_frame_does_not_let_a_frozen_pico_skeleton_through(monkeypatch):
+    """Gaps used to reset the frozen-pose window, so it never filled."""
+    monkeypatch.setattr(input_readers, "match_orientation_convention", lambda *a: _decided("pico"))
+    frozen_with_gaps = [None if i % 4 == 3 else _IDENTITY_POSES for i in range(80)]
+    reader = _run_reader(monkeypatch, [*frozen_with_gaps, _IDENTITY_POSES])
+    assert reader.get_latest() is None
+
+
+def test_a_dropped_frame_does_not_stall_a_live_pico_skeleton(monkeypatch):
+    """The frozen-pose window survives a gap, so live data resumes at once."""
+    monkeypatch.setattr(input_readers, "match_orientation_convention", lambda *a: _decided("pico"))
+    frames = [*_live_frames(40), None, *_live_frames(1, seed=1)]
+    assert _run_reader(monkeypatch, frames).get_latest() is not None
+
+
+def test_pico_frames_wait_for_the_frozen_window_to_fill(monkeypatch):
+    """Until the window fills, frozen and live look alike, so nothing is forwarded."""
+    monkeypatch.setattr(input_readers, "match_orientation_convention", lambda *a: _decided("pico"))
+    waiting = _run_reader(monkeypatch, _live_frames(FROZEN_WINDOW - 1))
+    assert waiting.get_latest() is None
+    assert waiting.refusal_count == 0, "warm-up is not a fault"
+    assert _run_reader(monkeypatch, _live_frames(FROZEN_WINDOW)).get_latest() is not None
+
+
+def test_reader_refuses_a_non_finite_frame(monkeypatch):
+    monkeypatch.setattr(input_readers, "match_orientation_convention", lambda *a: _decided("pico"))
+    bad = _live_frames(1, seed=1)[0]
+    bad[5, 3] = np.nan
+    reader = _run_reader(monkeypatch, [*_live_frames(40), bad])
+    assert reader.get_latest() is None
+    assert reader.refusal_count == 1
+
+
+def test_a_failing_correction_refuses_the_frame_and_keeps_reading(monkeypatch):
+    def _correct(orientations, profile):
+        raise ValueError(f"unknown profile {profile!r}")
+
+    _patch_correction(monkeypatch, _correct)
+    monkeypatch.setattr(input_readers, "match_orientation_convention", lambda *a: _decided("quest"))
+    frames = _live_frames(5)
+    reader = _run_reader(monkeypatch, frames, skeleton_profile="quest", full_body_source="quest")
+    assert reader._client.polls == len(frames)  # the thread survived every failure
+    assert reader.get_latest() is None
+    assert reader.refusal_count == len(frames)
+
+
+def test_the_correction_always_runs_with_its_own_profile(monkeypatch):
+    """Clearing the profile mid-frame cannot hand the saved function a None profile."""
+    seen = []
+
+    def _correct(orientations, profile):
+        seen.append(profile)
+        return orientations
+
+    _patch_correction(monkeypatch, _correct)
+    monkeypatch.setattr(input_readers, "IsaacTeleopClient", lambda **kw: object())
+    reader = input_readers.IsaacTeleopReader(skeleton_profile="quest")
+    correct_fn, profile = reader._correction
+    reader.set_skeleton_profile(None)  # another thread clears it after the read
+    correct_fn(_IDENTITY_POSES[:, 3:], profile)
+    assert seen == ["quest"]
+    assert reader._correction is None
+
+
+def test_an_unexpected_reader_failure_surfaces_from_get_latest(monkeypatch):
+    monkeypatch.setattr(input_readers, "match_orientation_convention", lambda *a: _decided("quest"))
+    _patch_correction(monkeypatch, lambda o, p: o)
+
+    def _timestamp_fails(self):
+        raise OSError("gone")
+
+    monkeypatch.setattr(_ScriptedClient, "get_timestamp_ns", _timestamp_fails)
+    reader = _run_reader(
+        monkeypatch, _live_frames(2), skeleton_profile="quest", full_body_source="quest"
+    )
+    with pytest.raises(OSError, match="gone"):
+        reader.get_latest()
+
+
+def test_explicit_quest_without_the_correction_names_the_fix(monkeypatch):
+    monkeypatch.setitem(sys.modules, "isaacteleop.retargeting_engine.utilities", None)
+    monkeypatch.setattr(input_readers, "IsaacTeleopClient", lambda **kw: object())
+    with pytest.raises(input_readers.SkeletonCorrectionUnavailable, match="IsaacTeleop#921"):
+        input_readers.IsaacTeleopReader(skeleton_profile="quest")

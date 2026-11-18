@@ -24,6 +24,7 @@
 
 from collections import defaultdict, deque
 from enum import Enum, IntEnum
+from typing import TypedDict
 import os
 import subprocess
 import threading
@@ -130,6 +131,28 @@ class StreamMode(Enum):
     PLANNER_FROZEN_UPPER_BODY = 3
     POSE_PAUSE = 4
     PLANNER_VR_3PT = 5
+
+
+def _mode_after_refusal(
+    current_mode: StreamMode, new_mode: StreamMode, vr3pt_parent_mode: StreamMode
+) -> StreamMode:
+    """The mode to be in once the reader has refused body data.
+
+    POSE and PLANNER_VR_3PT drive the robot from the headset's body pose. When
+    the reader refuses that pose, leaving those modes is what reaches the robot:
+    the switch sends ``planner=True`` to the deploy side, which otherwise keeps
+    acting on the last pose it was streamed. Each goes where its own button
+    would take it -- POSE to PLANNER, VR_3PT back to the planner mode it was
+    entered from. Every other mode is already independent of the body pose and
+    is returned unchanged, including OFF from an emergency stop this tick.
+    """
+    if new_mode == StreamMode.POSE:
+        return StreamMode.PLANNER
+    if new_mode == StreamMode.PLANNER_VR_3PT:
+        # Entered this very tick: the parent is still the current mode, because
+        # vr3pt_parent_mode is only updated once the switch is applied.
+        return vr3pt_parent_mode if current_mode == StreamMode.PLANNER_VR_3PT else current_mode
+    return new_mode
 
 
 ### Parse 3 point pose from SMPL
@@ -447,7 +470,26 @@ def run_vr3pt_realtime_visualizer(update_hz: int = 10):
         visualizer.close()
 
 
-def process_smpl_joints(body_pose, global_orient, transl):
+class SmplJoints(TypedDict):
+    """What :func:`process_smpl_joints` computes from one SMPL pose; T frames."""
+
+    #: ``(T, 69)`` body pose, axis-angle, as passed in.
+    smpl_pose: torch.Tensor
+    #: ``(T, 24, 3)`` joint positions from the SMPL model.
+    joints: torch.Tensor
+    #: ``(T, 24, 3)`` joint positions in the root frame.
+    smpl_joints_local: torch.Tensor
+    #: ``(T, 4)`` root orientation, wxyz, base rotation removed.
+    global_orient_quat: torch.Tensor
+    #: ``(1, 6)`` root orientation as the first two rotation-matrix columns.
+    global_orient_6d: torch.Tensor
+    #: ``(T, 3)`` root translation, as passed in.
+    adjusted_transl: torch.Tensor
+
+
+def process_smpl_joints(
+    body_pose: torch.Tensor, global_orient: torch.Tensor, transl: torch.Tensor
+) -> SmplJoints:
     """Process SMPL parameters to compute local joints.
 
     Args:
@@ -560,7 +602,7 @@ class YawAccumulator:
 
 def compute_from_body_poses(
     parent_indices: list[int], device: torch.device, body_poses_np: np.ndarray
-):
+) -> SmplJoints:
     """
     Compute local joints and body orientation from provided body_poses_np.
 
@@ -818,7 +860,7 @@ class PicoReader:
         self._last_t = None
         self._fps_ema = 0.0
         self._last_stamp_ns = None
-        self._latest = None
+        self._latest: input_readers.BodySample | None = None
         self._lock = threading.Lock()
 
     def start(self):
@@ -828,7 +870,7 @@ class PicoReader:
         self._stop.set()
         self._thread.join(timeout=1.0)
 
-    def get_latest(self):
+    def get_latest(self) -> input_readers.BodySample | None:
         with self._lock:
             return self._latest
 
@@ -866,7 +908,7 @@ class PicoReader:
             try:
                 body_poses = xrt.get_body_joints_pose()
 
-                sample = {
+                sample: input_readers.BodySample = {
                     "body_poses_np": np.array(body_poses),
                     "timestamp_realtime": t_realtime,
                     "timestamp_monotonic": t_monotonic,
@@ -1352,7 +1394,8 @@ class PoseStreamer:
         Calibration is triggered separately by the operator (A+B+X+Y → calibrate_now)."""
         self.yaw_accumulator.reset()
 
-    def on_mode_exit(self):
+    def _reset_pose_history(self):
+        """Forget every frame already received, so the next one starts a fresh window."""
         self.frame_buffer.clear()
         self.prev_stamp_ns = None
         self.prev_smpl_pose_np = None
@@ -1360,6 +1403,9 @@ class PoseStreamer:
         self.prev_body_quat_np = None
         self.next_target_ns = None
         self.buffer_cleared = True
+
+    def on_mode_exit(self):
+        self._reset_pose_history()
         self.step = 0
 
     def run_once(self):
@@ -1367,6 +1413,13 @@ class PoseStreamer:
         sample = self.reader.get_latest()
 
         if sample is None:
+            if self.prev_stamp_ns is not None:
+                # Readers only drop a sample they already published when they
+                # refuse the stream (IsaacTeleopReader's degenerate-skeleton
+                # guards). The poses buffered before the refusal must not be
+                # resent, nor interpolated into the first frames after it.
+                print("[PoseStreamer] Reader withdrew its sample; resetting pose history")
+                self._reset_pose_history()
             time.sleep(0.005)
             return
 
@@ -2034,6 +2087,8 @@ def run_pico_manager(
     # Track which mode VR_3PT was entered from, so left_axis_click returns to it.
     # Will be either PLANNER or PLANNER_FROZEN_UPPER_BODY.
     vr3pt_parent_mode = StreamMode.PLANNER
+    # Only IsaacTeleopReader has guards that refuse frames; other readers never do.
+    last_refusal_count = getattr(reader, "refusal_count", 0)
     prev_toggle_dc = False
     prev_toggle_da = False
     try:
@@ -2117,6 +2172,20 @@ def run_pico_manager(
                     new_mode = StreamMode.POSE
                 elif by_pressed and not prev_by_pressed:
                     new_mode = StreamMode.POSE
+
+            # The reader refused body data since the last tick: stop driving the
+            # robot from it. Re-checked every tick, so pressing a button back
+            # into a pose-driven mode while refusals continue does not stick.
+            refusal_count = getattr(reader, "refusal_count", 0)
+            if refusal_count != last_refusal_count:
+                last_refusal_count = refusal_count
+                safe_mode = _mode_after_refusal(current_mode, new_mode, vr3pt_parent_mode)
+                if safe_mode != new_mode:
+                    print(
+                        f"[Manager] Body tracking refused; leaving {new_mode.name} "
+                        f"for {safe_mode.name}"
+                    )
+                    new_mode = safe_mode
 
             # Handle mode transitions before running loop
             if new_mode != current_mode:

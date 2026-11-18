@@ -7,7 +7,7 @@ IsaacTeleopReader  -- in-process IsaacTeleop / CloudXR DeviceIO session.
 import logging
 import threading
 import time
-from typing import Any, TYPE_CHECKING
+from typing import Any, Callable, TYPE_CHECKING, TypedDict
 
 import numpy as np
 
@@ -49,6 +49,59 @@ _DEGENERATE_LOG_INTERVAL_NS = 2_000_000_000
 _UNVERIFIED_REFUSE_FRAMES = 30
 
 
+class BodySample(TypedDict):
+    """One body-tracking frame, as every reader's ``get_latest()`` returns it."""
+
+    #: ``(24, 7)`` per joint: position xyz in metres, then orientation xyzw.
+    body_poses_np: np.ndarray
+    #: ``time.time()`` when the frame was read.
+    timestamp_realtime: float
+    #: ``time.monotonic()`` when the frame was read.
+    timestamp_monotonic: float
+    #: Device (or host monotonic) timestamp of the frame, in nanoseconds.
+    timestamp_ns: int
+    #: Seconds since the previous frame's ``timestamp_ns``; 0.0 for the first.
+    dt: float
+    #: Smoothed frame rate, in Hz.
+    fps: float
+
+
+class _ControllerSide(TypedDict):
+    """One controller's inputs, before ``_build_controller_dict`` prefixes them by side."""
+
+    trigger_value: float
+    squeeze_value: float
+    thumbstick_x: float
+    thumbstick_y: float
+    thumbstick_click: float
+    primary_click: float
+    secondary_click: float
+
+
+class ControllerDict(TypedDict, total=False):
+    """The controller schema ``pico_manager_thread_server`` consumes.
+
+    Not total: a side is absent while its controller is not tracked.
+    """
+
+    left_trigger_value: float
+    left_squeeze_value: float
+    left_thumbstick: list[float]
+    left_thumbstick_click: float
+    left_primary_click: float
+    left_secondary_click: float
+    right_trigger_value: float
+    right_squeeze_value: float
+    right_thumbstick: list[float]
+    right_thumbstick_click: float
+    right_primary_click: float
+    right_secondary_click: float
+
+
+#: ``correct_body_orientations(orientations, profile)`` from isaacteleop.
+CorrectionFn = Callable[[np.ndarray, str], np.ndarray]
+
+
 class PicoReader:
     """Background reader that pulls Pico/XRT data and computes dt/FPS."""
 
@@ -60,7 +113,7 @@ class PicoReader:
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._fps_ema = 0.0
         self._last_stamp_ns = None
-        self._latest = None
+        self._latest: BodySample | None = None
         self._lock = threading.Lock()
         self._last_new_data_time = time.monotonic()
         self._disconnected = threading.Event()
@@ -74,7 +127,7 @@ class PicoReader:
         if self._thread.is_alive():
             self._thread.join(timeout=1.0)
 
-    def get_latest(self):
+    def get_latest(self) -> BodySample | None:
         with self._lock:
             return self._latest
 
@@ -137,7 +190,7 @@ class PicoReader:
 
             try:
                 body_poses = xrt.get_body_joints_pose()
-                sample = {
+                sample: BodySample = {
                     "body_poses_np": np.array(body_poses),
                     "timestamp_realtime": time.time(),
                     "timestamp_monotonic": time.monotonic(),
@@ -319,7 +372,7 @@ def _body_data_to_24x7(
     return body_poses if any_valid else None
 
 
-def _controller_inputs_to_dict_side(snapshot: Any) -> dict[str, Any] | None:
+def _controller_inputs_to_dict_side(snapshot: Any) -> _ControllerSide | None:
     """Project one ControllerSnapshot.inputs into the dict shape consumed by helpers."""
     if snapshot is None:
         return None
@@ -337,7 +390,7 @@ def _controller_inputs_to_dict_side(snapshot: Any) -> dict[str, Any] | None:
     }
 
 
-def _build_controller_dict(raw: "TrackerSnapshot | None") -> dict[str, Any] | None:
+def _build_controller_dict(raw: "TrackerSnapshot | None") -> ControllerDict | None:
     """Convert ``IsaacTeleopClient._get_tracker_data()`` into the controller dict
     schema that ``pico_manager_thread_server`` consumes (left/right trigger,
     squeeze, thumbstick, click, primary/secondary click)."""
@@ -349,7 +402,7 @@ def _build_controller_dict(raw: "TrackerSnapshot | None") -> dict[str, Any] | No
     if left is None and right is None:
         return None
 
-    out: dict[str, Any] = {}
+    out: ControllerDict = {}
     if left is not None:
         out["left_trigger_value"] = left["trigger_value"]
         out["left_squeeze_value"] = left["squeeze_value"]
@@ -371,17 +424,16 @@ class SkeletonCorrectionUnavailable(RuntimeError):
     """The isaacteleop skeleton correction is needed but not importable."""
 
 
-# Deliberately actionable rather than a bare ImportError. The correction ships in
-# isaacteleop 1.5+, while this repo pins 1.3.131, so on any machine that has not
-# been bridged the import is the first thing a Quest operator hits.
-_BRIDGE_MESSAGE = (
+# Deliberately actionable rather than a bare ImportError: on an isaacteleop
+# without the correction, this is the first thing a Quest operator hits.
+_CORRECTION_UNAVAILABLE_MESSAGE = (
     "the isaacteleop skeleton correction is not available, so a {profile!r} "
     "skeleton cannot be corrected.\n"
     "  Driving a robot from an uncorrected Quest skeleton gives it permuted "
     "joint axes, so this refuses rather than continuing.\n"
-    "  Fix it with:\n"
-    "      git -C ~/IsaacTeleop checkout jsepulveda/quest_remapping\n"
-    "      ./install_scripts/install_isaacteleop_skeleton_correction.sh\n"
+    "  The correction (isaacteleop.retargeting_engine.utilities."
+    "correct_body_orientations) comes with NVIDIA/IsaacTeleop#921; install an "
+    "isaacteleop that includes it.\n"
     "  Or run with --skeleton-source pico if you are on a PICO headset.\n"
     "  (PICO needs no correction and is unaffected by this.)"
 )
@@ -415,8 +467,11 @@ class IsaacTeleopReader:
         # PICO needs and what --skeleton-source auto needs before the first frame
         # resolves it. _apply_resolved_source installs the correction once
         # resolved.
-        self._skeleton_profile = None
-        self._correct_fn = None
+        #
+        # The function and its profile live in one attribute, replaced whole,
+        # so the reader thread can never pair a function with a profile from a
+        # different call to set_skeleton_profile().
+        self._correction: tuple[CorrectionFn, str] | None = None
 
         # Resolution happens here rather than in a consumer, and that placement is
         # load-bearing. The correction has to be settled before anything
@@ -450,6 +505,8 @@ class IsaacTeleopReader:
         #: _UNVERIFIED_REFUSE_FRAMES.
         self._unverified_streak = 0
         self._last_unverified_log_ns = 0
+        #: Frames the guards have refused; see :attr:`refusal_count`.
+        self._refusal_count = 0
         if skeleton_profile != "auto":
             self._manual_skeleton_source = skeleton_profile or "pico"
             self._apply_resolved_source(self._manual_skeleton_source)
@@ -472,8 +529,8 @@ class IsaacTeleopReader:
         # Bumped on every invalidation so a frame already in flight when the
         # cache is cleared is dropped instead of published after the clear.
         self._epoch = 0
-        self._latest: dict[str, Any] | None = None
-        self._latest_controller: dict[str, Any] | None = None
+        self._latest: BodySample | None = None
+        self._latest_controller: ControllerDict | None = None
         self._fps_ema = 0.0
         self._last_stamp_ns: int | None = None
         self._last_new_data_time = time.monotonic()
@@ -484,20 +541,23 @@ class IsaacTeleopReader:
     def set_skeleton_profile(self, profile: str | None) -> None:
         """Install (or clear) the skeleton correction applied to incoming frames.
 
-        Safe to call while the reader thread is running: the correction is a
-        single attribute read per frame, so the worst case is one frame either
-        side of the change.
+        Safe to call while the reader thread is running: the function and its
+        profile are swapped as one attribute and read once per frame, so a
+        frame is corrected entirely before or entirely after the change.
         """
         if not profile:
-            self._skeleton_profile, self._correct_fn = None, None
+            self._correction = None
             return
         try:
             from isaacteleop.retargeting_engine.utilities import correct_body_orientations
-        except ImportError as exc:
-            raise SkeletonCorrectionUnavailable(_BRIDGE_MESSAGE.format(profile=profile)) from exc
+        # Not only ImportError: a broken install can fail to load its native
+        # extension with other errors, and this runs on the reader thread.
+        except Exception as exc:
+            raise SkeletonCorrectionUnavailable(
+                _CORRECTION_UNAVAILABLE_MESSAGE.format(profile=profile)
+            ) from exc
 
-        self._skeleton_profile = profile
-        self._correct_fn = correct_body_orientations
+        self._correction = (correct_body_orientations, profile)
         logger.info(
             "[IsaacTeleopReader] applying isaacteleop skeleton correction (profile=%s)",
             profile,
@@ -551,6 +611,29 @@ class IsaacTeleopReader:
             self._latest = None
             self._epoch += 1
 
+    def _refuse(self) -> None:
+        """Withhold this frame from the robot: drop the cached pose and count it.
+
+        Clearing the cache stops the pose being read again, but a consumer that
+        already holds it -- the deploy side holds the last streamed pose -- keeps
+        acting on it. :attr:`refusal_count` is what tells that consumer to move
+        the robot somewhere safe.
+        """
+        with self._lock:
+            self._refusal_count += 1
+        self._invalidate_latest()
+
+    @property
+    def refusal_count(self) -> int:
+        """How many frames the guards have refused since this reader started.
+
+        Increases on every refused frame, and never on :meth:`clear_latest`.
+        A consumer driving the robot from the stream should compare it with the
+        value it last saw and leave that mode when it changes.
+        """
+        with self._lock:
+            return self._refusal_count
+
     def clear_latest(self) -> None:
         """Public form of :meth:`_invalidate_latest`.
 
@@ -567,7 +650,7 @@ class IsaacTeleopReader:
         """
         self._invalidate_latest()
 
-    def get_latest(self) -> dict[str, Any] | None:
+    def get_latest(self) -> BodySample | None:
         # Raised here, not in the reader thread, so it reaches the caller rather
         # than dying silently in a background thread.
         if self._fatal is not None:
@@ -575,7 +658,7 @@ class IsaacTeleopReader:
         with self._lock:
             return self._latest
 
-    def get_controller_data(self) -> dict[str, Any] | None:
+    def get_controller_data(self) -> ControllerDict | None:
         with self._ctrl_lock:
             return self._latest_controller
 
@@ -595,6 +678,17 @@ class IsaacTeleopReader:
         return int(sample["timestamp_ns"]) if sample else 0
 
     def _run(self) -> None:
+        # Any failure the loop does not handle itself is re-raised from
+        # get_latest(), so it stops the caller instead of silently leaving it
+        # waiting on a reader thread that has died.
+        try:
+            self._run_loop()
+        except Exception as exc:
+            logger.exception("[IsaacTeleopReader] reader thread failed")
+            self._fatal = exc
+            self._stop.set()
+
+    def _run_loop(self) -> None:
         last_report = time.time()
         while not self._stop.is_set():
             # Read before the frame is acquired, compared before it is
@@ -666,6 +760,20 @@ class IsaacTeleopReader:
 
             body_poses = _body_data_to_24x7(raw.full_body)
 
+            # NaN and inf fail every threshold comparison in the guards below,
+            # so without this they would read as "not degenerate".
+            if body_poses is not None and not np.isfinite(body_poses).all():
+                now_ns = time.monotonic_ns()
+                if now_ns - self._last_degenerate_log_ns > _DEGENERATE_LOG_INTERVAL_NS:
+                    self._last_degenerate_log_ns = now_ns
+                    logger.error(
+                        "[IsaacTeleopReader] DEGENERATE SKELETON: non-finite joint values. "
+                        "Refusing to forward this frame to the robot control policy."
+                    )
+                self._refuse()
+                time.sleep(self._period)
+                continue
+
             # Geometry degeneracy guard. This used to be the primary detection
             # mechanism; that driver has been removed, but its comparison is kept;
             # now that the OpenXR Extension Method says definitively which vendor
@@ -710,7 +818,7 @@ class IsaacTeleopReader:
                                 match.source,
                                 match.scores,
                             )
-                        self._invalidate_latest()
+                        self._refuse()
                         time.sleep(self._period)
                         continue
                     # Verified against the resolved source: clear the streak.
@@ -747,7 +855,7 @@ class IsaacTeleopReader:
                                 self.resolved_skeleton_source,
                                 detail,
                             )
-                        self._invalidate_latest()
+                        self._refuse()
                         time.sleep(self._period)
                         continue
 
@@ -760,8 +868,29 @@ class IsaacTeleopReader:
             # sense while resolved to pico, so the window is reset whenever we're
             # not, to avoid a stale window from a previous pico session bleeding
             # into a fresh one.
-            if self.resolved_skeleton_source == "pico" and body_poses is not None:
-                frozen = self._trackers_disconnected_detector.push(body_poses[:, :3], body_poses[:, 3:])
+            #
+            # It is deliberately *not* reset on a frame with no body data. A
+            # frozen skeleton interleaved with dropped frames would then never
+            # fill the window, and so never be refused.
+            if self.resolved_skeleton_source != "pico":
+                self._trackers_disconnected_detector.reset()
+            elif body_poses is not None:
+                detector = self._trackers_disconnected_detector
+                try:
+                    frozen = detector.push(body_poses[:, :3], body_poses[:, 3:])
+                except Exception:
+                    logger.exception(
+                        "[IsaacTeleopReader] frozen-skeleton check failed; refusing this frame"
+                    )
+                    frozen = True
+                if not detector.window_full:
+                    # Until the window fills, a frozen skeleton is
+                    # indistinguishable from a live one, so the first frames of
+                    # a PICO session wait (about half a second) rather than
+                    # reach the robot unchecked.
+                    self._invalidate_latest()
+                    time.sleep(self._period)
+                    continue
                 if frozen:
                     now_ns = time.monotonic_ns()
                     if now_ns - self._last_trackers_disconnected_log_ns > _DEGENERATE_LOG_INTERVAL_NS:
@@ -771,17 +900,31 @@ class IsaacTeleopReader:
                             "appear disconnected (torso/pelvis frozen to a constant pose). "
                             "Refusing to forward this frame to the robot control policy.",
                         )
-                    self._invalidate_latest()
+                    self._refuse()
                     time.sleep(self._period)
                     continue
-            else:
-                self._trackers_disconnected_detector.reset()
 
-            correct_fn = self._correct_fn
-            if body_poses is not None and correct_fn is not None:
-                body_poses[:, 3:] = correct_fn(
-                    body_poses[:, 3:], self._skeleton_profile
-                ).astype(body_poses.dtype)
+            correction = self._correction
+            if body_poses is not None and correction is not None:
+                correct_fn, profile = correction
+                # A frame that cannot be corrected must not reach the policy
+                # uncorrected, and the failure must not end this thread.
+                try:
+                    body_poses[:, 3:] = correct_fn(body_poses[:, 3:], profile).astype(
+                        body_poses.dtype
+                    )
+                except Exception:
+                    now_ns = time.monotonic_ns()
+                    if now_ns - self._last_degenerate_log_ns > _DEGENERATE_LOG_INTERVAL_NS:
+                        self._last_degenerate_log_ns = now_ns
+                        logger.exception(
+                            "[IsaacTeleopReader] skeleton correction (profile=%s) failed; "
+                            "refusing to forward this frame to the robot control policy",
+                            profile,
+                        )
+                    self._refuse()
+                    time.sleep(self._period)
+                    continue
             if body_poses is None:
                 if not self._unrecognised_logged and not _attr_or_item(
                     raw.full_body, "joint_positions"
@@ -802,7 +945,7 @@ class IsaacTeleopReader:
                 logger.info("[IsaacTeleopReader] Fresh data received, connection restored")
                 self._disconnected.clear()
 
-            sample = {
+            sample: BodySample = {
                 "body_poses_np": body_poses,
                 "timestamp_realtime": time.time(),
                 "timestamp_monotonic": time.monotonic(),

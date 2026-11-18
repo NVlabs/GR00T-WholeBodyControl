@@ -150,6 +150,18 @@ REFERENCE_SIGNATURES = {
 # neither reference -- a third headset, or a degenerate frame.
 MIN_MARGIN_DEG = 20.0
 
+# The margin alone cannot tell a good match from two bad ones that happen to sit
+# far apart, so the best score must also be good in absolute terms. Across the
+# same 68 captures (~72k frames) a frame scored at most 9.1 deg against its own
+# headset's reference and at least 59.3 deg against the other one; 30 sits well
+# clear of both.
+MAX_MATCH_DEG = 30.0
+
+# Bones a frame needs before its score means anything. Every captured frame had
+# all 19; a mean over a handful of surviving bones would be decided by whichever
+# few happened to be valid.
+MIN_USABLE_BONES = 15
+
 
 def signature(positions: np.ndarray, orientations: np.ndarray) -> np.ndarray:
     """Bone directions expressed in each parent joint's own frame.
@@ -159,7 +171,9 @@ def signature(positions: np.ndarray, orientations: np.ndarray) -> np.ndarray:
         orientations: ``(24, 4)`` global joint orientations, xyzw.
 
     Returns:
-        ``(len(BONES), 3)`` array; zero rows mark bones of negligible length.
+        ``(len(BONES), 3)`` array; zero rows mark bones that could not be
+        measured -- negligible length, a non-finite value, or a degenerate
+        parent quaternion.
     """
     positions = np.asarray(positions, dtype=np.float64)
     orientations = np.asarray(orientations, dtype=np.float64)
@@ -167,10 +181,15 @@ def signature(positions: np.ndarray, orientations: np.ndarray) -> np.ndarray:
     out = np.zeros((len(BONES), 3), dtype=np.float64)
     for i, (parent, child) in enumerate(BONES):
         delta = positions[child] - positions[parent]
-        length = np.linalg.norm(delta)
-        if length < 1e-3:
+        quat = orientations[parent]
+        # NaN fails every comparison below, so it has to be excluded explicitly
+        # or it reaches the score as a NaN row.
+        if not (np.isfinite(delta).all() and np.isfinite(quat).all()):
             continue
-        out[i] = R.from_quat(orientations[parent]).inv().apply(delta / length)
+        length = np.linalg.norm(delta)
+        if length < 1e-3 or np.linalg.norm(quat) < 1e-6:
+            continue
+        out[i] = R.from_quat(quat).inv().apply(delta / length)
     return out
 
 
@@ -193,8 +212,11 @@ class MatchOutcome(Enum):
     #: Both references scored, but too close together to tell apart. Not the
     #: same as a match: the frame resembles neither convention cleanly.
     AMBIGUOUS = "ambiguous"
-    #: Not enough valid geometry in the frame to score at all (every bone
-    #: zero-length, so the signature is undefined).
+    #: The references are told apart, but even the better one scores worse
+    #: than :data:`MAX_MATCH_DEG`: the frame resembles neither convention.
+    NO_MATCH = "no_match"
+    #: Too little valid geometry to score: fewer than
+    #: :data:`MIN_USABLE_BONES` bones could be measured.
     UNUSABLE = "unusable"
 
 
@@ -244,13 +266,16 @@ def match_orientation_convention(
     scores = {
         name: _mean_angle_deg(sig, ref) for name, ref in REFERENCE_SIGNATURES.items()
     }
-    if any(np.isnan(v) for v in scores.values()):
+    usable_bones = int(np.count_nonzero(np.linalg.norm(sig, axis=-1) > 1e-6))
+    if usable_bones < MIN_USABLE_BONES or not all(np.isfinite(v) for v in scores.values()):
         return ConventionMatch(MatchOutcome.UNUSABLE, None, scores, 0.0)
 
     best, second = sorted(scores, key=lambda k: scores[k])[:2]
     margin = scores[second] - scores[best]
     if margin < min_margin_deg:
         return ConventionMatch(MatchOutcome.AMBIGUOUS, None, scores, margin)
+    if scores[best] > MAX_MATCH_DEG:
+        return ConventionMatch(MatchOutcome.NO_MATCH, None, scores, margin)
     return ConventionMatch(MatchOutcome.DECIDED, best, scores, margin)
 
 
@@ -309,10 +334,10 @@ class TrackersDisconnectedDetector:
     degenerate skeleton: the torso/pelvis joints frozen to a constant pose.
 
     Stateful because the signature is temporal (zero motion over a window),
-    unlike the per-frame orientation check above. Feed it every frame
-    while operating on a Pico skeleton; call ``reset()`` when switching away
-    from Pico (or on any gap in body data) so a stale window from before the
-    gap cannot combine with fresh data after it.
+    unlike the per-frame orientation check above. Feed it every frame while
+    operating on a Pico skeleton, and call ``reset()`` when switching away from
+    Pico. Do not reset on a gap in body data: a frozen skeleton interleaved
+    with dropped frames would then never fill the window.
     """
 
     def __init__(self, window: int = FROZEN_WINDOW):
@@ -323,6 +348,11 @@ class TrackersDisconnectedDetector:
     def reset(self) -> None:
         self._pos_history.clear()
         self._quat_history.clear()
+
+    @property
+    def window_full(self) -> bool:
+        """Whether enough frames are buffered for :meth:`push` to tell frozen from live."""
+        return len(self._pos_history) >= self._window
 
     def push(self, positions: np.ndarray, orientations: np.ndarray) -> bool:
         """Feed one frame; positions (24, 3), orientations (24, 4 xyzw).
@@ -358,9 +388,9 @@ class TrackersDisconnectedDetector:
         # a 30-frame window oscillating +/-0.5 deg: std 0.0000 (frozen, wrong)
         # against mean 0.5000 (moving, right).
         #
-        # The threshold is unaffected. Both statistics give exactly 0 for a
-        # genuinely frozen joint, and for live data the mean angle is the larger
-        # of the two, so the margin over FROZEN_ROT_EPS_DEG only widens.
+        # Both statistics give exactly 0 for a genuinely frozen joint, so the
+        # switch does not move the frozen side of FROZEN_ROT_EPS_DEG; it only
+        # stops a moving joint from reading as frozen.
         #
         # q and -q are the same rotation, so align the window to its first
         # sample before averaging componentwise; a tracker that flips sign

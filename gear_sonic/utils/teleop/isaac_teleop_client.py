@@ -538,7 +538,7 @@ class IsaacTeleopClient:
             return [0.0, 0.0]
         return [float(inp.thumbstick_x), float(inp.thumbstick_y)]
 
-    def get_full_body_data(self) -> Any | None:
+    def get_full_body_data(self) -> "FullBodyPoseT | None":
         """Return the raw DeviceIO ``FullBodyTracker`` data payload (or None).
 
         Body-joint extraction (24×7 pose array) lives in

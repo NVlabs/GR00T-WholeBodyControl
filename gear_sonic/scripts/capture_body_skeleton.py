@@ -728,7 +728,7 @@ def report(P: np.ndarray, Q: np.ndarray, V: np.ndarray, label: str) -> None:
         # position spread relative to pelvis (cancels whole-body translation)
         rel = P[:, j, :] - pelvis
         pos_sd = np.linalg.norm(rel.std(axis=0)) * 1000.0
-        rot_spread = _rot_spread_deg(Q[:, j, :])
+        rot_spread = _rot_spread_deg(_valid_quat(Q, V, j))
         jd = np.linalg.norm(np.diff(P[:, j, :], axis=0), axis=-1)
         if jd.std() > 1e-9 and pelvis_d.std() > 1e-9:
             corr = float(np.corrcoef(jd, pelvis_d)[0, 1])
@@ -768,8 +768,8 @@ def compare(path_a: str, path_b: str) -> None:
     for j in range(NUM_JOINTS):
         va = 100.0 * a["valid"][:, j].mean()
         vb = 100.0 * b["valid"][:, j].mean()
-        ra = _rot_spread_deg(a["quat"][:, j, :])
-        rb = _rot_spread_deg(b["quat"][:, j, :])
+        ra = _rot_spread_deg(_valid_quat(a["quat"], a["valid"], j))
+        rb = _rot_spread_deg(_valid_quat(b["quat"], b["valid"], j))
         ratio = (rb / ra) if ra > 1e-6 else float("nan")
         mark = "  <--" if (ra > 1.0 and rb < 0.2 * ra) else ""
         print(f"{j:>3} {BodyJoint(j).name:<16} {va:>8.1f}% {vb:>8.1f}% "
@@ -868,6 +868,18 @@ def _mean_rot(q: np.ndarray) -> "Rotation":
     return R.from_quat(m / n)
 
 
+def _valid_quat(quat: np.ndarray, valid: np.ndarray, j: int) -> np.ndarray:
+    """Joint ``j``'s orientations ``(M, 4)`` from only the samples marked valid.
+
+    ``quat`` ``(N, 24, 4)`` and ``valid`` ``(N, 24)`` are a recording's arrays.
+    A recording keeps the tracker's orientation for an invalid joint rather than
+    zeroing it (see :func:`_extract_joints`), so without this an invalid sample
+    -- often a stale or synthesised pose -- would count as motion in a spread
+    and pull a mean orientation toward it.
+    """
+    return quat[np.asarray(valid[:, j], dtype=bool), j, :]
+
+
 def _has_orientation(q: np.ndarray) -> bool:
     """True if any sample in ``q`` ``(N, 4)`` carries an orientation."""
     return bool((np.linalg.norm(q, axis=-1) > 1e-9).any())
@@ -896,7 +908,8 @@ def rest_pose(path_a: str, path_b: str) -> dict[int, "Rotation"]:
     print("STATICNESS CHECK (this analysis is only valid for held poses)")
     ok = True
     for tag, d in ((la, a), (lb, b)):
-        sd = np.array([_rot_spread_deg(d["quat"][:, j, :]) for j in range(NUM_JOINTS)])
+        sd = np.array([_rot_spread_deg(_valid_quat(d["quat"], d["valid"], j))
+                       for j in range(NUM_JOINTS)])
         static, summary = _staticness(sd)
         if not static:
             ok = False
@@ -907,16 +920,25 @@ def rest_pose(path_a: str, path_b: str) -> dict[int, "Rotation"]:
     print()
 
     offsets = {}
-    print(f"PER-JOINT REST-POSE OFFSET ({lb} relative to {la})")
+    print(f"PER-JOINT REST-POSE OFFSET ({lb} relative to {la}, in the joint's own frame)")
     print(f"{'idx':>3} {'joint':<16} {'angle':>7}  axis(x,y,z)")
     print("-" * 56)
     for j in range(NUM_JOINTS):
         # An offset needs an orientation from both captures; a joint either
-        # tracker never reported has none to compare.
-        if not (_has_orientation(a["quat"][:, j, :]) and _has_orientation(b["quat"][:, j, :])):
+        # tracker never validly reported has none to compare.
+        qa = _valid_quat(a["quat"], a["valid"], j)
+        qb = _valid_quat(b["quat"], b["valid"], j)
+        if not (_has_orientation(qa) and _has_orientation(qb)):
             print(f"{j:>3} {BodyJoint(j).name:<16} {'--':>6}   untracked in a capture")
             continue
-        off = _mean_rot(b["quat"][:, j, :]) * _mean_rot(a["quat"][:, j, :]).inv()
+        # A⁻¹·B, the offset in the joint's own frame: the B orientation is A
+        # followed by this rotation about A's axes. That is the frame the
+        # correction's per-joint table works in, so a fixed correction shows up
+        # here as the same offset in every pose. B·A⁻¹ would measure it in the
+        # world frame instead, where the same fixed local offset reads
+        # differently in each pose (it is conjugated by A), and so would make a
+        # valid fixed correction look pose-dependent.
+        off = _mean_rot(qa).inv() * _mean_rot(qb)
         offsets[j] = off
         rv = off.as_rotvec()
         ang = np.degrees(np.linalg.norm(rv))
