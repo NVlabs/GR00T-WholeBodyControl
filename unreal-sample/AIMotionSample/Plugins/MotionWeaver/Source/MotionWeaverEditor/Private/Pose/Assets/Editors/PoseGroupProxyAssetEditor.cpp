@@ -74,6 +74,7 @@ void FPoseGroupProxyAssetEditor::InitPoseGroupProxyAssetEditor(
 
 	DetailsView = PropertyEditorModule.CreateDetailView(DetailsViewArgs);
 	DetailsView->SetObject(GroupAsset);
+	DetailsPropertyHandle = DetailsView->OnFinishedChangingProperties().AddSP(this, &FPoseGroupProxyAssetEditor::OnAssetPropertyChanged);
 
 	// 左边视口占大头，中间时间轴，右边细节面板。
 	const TSharedRef<FTabManager::FLayout> Layout =
@@ -193,6 +194,11 @@ void FPoseGroupProxyAssetEditor::SetSelectedKeyIndex(int32 InKeyIndex)
 
 void FPoseGroupProxyAssetEditor::RefreshFromAsset()
 {
+	if (ViewportWidget.IsValid())
+	{
+		ViewportWidget->RefreshFromAsset();
+	}
+
 	if (TimelineWidget.IsValid())
 	{
 		TimelineWidget->RefreshRows();
@@ -204,6 +210,30 @@ void FPoseGroupProxyAssetEditor::RefreshFromAsset()
 	{
 		DetailsView->SetObject(GroupAsset, true);
 	}
+}
+
+void FPoseGroupProxyAssetEditor::OnAssetPropertyChanged(const FPropertyChangedEvent&)
+{
+	// 细节面板直接改资产，视口与时间轴不会自己刷新。
+	// 这里不调 RefreshFromAsset：那会 SetObject 重建细节面板，
+	// 作者正在输入的控件会被打断。
+	if (GroupAsset == nullptr)
+	{
+		return;
+	}
+
+	if (ViewportWidget.IsValid())
+	{
+		ViewportWidget->RefreshFromAsset();
+	}
+
+	if (TimelineWidget.IsValid())
+	{
+		TimelineWidget->RefreshRows();
+	}
+
+	// 行对象被重建后选中态会丢，重新按当前下标选一次。
+	SetSelectedKeyIndex(SelectedKeyIndex);
 }
 
 void FPoseGroupProxyAssetEditor::AddKey()
@@ -301,6 +331,12 @@ void FPoseGroupProxyAssetEditor::OnClose()
 	{
 		FEditorDelegates::PostUndoRedo.Remove(UndoRedoHandle);
 		UndoRedoHandle.Reset();
+	}
+
+	if (DetailsPropertyHandle.IsValid() && DetailsView.IsValid())
+	{
+		DetailsView->OnFinishedChangingProperties().Remove(DetailsPropertyHandle);
+		DetailsPropertyHandle.Reset();
 	}
 
 	// 清掉选择集里那个元素句柄，避免编辑器关掉后 owner 悬着。

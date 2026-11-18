@@ -44,7 +44,11 @@ public:
 	virtual bool GetCustomInputCoordinateSystem(FMatrix& InMatrix, void* InData) override;
 	//~ End FEdMode Interface
 
-	/** 编辑器把当前编辑对象告诉模式。未设置时不画手柄。 */
+	/**
+	 * 编辑器把当前编辑对象告诉模式。未设置时不画手柄。
+	 * InPreviewComponent 是「选中帧」的组件；视口里其他关键帧的幽灵组件
+	 * 不参与手柄拖拽，否则一次拖动会同时改掉多帧。
+	 */
 	void SetEditingContext(UPoseGroupProxyAsset* InAsset, USceneComponent* InPreviewComponent,
 		int32 InSelectedKey);
 
@@ -62,7 +66,7 @@ private:
 
 	TWeakObjectPtr<UPoseGroupProxyAsset> GroupAsset;
 
-	/** 预览组件。裸指针，生命周期由视口控件持有。 */
+	/** 选中帧的预览组件。裸指针，生命周期由视口控件持有。 */
 	USceneComponent* PreviewComponent = nullptr;
 
 	int32 SelectedKeyIndex = INDEX_NONE;

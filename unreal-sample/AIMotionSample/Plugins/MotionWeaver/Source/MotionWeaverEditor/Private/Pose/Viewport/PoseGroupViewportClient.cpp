@@ -5,23 +5,20 @@
 #include "Pose/PoseGroupEditMode.h"
 #include "Pose/Data/PoseGroupProxyAsset.h"
 #include "Pose/Data/PoseProxyAsset.h"
-#include "Pose/Solve/PoseChainDebugComponent.h"
 
 #include "EditorModeManager.h"
 #include "EditorViewportClient.h"
+#include "PrimitiveDrawingUtils.h"
 #include "SEditorViewport.h"
 #include "SceneManagement.h"
 
 namespace
 {
 	const FLinearColor TrajectoryColor(0.16f, 0.63f, 0.86f);
-	const FLinearColor ArrowColor(0.47f, 0.78f, 1.0f);
 	const FLinearColor GhostKeyColor(1.0f, 0.67f, 0.18f);
 	const FLinearColor SelectedRingColor(0.31f, 1.0f, 0.55f);
 
 	constexpr float TrajectoryThickness = 2.0f;
-	constexpr float GhostThickness = 1.0f;
-	constexpr float ArrowLength = 20.0f;
 }
 
 FPoseGroupViewportClient::FPoseGroupViewportClient(
@@ -139,9 +136,8 @@ void FPoseGroupViewportClient::Draw(const FSceneView* View, FPrimitiveDrawInterf
 		return;
 	}
 
-	// 视口里只留引擎自己的手柄。之前自绘的轨迹、朝向箭头、
-	// 选中圈与骨架幽灵全部去掉：它们与引擎手柄叠在一起，
-	// 分不清点中的是哪一个，观感也乱。
+	// 幽灵骨架现在是预览场景里的真组件，不在这里画。
+	// 这里只补轨迹、空帧落点与选中圈，避免和引擎手柄抢视觉焦点。
 	DrawTrajectory(PDI);
 }
 
@@ -163,4 +159,46 @@ void FPoseGroupViewportClient::DrawTrajectory(FPrimitiveDrawInterface* PDI) cons
 			TrajectoryColor, SDPG_Foreground, TrajectoryThickness);
 	}
 
+	// 没有蒙皮的帧没有实体可看，至少把落点标出来。
+	for (int32 KeyIndex = 0; KeyIndex < Asset->Keys.Num(); ++KeyIndex)
+	{
+		const FPoseKey& Key = Asset->Keys[KeyIndex];
+		const bool bHasMesh = Key.PoseAsset != nullptr && !Key.PoseAsset->PreviewMesh.IsNull();
+		if (bHasMesh)
+		{
+			continue;
+		}
+
+		const bool bSelected = KeyIndex == SelectedKeyIndex;
+		const FVector MarkerLocation(
+			Key.LocalLocation.X,
+			Key.LocalLocation.Y,
+			FMath::Max(Key.LocalLocation.Z + 2.0, 2.0));
+		PDI->DrawPoint(
+			MarkerLocation,
+			bSelected ? SelectedRingColor : GhostKeyColor,
+			bSelected ? 10.0f : 7.0f,
+			SDPG_Foreground);
+	}
+
+	// 选中帧的地面圆环：线框幽灵与实体蒙皮都适用，
+	// 在角色重叠时也能一眼看出当前在编辑哪一帧。
+	if (Asset->Keys.IsValidIndex(SelectedKeyIndex))
+	{
+		const FPoseKey& Key = Asset->Keys[SelectedKeyIndex];
+		const FRotator YawOnly(0.0, Key.BodyRotation.Yaw, 0.0);
+		const FVector XAxis = YawOnly.RotateVector(FVector::ForwardVector);
+		const FVector YAxis = YawOnly.RotateVector(FVector::RightVector);
+		const FVector RingCenter(
+			Key.LocalLocation.X,
+			Key.LocalLocation.Y,
+			FMath::Max(Key.LocalLocation.Z + 2.0, 2.0));
+
+		DrawCircle(
+			PDI,
+			RingCenter,
+			XAxis, YAxis,
+			SelectedRingColor,
+			30.0f, 32, SDPG_Foreground, 2.0f);
+	}
 }

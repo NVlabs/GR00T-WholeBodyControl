@@ -12,6 +12,7 @@ class SPoseGroupViewport;
 class SPoseKeyTimeline;
 class IDetailsView;
 class SDockTab;
+struct FPropertyChangedEvent;
 
 /**
  * 姿态代理组的编辑器：左边视口看姿态与轨迹，中间时间轴排帧，右边细节面板。
@@ -91,6 +92,9 @@ private:
 	TSharedRef<SDockTab> SpawnTab_Timeline(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnTab_Details(const FSpawnTabArgs& Args);
 
+	/** 细节面板改完资产后，让幽灵组件与时间轴跟上。 */
+	void OnAssetPropertyChanged(const FPropertyChangedEvent& PropertyChangedEvent);
+
 	static const FName ViewportTabId;
 	static const FName TimelineTabId;
 	static const FName DetailsTabId;
@@ -115,6 +119,9 @@ private:
 
 	/** 撤销/重做事件的绑定句柄。 */
 	FDelegateHandle UndoRedoHandle;
+
+	/** 细节面板属性变更的绑定句柄。 */
+	FDelegateHandle DetailsPropertyHandle;
 
 	bool bMovementTransactionOpen = false;
 };

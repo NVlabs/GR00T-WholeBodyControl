@@ -96,7 +96,7 @@ void FPoseGroupProxyAssetEditor::SyncPreviewFromAsset()
 	// 预览组件不会自己动；这里把新位置推给它，画面才跟手。
 	if (ViewportWidget.IsValid())
 	{
-		ViewportWidget->SetSelectedKey(SelectedKeyIndex);
+		ViewportWidget->RefreshSelectedPose();
 	}
 }
 
@@ -182,12 +182,6 @@ void FPoseGroupProxyAssetEditor::OnPostUndoRedo()
 
 	GroupAsset->Solve();
 	RefreshFromAsset();
-
-	// 蒙皮是按 Key 重新贴的，SetSelectedKey 会触发 ApplySelectedPose。
-	if (ViewportWidget.IsValid())
-	{
-		ViewportWidget->SetSelectedKey(SelectedKeyIndex);
-	}
 }
 
 #undef LOCTEXT_NAMESPACE
