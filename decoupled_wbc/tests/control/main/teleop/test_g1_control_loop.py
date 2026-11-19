@@ -313,9 +313,9 @@ class LocomotionRunner:
             base_velocity_cmd = statistics["floating_base_vel"]["cmd"]
 
             base_velocity_tracking_err = []
-            for v_cmd, v in zip(base_velocity_cmd, base_velocity):  # TODO: check if this is correct
+            for v_cmd, v in zip(base_velocity_cmd, base_velocity):
                 if v_cmd.max() < 1e-4:
-                    base_velocity_tracking_err.append(v)
+                    base_velocity_tracking_err.append(np.linalg.norm(v - v_cmd))
             print(
                 f" [{GREEN_BOLD}INFO{RESET}] Base velocity tracking when stopped: "
                 f"{np.mean(base_velocity_tracking_err):.3f}"

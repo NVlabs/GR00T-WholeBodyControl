@@ -144,8 +144,9 @@ def gather_robot_observations(env, verbose=False, format_gripper_space=True):
             if part_name in gripper_names.keys():
                 gripper = gripper_names[part_name]
                 # Reverse the order to match the real robot
-                # TODO: how to adapt to other grippers?
                 if format_gripper_space:
+                    if not isinstance(gripper, (InspireLeftHand, InspireRightHand, FourierLeftHand, FourierRightHand, PandaGripper, G1ThreeFingerLeftHand, G1ThreeFingerRightHand)):
+                        print(f"Warning: Gripper type {type(gripper)} is not fully supported for formatting space yet.")
                     qpos_values = unformat_gripper_space(gripper, qpos_values)[::-1]
             if len(qpos_values) > 0:
                 observations[f"robot{robot_id}_{part_name}"] = qpos_values
