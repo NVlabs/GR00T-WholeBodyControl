@@ -31,7 +31,7 @@ On your **workstation** (where you run the C++ deployment, teleop, and data expo
 bash install_scripts/install_data_collection.sh
 ```
 
-This creates `.venv_data_collection` using Python 3.10 via `uv`. It installs `gear_sonic[data_collection]` which includes `lerobot`, `av`, `opencv-python`, and other required packages. It also installs `espeak` (system package) for voice feedback during recording.
+This creates `.venv_data_collection` using Python 3.11 via `uv`. It installs `gear_sonic[data_collection]` which includes `lerobot`, `av`, `opencv-python`, and other required packages. It also installs `espeak` (system package) for voice feedback during recording.
 
 ```{tip}
 This environment is separate from `.venv_teleop` and `.venv_sim` — the data exporter has heavier ML dependencies that are not needed for teleop or simulation.
@@ -274,7 +274,7 @@ Common options:
 | `--sim / --no-sim` | `False` | Run deploy.sh in sim mode (also starts the sim loop) |
 | `--camera-host` | `localhost` | Camera server host (e.g., `192.168.123.164` for real robot) |
 | `--camera-port` | `5555` | Camera server port |
-| `--pico-input-source` | `xrt` | PICO input backend: `xrt` for XRoboToolkit or `isaac-teleop` for IsaacTeleop. |
+| `--pico-input-source` | `xrt` | PICO input backend: `xrt` for XRoboToolkit or `isaac-teleop` for IsaacCapture. |
 | `--no-camera-viewer` | *(viewer on)* | Disable the camera viewer pane |
 | `--data-exporter-frequency` | `50` | Recording frequency (Hz) |
 | `--deploy-checkpoint` | *(default)* | Custom checkpoint path for deploy.sh |
@@ -336,9 +336,9 @@ source .venv_teleop/bin/activate
 python gear_sonic/scripts/pico_manager_thread_server.py --manager
 ```
 
-```{admonition} IsaacTeleop (CloudXR)
+```{admonition} IsaacCapture (CloudXR)
 :class: note
-To use IsaacTeleop, add `--input-source isaac-teleop` and connect the headset as described in [Isaac Teleop Setup](isaac_teleop_publisher_setup.md).
+To use IsaacCapture, add `--input-source isaac-teleop` and connect the headset as described in [Isaac Capture Setup](isaac_teleop_publisher_setup.md).
 ```
 
 **Terminal 4 — Data Exporter:**

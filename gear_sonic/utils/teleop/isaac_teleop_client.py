@@ -1,4 +1,4 @@
-"""Isaac Teleop client wrapping CloudXR + DeviceIO + OpenXR for the host.
+"""Isaac Capture client wrapping CloudXR + DeviceIO + OpenXR for the host.
 
 Launches the CloudXR runtime in-process (via ``CloudXRLauncher``), opens an
 OpenXR session, and starts the DeviceIO trackers (head, hands, controllers,
@@ -100,9 +100,10 @@ def _controller_inputs(snapshot: Any) -> Any | None:
 
 
 #: Oldest isaacteleop with the vendor-parameterised tracker API (IsaacTeleop#781).
-#: install_pico.sh pins ~=1.4.0; this is only for the error message when an older
-#: one is somehow installed.
+#: Only for the error message when an older one is somehow installed.
 _MIN_ISAACTELEOP = "1.4"
+#: What install_pico.sh installs, so the remedy names the same version.
+_INSTALLED_ISAACTELEOP = "1.5"
 
 _WEBXR_BODY_VENDOR = "body.quest-cloudxr"
 _BD_BODY_VENDOR = "body.pico-xr"
@@ -145,7 +146,7 @@ def _webxr_body_vendor_available() -> bool:
             f"isaacteleop {_MIN_ISAACTELEOP} (IsaacTeleop#781); 1.3.x has only the "
             f"deprecated FullBodyTrackerPico.\n"
             f"  install_scripts/install_pico.sh installs a supported version:\n"
-            f"    uv pip install 'isaacteleop[cloudxr]~={_MIN_ISAACTELEOP}.0' "
+            f"    uv pip install 'isaacteleop[cloudxr]~={_INSTALLED_ISAACTELEOP}.0' "
             f"--prerelease=allow --extra-index-url https://pypi.nvidia.com"
         ) from exc
 
@@ -300,6 +301,7 @@ class IsaacTeleopClient:
                 install_dir=self._cloudxr_install_dir,
                 env_config=self._cloudxr_env_config,
                 accept_eula=True,
+                run_embedded=True,
                 setup_oob=self._use_adb,
                 usb_local=self._use_adb,
                 host_client=True,
@@ -372,7 +374,7 @@ class IsaacTeleopClient:
                 deviceio.DeviceIOSession.run(trackers, handles, vendor_config=vendor_config)
             )
             self._exit_stack = stack
-            print("Isaac Teleop session initialized.")
+            print("Isaac Capture session initialized.")
 
         except RuntimeError as e:
             stack.close()
@@ -394,7 +396,7 @@ class IsaacTeleopClient:
         Returns:
             Dict with keys ``left_controller``, ``right_controller``, ``head``,
             ``left_hand``, ``right_hand``, ``full_body``. Each value is the
-            corresponding tracker's payload (raw DeviceIO type), or None.
+            corresponding tracker's payload, or None if inactive.
         """
         if self._deviceio_session is None:
             return None

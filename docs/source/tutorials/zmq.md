@@ -70,9 +70,9 @@ You can use `--input-type zmq` with the PICO teleop streamer for a simple, strea
 
 The commands below use XRoboToolkit.
 
-```{admonition} IsaacTeleop (CloudXR)
+```{admonition} IsaacCapture (CloudXR)
 :class: note
-To use IsaacTeleop, add `--input-source isaac-teleop` and connect the headset as described in [Isaac Teleop Setup](isaac_teleop_publisher_setup.md).
+To use IsaacCapture, add `--input-source isaac-teleop` and connect the headset as described in [Isaac Capture Setup](isaac_teleop_publisher_setup.md).
 ```
 
 ### Launch (Sim2Sim)

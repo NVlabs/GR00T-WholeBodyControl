@@ -41,10 +41,10 @@ if ! command -v uv &>/dev/null; then
 fi
 echo "[OK] uv $(uv --version)"
 
-# ── 2. Install a uv-managed Python 3.10 ─────────────────────────────────────
-echo "[INFO] Installing uv-managed Python 3.10 …"
-uv python install 3.10
-MANAGED_PY="$(uv python find --no-project 3.10)"
+# ── 2. Install a uv-managed Python 3.11 ─────────────────────────────────────
+echo "[INFO] Installing uv-managed Python 3.11 …"
+uv python install 3.11
+MANAGED_PY="$(uv python find --no-project 3.11)"
 echo "[OK] Using Python: $MANAGED_PY"
 
 # ── 3. Clean previous venv (if any) ─────────────────────────────────────────
@@ -53,7 +53,7 @@ echo "[INFO] Removing old .venv_camera (if present) …"
 rm -rf .venv_camera
 
 # ── 4. Create venv & install camera extra ────────────────────────────────────
-echo "[INFO] Creating .venv_camera with uv-managed Python 3.10 …"
+echo "[INFO] Creating .venv_camera with uv-managed Python 3.11 …"
 uv venv .venv_camera --python "$MANAGED_PY" --prompt gear_sonic_camera
 # shellcheck disable=SC1091
 source .venv_camera/bin/activate

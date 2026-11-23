@@ -69,7 +69,7 @@ The streamer receives PICO tracking data. The deployment host runs the C++ polic
 - On the deployment host, add `--zmq-host <streamer-ip>` to `./deploy.sh` to receive commands and poses from the streamer's TCP port **5556**.
 - On the streamer host, add `--zmq_feedback_host <deployment-ip>` to `pico_manager_thread_server.py` to receive robot-state feedback from the deployment host's TCP port **5557**.
 
-Both flags default to `localhost` for a single-host setup. These settings apply to both XRoboToolkit and IsaacTeleop.
+Both flags default to `localhost` for a single-host setup. These settings apply to both XRoboToolkit and IsaacCapture.
 
 If a firewall is enabled, allow TCP **5556** on the streamer host from the deployment host, and TCP **5557** on the deployment host from the streamer host.
 ```
@@ -89,12 +89,12 @@ python gear_sonic/scripts/pico_manager_thread_server.py --manager \
 # python gear_sonic/scripts/pico_manager_thread_server.py --manager
 ```
 
-```{admonition} IsaacTeleop (CloudXR)
+```{admonition} IsaacCapture (CloudXR)
 :class: note
-To use IsaacTeleop, add `--input-source isaac-teleop` and follow the [Isaac Teleop Setup](isaac_teleop_publisher_setup.md).
+To use IsaacCapture, add `--input-source isaac-teleop` and follow the [Isaac Capture Setup](isaac_teleop_publisher_setup.md).
 ```
 
-When you turn on the visualization, wait for a window to pop up showing a Unitree G1 mesh with all joints at the default angles. If no window shows up on the default PICO path, double-check the PICO's XRoboToolKit IP configuration in the [VR Teleop Setup](../getting_started/vr_teleop_setup.md). If you are using Isaac Teleop instead, verify the headset is connected to the in-process CloudXR runtime — see [Isaac Teleop Setup](isaac_teleop_publisher_setup.md) for connection steps.
+When you turn on the visualization, wait for a window to pop up showing a Unitree G1 mesh with all joints at the default angles. If no window shows up on the default PICO path, double-check the PICO's XRoboToolKit IP configuration in the [VR Teleop Setup](../getting_started/vr_teleop_setup.md). If you are using Isaac Capture instead, verify the headset is connected to the in-process CloudXR runtime — see [Isaac Capture Setup](isaac_teleop_publisher_setup.md) for connection steps.
 
 ### Your First Teleop Session
 
@@ -330,9 +330,9 @@ python gear_sonic/scripts/pico_manager_thread_server.py --manager
 
 Select the PC service when prompted in the XRoboToolkit headset application.
 
-```{admonition} IsaacTeleop (CloudXR)
+```{admonition} IsaacCapture (CloudXR)
 :class: note
-To use IsaacTeleop, add `--input-source isaac-teleop` and follow the [Isaac Teleop Setup](isaac_teleop_publisher_setup.md).
+To use IsaacCapture, add `--input-source isaac-teleop` and follow the [Isaac Capture Setup](isaac_teleop_publisher_setup.md).
 ```
 
 Follow the same start sequence: calibration pose → **A+B+X+Y** → **A+X** for POSE mode. See [Complete PICO Controls](#pico-controls) for all available commands.

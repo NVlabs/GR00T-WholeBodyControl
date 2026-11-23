@@ -47,7 +47,7 @@ source .venv_teleop/bin/activate
 python gear_sonic/scripts/pico_manager_thread_server.py --manager 
 ```
 
-The command above uses XRoboToolkit. To use IsaacTeleop, add `--input-source isaac-teleop` and follow the [Isaac Teleop setup instructions](../tutorials/isaac_teleop_publisher_setup.md).
+The command above uses XRoboToolkit. To use IsaacCapture, add `--input-source isaac-teleop` and follow the [Isaac Capture setup instructions](../tutorials/isaac_teleop_publisher_setup.md).
 
 **Operator Actions**:
 1. **Put on PICO headset and controllers** — Ensure foot trackers are securely attached. 
@@ -202,7 +202,7 @@ When switching between modes, **always match the robot's current pose first**.
 4. Restart XRoboToolKit on the PICO headset
 5. Recalibrate 
 
-For IsaacTeleop, verify that the Web Client is connected to the streamer IP.
+For IsaacCapture, verify that the Web Client is connected to the streamer IP.
 
 ### Robot makes sudden aggressive motions
 

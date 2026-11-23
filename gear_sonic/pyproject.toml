@@ -64,6 +64,7 @@ data_collection = [
     "opencv-python",
     "lerobot @ git+https://github.com/huggingface/lerobot.git@a445d9c9da6bea99a8972daa4fe1fdd053d711d2",
     "datasets==3.6.0",
+    "pyarrow<26",
 ]
 # Camera server: runs on the robot to publish camera frames over ZMQ
 # Includes depthai (OAK cameras) by default. For other SDKs (pyrealsense2),
