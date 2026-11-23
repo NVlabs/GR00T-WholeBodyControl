@@ -915,6 +915,7 @@ class PicoReader:
                     "timestamp_ns": stamp_ns,
                     "dt": device_dt,
                     "fps": self._fps_ema,
+                    "epoch": 0,
                 }
                 with self._lock:
                     self._latest = sample
@@ -1378,6 +1379,7 @@ class PoseStreamer:
         self.prev_smpl_joints_np = None
         self.prev_body_quat_np = None
         self.next_target_ns = None
+        self.prev_epoch = None
         self.frame_start = time.time()
 
         # Data collection button state tracking (edge-triggered)
@@ -1412,14 +1414,18 @@ class PoseStreamer:
         """Execute one iteration of the pose streaming loop."""
         sample = self.reader.get_latest()
 
+        # Readers only withdraw a sample they already published when they
+        # refuse the stream (IsaacTeleopReader's degenerate-skeleton guards).
+        # The poses buffered before the refusal must not be resent, nor
+        # interpolated into the first frames after it. The reader may refuse
+        # and recover between two polls, so the empty cache is not always seen
+        # here; the epoch it stamps on every sample is.
+        epoch = None if sample is None else sample["epoch"]
+        if epoch != self.prev_epoch and self.prev_stamp_ns is not None:
+            print("[PoseStreamer] Reader withdrew its sample; resetting pose history")
+            self._reset_pose_history()
+        self.prev_epoch = epoch
         if sample is None:
-            if self.prev_stamp_ns is not None:
-                # Readers only drop a sample they already published when they
-                # refuse the stream (IsaacTeleopReader's degenerate-skeleton
-                # guards). The poses buffered before the refusal must not be
-                # resent, nor interpolated into the first frames after it.
-                print("[PoseStreamer] Reader withdrew its sample; resetting pose history")
-                self._reset_pose_history()
             time.sleep(0.005)
             return
 
@@ -1701,15 +1707,18 @@ def run_pico(
     input_source: str = "xrt",
 ):
     """Run body tracking with real-time visualization and ZMQ streaming."""
-    reader = _init_input_source(
-        input_source,
-        buffer_size,
-        # --skeleton-source is Manager mode only (see its help text), and this is
-        # the legacy single-thread path, so it stays on the uncorrected ByteDance
-        # skeleton. Passing None here resolves the reader to "pico", which leaves
-        # the skeleton untouched and still runs both degeneracy guards.
-        skeleton_profile=None,
-    )
+    if input_source == "isaac-teleop":
+        # IsaacTeleopReader refuses degenerate body frames, and a refusal has to
+        # move the robot somewhere safe: the manager does that by switching the
+        # deploy side to the planner. This loop only streams poses, to a
+        # receiver that holds the last one when they stop, so it has no way to
+        # act on a refusal. Refuse the configuration instead.
+        raise SystemExit(
+            "--input-source isaac-teleop needs --manager (and the deploy side on "
+            "--input-type zmq_manager): only the manager can take the robot out of "
+            "pose tracking when body tracking is refused."
+        )
+    reader = _init_input_source(input_source, buffer_size)
     context = zmq.Context()
     socket = context.socket(zmq.PUB)
     socket.bind(f"tcp://*:{port}")
@@ -1837,6 +1846,7 @@ class PlannerStreamer:
         self.yaw_accumulator = YawAccumulator()
         self.last_send = time.time()
         self.last_xrt_timestamp = None
+        self.last_stream_mode = None
 
         # Hand IK solvers for trigger-controlled hand open/close in VR 3PT mode
         self.left_hand_ik_solver, self.right_hand_ik_solver = init_hand_ik_solvers()
@@ -1872,27 +1882,38 @@ class PlannerStreamer:
     def run_once(self, stream_mode: StreamMode):
         """Execute one iteration of the planner control loop."""
         try:
-            # Avoid sending old commands if XRT timestamp hasn't advanced, in case of headset disconnect
+            # Avoid sending old commands if XRT timestamp hasn't advanced, in case of headset disconnect.
+            # A change of stream mode is still sent, once: the deploy side only
+            # drops the previous mode's targets when a packet without them
+            # arrives. Leaving VR_3PT after a refusal is exactly when the
+            # timestamp stops advancing (the reader has withdrawn its sample),
+            # and without this packet the last VR target would stay active.
             xrt_timestamp = self.reader.get_timestamp_ns()
-            if xrt_timestamp == self.last_xrt_timestamp:
+            stale = xrt_timestamp == self.last_xrt_timestamp
+            if stale and stream_mode == self.last_stream_mode:
                 return
             self.last_xrt_timestamp = xrt_timestamp
+            self.last_stream_mode = stream_mode
 
-            # A+B => next mode; X+Y => previous mode (rising edges)
-            a_pressed, b_pressed, x_pressed, y_pressed = get_abxy_buttons(self.reader)
-            ab_now = bool(a_pressed) and bool(b_pressed)
-            xy_now = bool(x_pressed) and bool(y_pressed)
-            if ab_now and not self.prev_ab:
-                self.mode = LocomotionMode(min(LocomotionMode.INJURED_WALK, self.mode + 1))
-                print(f"[PlannerLoop] Mode -> {self.mode.value}: {self.mode.name}")
-            if xy_now and not self.prev_xy:
-                self.mode = LocomotionMode(max(LocomotionMode.IDLE, self.mode - 1))
-                print(f"[PlannerLoop] Mode -> {self.mode.value}: {self.mode.name}")
-            self.prev_ab = ab_now
-            self.prev_xy = xy_now
+            if stale:
+                # Nothing fresh to act on: stand still and keep facing.
+                lx = ly = rx = ry = 0.0
+            else:
+                # A+B => next mode; X+Y => previous mode (rising edges)
+                a_pressed, b_pressed, x_pressed, y_pressed = get_abxy_buttons(self.reader)
+                ab_now = bool(a_pressed) and bool(b_pressed)
+                xy_now = bool(x_pressed) and bool(y_pressed)
+                if ab_now and not self.prev_ab:
+                    self.mode = LocomotionMode(min(LocomotionMode.INJURED_WALK, self.mode + 1))
+                    print(f"[PlannerLoop] Mode -> {self.mode.value}: {self.mode.name}")
+                if xy_now and not self.prev_xy:
+                    self.mode = LocomotionMode(max(LocomotionMode.IDLE, self.mode - 1))
+                    print(f"[PlannerLoop] Mode -> {self.mode.value}: {self.mode.name}")
+                self.prev_ab = ab_now
+                self.prev_xy = xy_now
 
-            # Read axes/joysticks to control movement, facing, speed and mode
-            lx, ly, rx, ry = get_controller_axes(self.reader)
+                # Read axes/joysticks to control movement, facing, speed and mode
+                lx, ly, rx, ry = get_controller_axes(self.reader)
 
             # Facing from RIGHT stick: continuous yaw based on rx (right = turn right, left = turn left)
             facing = self.yaw_accumulator.update(rx, self.dt)
@@ -1938,7 +1959,7 @@ class PlannerStreamer:
             vr_3pt_position = None
             vr_3pt_orientation = None
             vr_3pt_compliance = None
-            if stream_mode == StreamMode.PLANNER_VR_3PT:
+            if stream_mode == StreamMode.PLANNER_VR_3PT and not stale:
                 sample = self.reader.get_latest()
                 if sample is not None:
                     print("[PlannerLoop] Sending VR 3-point pose as target")

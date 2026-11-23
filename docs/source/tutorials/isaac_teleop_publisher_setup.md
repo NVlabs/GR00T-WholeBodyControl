@@ -89,6 +89,8 @@ python gear_sonic/scripts/pico_manager_thread_server.py --manager \
 #   --vis_vr3pt --vis_smpl
 ```
 
+`--manager` is required with `--input-source isaac-teleop`, and the deployment must use `--input-type zmq_manager` as in Step 3. When the streamer refuses unusable body-tracking data, it takes the robot out of pose tracking by switching it to the planner, and only that combination can carry out the switch.
+
 On startup the streamer brings up the in-process CloudXR runtime and logs `Isaac Capture session initialized.`, then repeats `waiting for Isaac Capture body data (connect the headset to CloudXR)...` until you connect the client in Step 5. The ZMQ publisher on port **5556** starts after body data arrives.
 
 ## Step 5: Connect the XR Client

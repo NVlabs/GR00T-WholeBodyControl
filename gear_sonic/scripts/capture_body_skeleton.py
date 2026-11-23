@@ -639,7 +639,7 @@ def batch(args: argparse.Namespace) -> int:
         np.savez_compressed(out, pos=P, quat=Q, valid=V, t=np.array(T), label=label)
 
         # immediate staticness feedback so a bad take can be redone on the spot
-        sd = np.array([_rot_spread_deg(Q[:, j, :]) for j in range(NUM_JOINTS)])
+        sd = np.array([_rot_spread_deg(_valid_quat(Q, V, j)) for j in range(NUM_JOINTS)])
         static, summary = _staticness(sd)
         print(f"    saved {len(P)} samples -> {out}")
         print(f"    staticness: {summary}"

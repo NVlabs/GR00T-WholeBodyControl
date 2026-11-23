@@ -388,9 +388,12 @@ class TrackersDisconnectedDetector:
         # a 30-frame window oscillating +/-0.5 deg: std 0.0000 (frozen, wrong)
         # against mean 0.5000 (moving, right).
         #
-        # Both statistics give exactly 0 for a genuinely frozen joint, so the
-        # switch does not move the frozen side of FROZEN_ROT_EPS_DEG; it only
-        # stops a moving joint from reading as frozen.
+        # Both statistics give exactly 0 for a joint held at one constant pose,
+        # so that case reads frozen either way. Otherwise neither bounds the
+        # other, and windows near FROZEN_ROT_EPS_DEG can cross it in either
+        # direction: 29 identical frames and one 0.5 deg step give a mean of
+        # 0.03 deg (frozen) against a standard deviation of 0.08 deg (moving).
+        # The switch is made for the oscillating joint above.
         #
         # q and -q are the same rotation, so align the window to its first
         # sample before averaging componentwise; a tracker that flips sign

@@ -8,9 +8,12 @@ import numpy as np
 import pytest
 
 from gear_sonic.utils.teleop import input_readers
+from gear_sonic.utils.teleop.body_joints import BodyJoint
 from gear_sonic.utils.teleop.input_readers import _body_data_to_24x7
 from gear_sonic.utils.teleop.skeleton_guards import (
+    BONES,
     FROZEN_WINDOW,
+    REFERENCE_SIGNATURES,
     ConventionMatch,
     MatchOutcome,
 )
@@ -180,8 +183,11 @@ class _ScriptedClient:
         self._frames = list(frames)
         self._source = full_body_source
         self.polls = 0
+        #: What the reader's cache held at each poll, i.e. after the previous frame.
+        self.cached = []
 
     def _get_tracker_data(self):
+        self.cached.append(self._reader_ref[0]._latest)
         if self.polls >= len(self._frames):
             self._reader_ref[0]._stop.set()
             return None
@@ -201,16 +207,23 @@ class _ScriptedClient:
         pass
 
 
-def _run_reader(monkeypatch, frames, skeleton_profile="pico", full_body_source="pico"):
-    """Run IsaacTeleopReader._run synchronously over ``frames``; return the reader."""
+def _run_reader(
+    monkeypatch, frames, skeleton_profile="pico", full_body_source="pico", native=False
+):
+    """Run IsaacTeleopReader._run synchronously over ``frames``; return the reader.
+
+    With ``native``, frames are FullBodyPose-shaped objects that go through the
+    real _body_data_to_24x7, rather than ready-made (24, 7) arrays.
+    """
     reader_ref = [None]
     client = _ScriptedClient(reader_ref, frames, full_body_source)
     monkeypatch.setattr(input_readers, "IsaacTeleopClient", lambda **kw: client)
-    monkeypatch.setattr(
-        input_readers,
-        "_body_data_to_24x7",
-        lambda data: None if data is None else np.array(data, copy=True),
-    )
+    if not native:
+        monkeypatch.setattr(
+            input_readers,
+            "_body_data_to_24x7",
+            lambda data: None if data is None else np.array(data, copy=True),
+        )
     reader = input_readers.IsaacTeleopReader(poll_hz=1000.0, skeleton_profile=skeleton_profile)
     reader_ref[0] = reader
     reader._run()
@@ -354,3 +367,78 @@ def test_explicit_quest_without_the_correction_names_the_fix(monkeypatch):
     monkeypatch.setattr(input_readers, "IsaacTeleopClient", lambda **kw: object())
     with pytest.raises(input_readers.SkeletonCorrectionUnavailable, match="IsaacTeleop#921"):
         input_readers.IsaacTeleopReader(skeleton_profile="quest")
+
+
+def _pico_skeleton_frames(n, seed=0):
+    """``n`` live frames the real matcher decides as PICO.
+
+    Identity orientations make each bone's signature row its own direction, so
+    laying the bones out along the PICO reference reproduces it; the sway keeps
+    the frozen-pose guard satisfied.
+    """
+    base = np.zeros((24, 7))
+    base[:, 6] = 1.0
+    for (parent, child), direction in zip(BONES, REFERENCE_SIGNATURES["pico"], strict=True):
+        base[child, :3] = base[parent, :3] + direction
+    rng = np.random.default_rng(seed)
+    frames = []
+    for _ in range(n):
+        f = base.copy()
+        f[:, :3] += rng.normal(scale=0.01, size=(24, 3))
+        frames.append(f)
+    return frames
+
+
+def _native(poses, invalid=()):
+    """A FullBodyPose-shaped frame from a (24, 7) array, ``invalid`` joints flagged."""
+    return SimpleNamespace(
+        joints=MockBodyJoints(
+            [_joint(p[:3], p[3:], is_valid=i not in invalid) for i, p in enumerate(poses)]
+        )
+    )
+
+
+def test_a_frame_with_an_invalid_joint_is_never_published(monkeypatch):
+    """The matcher still identifies PICO from the other bones; the zero
+    quaternion the converter leaves for the missing joint must not reach the
+    pose consumer, which cannot turn it into a rotation."""
+    live = [_native(f) for f in _pico_skeleton_frames(40)]
+    broken = [
+        _native(f, invalid={BodyJoint.LEFT_ELBOW}) for f in _pico_skeleton_frames(60, seed=1)
+    ]
+    reader = _run_reader(monkeypatch, [*live, *broken], native=True)
+    assert reader._client.cached[len(live)] is not None, "the live frames were published"
+    assert all(c is None for c in reader._client.cached[len(live) + 1 :])
+    assert reader.get_latest() is None
+    assert reader.refusal_count == len(broken)
+
+
+def test_no_matching_convention_is_refused_on_the_first_frame(monkeypatch):
+    """NO_MATCH is a finding, not an inability to tell: no grace period."""
+    no_match = ConventionMatch(MatchOutcome.NO_MATCH, None, {"pico": 74.1, "quest": 35.0}, 39.1)
+    monkeypatch.setattr(input_readers, "match_orientation_convention", lambda *a: no_match)
+    reader = _run_reader(monkeypatch, _live_frames(5))
+    assert reader.get_latest() is None
+    assert reader.refusal_count == 5
+
+
+def test_no_match_frames_get_no_pass_from_interleaved_good_ones(monkeypatch):
+    """A verified frame resets the AMBIGUOUS streak; it must not readmit NO_MATCH."""
+    no_match = ConventionMatch(MatchOutcome.NO_MATCH, None, {"pico": 74.1, "quest": 35.0}, 39.1)
+    outcomes = iter([_decided("pico") if i % 30 == 0 else no_match for i in range(120)])
+    monkeypatch.setattr(input_readers, "match_orientation_convention", lambda *a: next(outcomes))
+    reader = _run_reader(monkeypatch, _live_frames(120))
+    assert reader.refusal_count == 116
+
+
+def test_a_refusal_between_two_polls_still_changes_the_sample_epoch(monkeypatch):
+    """Refused and recovered before anyone read the empty cache: the recovered
+    sample must still say that everything before it was withdrawn."""
+    monkeypatch.setattr(input_readers, "match_orientation_convention", lambda *a: _decided("pico"))
+    bad = _live_frames(1, seed=1)[0]
+    bad[5, 3] = np.nan
+    reader = _run_reader(monkeypatch, [*_live_frames(40), bad, *_live_frames(1, seed=2)])
+    before = reader._client.cached[40]  # after the last live frame, before the bad one
+    after = reader.get_latest()
+    assert before is not None and after is not None
+    assert after["epoch"] != before["epoch"]

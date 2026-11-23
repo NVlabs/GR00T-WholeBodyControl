@@ -48,6 +48,9 @@ _DEGENERATE_LOG_INTERVAL_NS = 2_000_000_000
 #: refusal stops teleop for a Pico operator who has nothing wrong.
 _UNVERIFIED_REFUSE_FRAMES = 30
 
+#: How far a joint quaternion's norm may sit from 1 before the frame is refused.
+_QUAT_NORM_TOLERANCE = 0.1
+
 
 class BodySample(TypedDict):
     """One body-tracking frame, as every reader's ``get_latest()`` returns it."""
@@ -64,6 +67,11 @@ class BodySample(TypedDict):
     dt: float
     #: Smoothed frame rate, in Hz.
     fps: float
+    #: Bumped each time the reader withdraws its cached sample (a refused frame,
+    #: a ``clear_latest()``). A consumer that sees it change must drop any
+    #: history built from earlier samples, even if it never saw the cache empty.
+    #: Readers that never withdraw a sample leave it at 0.
+    epoch: int
 
 
 class _ControllerSide(TypedDict):
@@ -197,6 +205,7 @@ class PicoReader:
                     "timestamp_ns": stamp_ns,
                     "dt": device_dt,
                     "fps": self._fps_ema,
+                    "epoch": 0,
                 }
                 with self._lock:
                     self._latest = sample
@@ -775,6 +784,33 @@ class IsaacTeleopReader:
                 time.sleep(self._period)
                 continue
 
+            # A joint the runtime did not fill (is_valid False, or a missing
+            # field) is left as a zero row by _body_data_to_24x7. The geometry
+            # guard can still identify the vendor from the remaining bones, but
+            # the pose consumer needs every joint: a zero quaternion is not a
+            # rotation, and it raises there. Real frames are unit to within
+            # 1e-6, so 0.1 only ever catches a row that is not a rotation.
+            missing = (
+                np.flatnonzero(
+                    np.abs(np.linalg.norm(body_poses[:, 3:], axis=1) - 1.0) > _QUAT_NORM_TOLERANCE
+                )
+                if body_poses is not None
+                else ()
+            )
+            if len(missing):
+                now_ns = time.monotonic_ns()
+                if now_ns - self._last_degenerate_log_ns > _DEGENERATE_LOG_INTERVAL_NS:
+                    self._last_degenerate_log_ns = now_ns
+                    logger.error(
+                        "[IsaacTeleopReader] DEGENERATE SKELETON: joints %s have no valid "
+                        "orientation. Refusing to forward this frame to the robot control "
+                        "policy.",
+                        missing.tolist(),
+                    )
+                self._refuse()
+                time.sleep(self._period)
+                continue
+
             # Geometry degeneracy guard. This used to be the primary detection
             # mechanism; that driver has been removed, but its comparison is kept;
             # now that the OpenXR Extension Method says definitively which vendor
@@ -824,9 +860,27 @@ class IsaacTeleopReader:
                         continue
                     # Verified against the resolved source: clear the streak.
                     self._unverified_streak = 0
+                elif match is not None and match.outcome is MatchOutcome.NO_MATCH:
+                    # Neither reference fits, so the resolved source does not
+                    # either. That is a positive finding, like a DECIDED
+                    # mismatch, not a failure to tell: refuse now rather than
+                    # give it the grace period meant for AMBIGUOUS frames.
+                    now_ns = time.monotonic_ns()
+                    if now_ns - self._last_degenerate_log_ns > _DEGENERATE_LOG_INTERVAL_NS:
+                        self._last_degenerate_log_ns = now_ns
+                        logger.error(
+                            "[IsaacTeleopReader] DEGENERATE SKELETON: this frame's orientations "
+                            "match no known convention (scores %s), so not resolved source %r. "
+                            "Refusing to forward this frame to the robot control policy.",
+                            match.scores,
+                            self.resolved_skeleton_source,
+                        )
+                    self._refuse()
+                    time.sleep(self._period)
+                    continue
                 else:
-                    # Every way of not being DECIDED lands here: AMBIGUOUS,
-                    # UNUSABLE, and the matcher raising. They differ in cause but
+                    # Every other way of not being DECIDED lands here:
+                    # AMBIGUOUS, UNUSABLE, and the matcher raising. They differ in cause but
                     # not in consequence -- this frame was not verified against
                     # the resolved source -- so they share one streak.
                     #
@@ -953,6 +1007,7 @@ class IsaacTeleopReader:
                 "timestamp_ns": stamp_ns,
                 "dt": device_dt,
                 "fps": self._fps_ema,
+                "epoch": frame_epoch,
             }
             with self._lock:
                 if self._epoch == frame_epoch:
