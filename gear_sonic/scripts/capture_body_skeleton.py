@@ -60,13 +60,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 
 if TYPE_CHECKING:  # import-time cost avoided; these names are annotations only
-    # The native body-tracking payload, as isaacteleop itself annotates it (see
-    # retargeting_engine/deviceio_source_nodes/full_body_source.py, which types
-    # FullBodyPoseTrackedT.data as "FullBodyPoseT | None").
-    from isaacteleop.schema import FullBodyPoseT
     from scipy.spatial.transform import Rotation
 
-    from gear_sonic.utils.teleop.isaac_teleop_client import IsaacTeleopClient
+    # FullBodyPose is the native body-tracking payload, described structurally
+    # so it holds on every SDK line (see isaac_teleop_client).
+    from gear_sonic.utils.teleop.isaac_teleop_client import FullBodyPose, IsaacTeleopClient
 
 # Repo root on sys.path so `gear_sonic.*` imports work when run directly.
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -101,7 +99,7 @@ class JointSample(NamedTuple):
 
 
 def _extract_joints(
-    body_data: "FullBodyPoseT | Mapping[str, Any] | None",
+    body_data: "FullBodyPose | Mapping[str, Any] | None",
 ) -> Optional[JointSample]:
     """Return a :class:`JointSample`, or None when there is no body data.
 

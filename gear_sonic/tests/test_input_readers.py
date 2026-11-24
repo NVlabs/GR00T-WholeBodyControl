@@ -6,6 +6,7 @@ from unittest import mock
 
 import numpy as np
 import pytest
+from scipy.spatial.transform import Rotation as R
 
 from gear_sonic.utils.teleop import input_readers
 from gear_sonic.utils.teleop.body_joints import BodyJoint
@@ -13,9 +14,12 @@ from gear_sonic.utils.teleop.input_readers import _body_data_to_24x7
 from gear_sonic.utils.teleop.skeleton_guards import (
     BONES,
     FROZEN_WINDOW,
+    MAX_MATCH_DEG,
+    MIN_MARGIN_DEG,
     REFERENCE_SIGNATURES,
     ConventionMatch,
     MatchOutcome,
+    match_orientation_convention,
 )
 
 
@@ -175,7 +179,8 @@ class _ScriptedClient:
 
     Each frame is the (24, 7) array the patched _body_data_to_24x7 returns for
     that poll, or None for a poll with no body data. The reader is stopped
-    once the frames run out.
+    once the frames run out. ``full_body_source`` is one source for every
+    frame, or a list of one per frame.
     """
 
     def __init__(self, reader_ref, frames, full_body_source="pico"):
@@ -192,12 +197,13 @@ class _ScriptedClient:
             self._reader_ref[0]._stop.set()
             return None
         frame = self._frames[self.polls]
+        source = self._source[self.polls] if isinstance(self._source, list) else self._source
         self.polls += 1
         return SimpleNamespace(
             left_controller=None,
             right_controller=None,
             full_body=frame,
-            full_body_source=self._source,
+            full_body_source=source,
         )
 
     def get_timestamp_ns(self):
@@ -442,3 +448,57 @@ def test_a_refusal_between_two_polls_still_changes_the_sample_epoch(monkeypatch)
     after = reader.get_latest()
     assert before is not None and after is not None
     assert after["epoch"] != before["epoch"]
+
+
+def _scrambled_frames(n, seed=0):
+    """``n`` frames laid out like a PICO skeleton but with every joint turned at random.
+
+    Finite, unit quaternions, and moving; the real matcher scores them poorly
+    against both references, often only a few degrees apart.
+    """
+    rng = np.random.default_rng(seed)
+    frames = []
+    for f in _pico_skeleton_frames(n, seed=seed):
+        f[:, 3:] = R.random(24, random_state=rng).as_quat()
+        frames.append(f)
+    return frames
+
+
+def test_two_poor_close_scores_get_no_grace_from_interleaved_good_frames(monkeypatch):
+    """The reviewer's schedule through the real matcher: no scrambled frame is published.
+
+    Close scores used to read as AMBIGUOUS before the absolute fit was
+    checked, so each scrambled frame joined the grace streak and one verified
+    frame in every 30 kept all of them flowing.
+    """
+    frames, scrambled = list(_pico_skeleton_frames(40)), []
+    for cycle in range(4):
+        bad = _scrambled_frames(29, seed=cycle)
+        scrambled += range(len(frames), len(frames) + len(bad))
+        frames += [*bad, *_pico_skeleton_frames(1, seed=100 + cycle)]
+    matches = [match_orientation_convention(frames[i][:, :3], frames[i][:, 3:]) for i in scrambled]
+    assert all(min(m.scores.values()) > MAX_MATCH_DEG for m in matches)
+    assert sum(m.margin_deg < MIN_MARGIN_DEG for m in matches) > len(matches) // 2
+
+    reader = _run_reader(monkeypatch, frames)
+    assert reader._client.cached[40] is not None, "the warmup was published"
+    assert all(reader._client.cached[i + 1] is None for i in scrambled)
+    assert reader.refusal_count == len(scrambled)
+
+
+def test_switching_back_to_pico_waits_for_a_fresh_frozen_window(monkeypatch):
+    """A source switch empties the frozen-pose window.
+
+    It must, even when the frame that brought the switch is refused before the
+    guard that used to do so. Otherwise the first PICO session's motion would
+    vouch for the second session's first 29 frames, frozen or not.
+    """
+    monkeypatch.setattr(input_readers, "match_orientation_convention", lambda *a: _decided("pico"))
+    monkeypatch.setattr(input_readers.IsaacTeleopReader, "set_skeleton_profile", lambda *a: None)
+    quest_frame = _IDENTITY_POSES.copy()
+    quest_frame[5, 3:] = 0.0  # refused for its quaternion, before any later check
+    frames = [*_live_frames(40), quest_frame, *[_IDENTITY_POSES] * 40]
+    sources = ["pico"] * 40 + ["quest"] + ["pico"] * 40
+    reader = _run_reader(monkeypatch, frames, skeleton_profile="auto", full_body_source=sources)
+    assert reader._client.cached[40] is not None, "the first session was published"
+    assert all(c is None for c in reader._client.cached[41:])

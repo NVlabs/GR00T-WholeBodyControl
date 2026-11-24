@@ -209,11 +209,11 @@ class MatchOutcome(Enum):
 
     #: One reference matched, and beat the runner-up by at least the margin.
     DECIDED = "decided"
-    #: Both references scored, but too close together to tell apart. Not the
-    #: same as a match: the frame resembles neither convention cleanly.
+    #: The better reference fits within :data:`MAX_MATCH_DEG`, but the other
+    #: is too close behind to tell them apart.
     AMBIGUOUS = "ambiguous"
-    #: The references are told apart, but even the better one scores worse
-    #: than :data:`MAX_MATCH_DEG`: the frame resembles neither convention.
+    #: Even the better reference scores worse than :data:`MAX_MATCH_DEG`: the
+    #: frame resembles neither convention, however close the two scores are.
     NO_MATCH = "no_match"
     #: Too little valid geometry to score: fewer than
     #: :data:`MIN_USABLE_BONES` bones could be measured.
@@ -254,8 +254,8 @@ def match_orientation_convention(
     Args:
         positions: ``(24, 3)`` joint positions.
         orientations: ``(24, 4)`` global joint orientations, xyzw.
-        min_margin_deg: Report ``AMBIGUOUS`` when the two candidates are closer
-            than this.
+        min_margin_deg: Report ``AMBIGUOUS`` when the better candidate fits
+            but the two are closer than this.
 
     Returns:
         A :class:`ConventionMatch`. Check :attr:`~ConventionMatch.outcome`
@@ -272,10 +272,13 @@ def match_orientation_convention(
 
     best, second = sorted(scores, key=lambda k: scores[k])[:2]
     margin = scores[second] - scores[best]
-    if margin < min_margin_deg:
-        return ConventionMatch(MatchOutcome.AMBIGUOUS, None, scores, margin)
+    # Absolute fit first: two poor scores close together are not "too close to
+    # call", they are two references the frame does not resemble. Checked the
+    # other way round they read as AMBIGUOUS and got the reader's grace period.
     if scores[best] > MAX_MATCH_DEG:
         return ConventionMatch(MatchOutcome.NO_MATCH, None, scores, margin)
+    if margin < min_margin_deg:
+        return ConventionMatch(MatchOutcome.AMBIGUOUS, None, scores, margin)
     return ConventionMatch(MatchOutcome.DECIDED, best, scores, margin)
 
 

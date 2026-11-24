@@ -28,17 +28,47 @@ import isaacteleop.oxr as oxr
 from isaacteleop.cloudxr import CloudXRLauncher
 
 if TYPE_CHECKING:  # annotations only -- never imported at runtime
-    # Only the payload types. The ``*TrackedT`` wrappers are matched
-    # structurally by _Tracked below rather than by name -- which also keeps
-    # this import working on 1.7+, where those wrapper types no longer exist.
-    from isaacteleop.schema import (
-        ControllerSnapshot,
-        FullBodyPoseT,
-        HandPoseT,
-        HeadPoseT,
-    )
-
+    # The ``*TrackedT`` wrappers are matched structurally by _Tracked below
+    # rather than by name, since 1.7+ no longer has them.
+    #
+    # The payloads are described structurally too, by the members
+    # this module and its consumers rely on, not imported from the SDK. Their
+    # canonical home moved (isaacteleop.schema up to 1.5, isaaccapture.schema
+    # since 1.6, with ``isaacteleop`` left as a runtime-only alias a type
+    # checker cannot follow), and no import a checker can resolve statically
+    # serves both lines: whichever branch it cannot resolve joins the type as
+    # Unknown, and wrong payloads pass. These protocols name no SDK module, so
+    # they hold on every SDK; the real 1.5 and 1.7 classes both satisfy them.
+    # Each one carries a member the others lack, so one payload passed for
+    # another is rejected -- except a FullBodyPose given for a HandPose, whose
+    # only member it shares.
     from typing import Protocol, TypeVar
+
+    class ControllerSnapshot(Protocol):
+        @property
+        def aim_pose(self) -> object: ...
+        @property
+        def grip_pose(self) -> object: ...
+        @property
+        def inputs(self) -> object: ...
+
+    class HeadPose(Protocol):
+        @property
+        def is_tracked(self) -> bool: ...
+        @property
+        def is_valid(self) -> bool: ...
+        @property
+        def pose(self) -> object: ...
+
+    class HandPose(Protocol):
+        @property
+        def joints(self) -> object: ...
+
+    class FullBodyPose(Protocol):
+        @property
+        def all_joint_poses_tracked(self) -> bool: ...
+        @property
+        def joints(self) -> object: ...
 
     #: The payload a tracker accessor is carrying, as a type variable, so
     #: _tracker_payload() hands each caller back the one type it asked for.
@@ -210,10 +240,10 @@ class TrackerSnapshot:
 
     left_controller: "ControllerSnapshot | None" = None
     right_controller: "ControllerSnapshot | None" = None
-    head: "HeadPoseT | None" = None
-    left_hand: "HandPoseT | None" = None
-    right_hand: "HandPoseT | None" = None
-    full_body: "FullBodyPoseT | None" = None
+    head: "HeadPose | None" = None
+    left_hand: "HandPose | None" = None
+    right_hand: "HandPose | None" = None
+    full_body: "FullBodyPose | None" = None
     #: Which vendor extension delivered :attr:`full_body` -- ``"pico"``,
     #: ``"quest"``, or ``None`` when no body data arrived. This is the OpenXR
     #: Extension Method result: a fact the runtime states, not an inference.
@@ -332,7 +362,7 @@ class IsaacTeleopClient:
             # actually sending reports active), so exactly one of these is ever active
             # at a time; _get_tracker_data() below prefers Meta when both are present.
             # The Meta tracker impl reduces its native 84-joint skeleton down to the
-            # same 24-joint BD-shaped FullBodyPoseT as the Pico tracker (the joint
+            # same 24-joint BD-shaped FullBodyPose as the Pico tracker (the joint
             # selection CloudXR.js used to do in the browser), so both come back in
             # an identical layout and no downstream code needs to know which fired.
             self._body_tracker_bd = deviceio.FullBodyTracker()
@@ -540,7 +570,7 @@ class IsaacTeleopClient:
             return [0.0, 0.0]
         return [float(inp.thumbstick_x), float(inp.thumbstick_y)]
 
-    def get_full_body_data(self) -> "FullBodyPoseT | None":
+    def get_full_body_data(self) -> "FullBodyPose | None":
         """Return the raw DeviceIO ``FullBodyTracker`` data payload (or None).
 
         Body-joint extraction (24×7 pose array) lives in

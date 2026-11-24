@@ -1420,6 +1420,11 @@ class PoseStreamer:
         # interpolated into the first frames after it. The reader may refuse
         # and recover between two polls, so the empty cache is not always seen
         # here; the epoch it stamps on every sample is.
+        #
+        # A withdrawal takes effect when this loop next observes it, here at
+        # the top of run_once(). A call that already fetched the old sample
+        # finishes with it and may send one more pose computed from it; nothing
+        # synchronises publication with the reader's refusal.
         epoch = None if sample is None else sample["epoch"]
         if epoch != self.prev_epoch and self.prev_stamp_ns is not None:
             print("[PoseStreamer] Reader withdrew its sample; resetting pose history")

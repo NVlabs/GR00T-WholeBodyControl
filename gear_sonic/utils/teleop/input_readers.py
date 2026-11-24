@@ -32,9 +32,7 @@ except ImportError:
 if TYPE_CHECKING:  # import cycle at runtime; only needed for annotations
     from collections.abc import Mapping
 
-    from isaacteleop.schema import FullBodyPoseT
-
-    from gear_sonic.utils.teleop.isaac_teleop_client import TrackerSnapshot
+    from gear_sonic.utils.teleop.isaac_teleop_client import FullBodyPose, TrackerSnapshot
 
 # Minimum time between repeated "degenerate skeleton" log lines. Every degenerate
 # frame is still refused regardless of this; it only throttles the ERROR spam.
@@ -299,7 +297,7 @@ def _log_unrecognised_schema_once(body_data: Any) -> None:
 
 
 def _body_data_to_24x7(
-    body_data: "FullBodyPoseT | Mapping[str, Any] | None",
+    body_data: "FullBodyPose | Mapping[str, Any] | None",
 ) -> np.ndarray | None:
     """Convert ``FullBodyTracker.get_body_pose()`` to a (24, 7) array.
 
@@ -592,6 +590,12 @@ class IsaacTeleopReader:
         # The streak counts frames against the *previous* source; a swap makes
         # it meaningless, so start it again rather than carrying it across.
         self._unverified_streak = 0
+        # Likewise the frozen-pose window. It is reset here, at the switch, and
+        # not only where a non-PICO frame is validated: a frame refused before
+        # reaching that point would leave an earlier PICO session's motion in
+        # the window, and a frozen skeleton after switching back would pass
+        # until the old frames aged out. Gaps within one source keep it.
+        self._trackers_disconnected_detector.reset()
 
     def start(self) -> None:
         self._client.start_streaming()

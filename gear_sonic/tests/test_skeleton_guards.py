@@ -91,3 +91,14 @@ def test_window_full_tracks_the_buffer():
     assert detector.window_full
     detector.reset()
     assert not detector.window_full
+
+
+def test_two_poor_scores_close_together_are_not_a_match(monkeypatch):
+    """Not AMBIGUOUS: neither reference fits, however close the two scores are."""
+    frame = guards.REFERENCE_SIGNATURES["pico"]
+    monkeypatch.setitem(guards.REFERENCE_SIGNATURES, "pico", _rotated_rows(frame, 45.0))
+    monkeypatch.setitem(guards.REFERENCE_SIGNATURES, "quest", _rotated_rows(frame, 50.0))
+    match = guards.match_orientation_convention(*_pose_with_signature(frame))
+    assert match.margin_deg < guards.MIN_MARGIN_DEG
+    assert match.outcome is guards.MatchOutcome.NO_MATCH
+    assert match.source is None
