@@ -25,6 +25,21 @@ def wrong(h: HeadPose, hand: HandPose) -> None:
     TrackerSnapshot(full_body=h)  # wrong
     TrackerSnapshot(full_body=hand)  # wrong
     TrackerSnapshot(left_controller=h)  # wrong
+
+def wrong_body_for_hand(b: FullBodyPose) -> None:
+    TrackerSnapshot(left_hand=b)  # wrong
+
+def nested(s: TrackerSnapshot) -> None:
+    assert s.left_controller and s.head and s.full_body and s.left_hand
+    reveal_type(s.left_controller.inputs.trigger_value)
+    reveal_type(s.left_controller.aim_pose.pose.orientation.w)
+    reveal_type(s.head.pose.position.x)
+    reveal_type(s.full_body.joints.joints(0).pose.position.x)
+    reveal_type(s.left_hand.joints.poses(0).radius)
+    trigger: str = s.left_controller.inputs.trigger_value  # wrong
+    tracked: str = s.head.is_tracked  # wrong
+    joint_x: str = s.full_body.joints.joints(0).pose.position.x  # wrong
+    radius: str = s.left_hand.joints.poses(0).radius  # wrong
 """
 
 
@@ -49,8 +64,11 @@ def test_snapshot_fields_reject_the_wrong_payload_on_the_installed_sdk(tmp_path)
     errors = [d for d in diagnostics if d["severity"] == "error"]
     revealed = [d["message"] for d in diagnostics if d["severity"] == "information"]
 
-    assert revealed == ['Type of "TrackerSnapshot().full_body" is "FullBodyPose | None"']
+    assert revealed[0] == 'Type of "TrackerSnapshot().full_body" is "FullBodyPose | None"'
+    # Nested reads resolve down to the scalar, rather than stopping at object.
+    assert len(revealed) == 6
+    assert all(message.endswith('is "float"') for message in revealed[1:])
     wrong_lines = {i for i, line in enumerate(probe.read_text().splitlines()) if "# wrong" in line}
-    assert len(wrong_lines) == 5
+    assert len(wrong_lines) == 10
     assert {d["range"]["start"]["line"] for d in errors} == wrong_lines
-    assert all("cannot be assigned" in d["message"] for d in errors)
+    assert all("assign" in d["message"] for d in errors)

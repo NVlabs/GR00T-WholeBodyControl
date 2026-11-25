@@ -1423,7 +1423,8 @@ class PoseStreamer:
         #
         # A withdrawal takes effect when this loop next observes it, here at
         # the top of run_once(). A call that already fetched the old sample
-        # finishes with it and may send one more pose computed from it; nothing
+        # finishes with it and may send one more command: the buffered pose
+        # window, now ending in a pose computed from that sample. Nothing
         # synchronises publication with the reader's refusal.
         epoch = None if sample is None else sample["epoch"]
         if epoch != self.prev_epoch and self.prev_stamp_ns is not None:
