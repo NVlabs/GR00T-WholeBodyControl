@@ -72,7 +72,7 @@ The commands below use XRoboToolkit.
 
 ```{admonition} IsaacCapture (CloudXR)
 :class: note
-To use IsaacCapture, add `--input-source isaac-teleop` and connect the headset as described in [Isaac Capture Setup](isaac_teleop_publisher_setup.md).
+IsaacCapture is not supported with `--input-type zmq`. When IsaacCapture refuses unusable body-tracking data, the streamer switches the robot to the planner, and this interface has no planner, so it would keep holding the last pose. Use `--input-type zmq_manager` as described in [Isaac Capture Setup](isaac_teleop_publisher_setup.md).
 ```
 
 ### Launch (Sim2Sim)

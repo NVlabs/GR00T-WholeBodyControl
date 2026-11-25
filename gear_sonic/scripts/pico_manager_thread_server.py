@@ -24,6 +24,7 @@
 
 from collections import defaultdict, deque
 from enum import Enum, IntEnum
+from typing import TypedDict
 import os
 import subprocess
 import threading
@@ -130,6 +131,28 @@ class StreamMode(Enum):
     PLANNER_FROZEN_UPPER_BODY = 3
     POSE_PAUSE = 4
     PLANNER_VR_3PT = 5
+
+
+def _mode_after_refusal(
+    current_mode: StreamMode, new_mode: StreamMode, vr3pt_parent_mode: StreamMode
+) -> StreamMode:
+    """The mode to be in once the reader has refused body data.
+
+    POSE and PLANNER_VR_3PT drive the robot from the headset's body pose. When
+    the reader refuses that pose, leaving those modes is what reaches the robot:
+    the switch sends ``planner=True`` to the deploy side, which otherwise keeps
+    acting on the last pose it was streamed. Each goes where its own button
+    would take it -- POSE to PLANNER, VR_3PT back to the planner mode it was
+    entered from. Every other mode is already independent of the body pose and
+    is returned unchanged, including OFF from an emergency stop this tick.
+    """
+    if new_mode == StreamMode.POSE:
+        return StreamMode.PLANNER
+    if new_mode == StreamMode.PLANNER_VR_3PT:
+        # Entered this very tick: the parent is still the current mode, because
+        # vr3pt_parent_mode is only updated once the switch is applied.
+        return vr3pt_parent_mode if current_mode == StreamMode.PLANNER_VR_3PT else current_mode
+    return new_mode
 
 
 ### Parse 3 point pose from SMPL
@@ -447,7 +470,26 @@ def run_vr3pt_realtime_visualizer(update_hz: int = 10):
         visualizer.close()
 
 
-def process_smpl_joints(body_pose, global_orient, transl):
+class SmplJoints(TypedDict):
+    """What :func:`process_smpl_joints` computes from one SMPL pose; T frames."""
+
+    #: ``(T, 69)`` body pose, axis-angle, as passed in.
+    smpl_pose: torch.Tensor
+    #: ``(T, 24, 3)`` joint positions from the SMPL model.
+    joints: torch.Tensor
+    #: ``(T, 24, 3)`` joint positions in the root frame.
+    smpl_joints_local: torch.Tensor
+    #: ``(T, 4)`` root orientation, wxyz, base rotation removed.
+    global_orient_quat: torch.Tensor
+    #: ``(1, 6)`` root orientation as the first two rotation-matrix columns.
+    global_orient_6d: torch.Tensor
+    #: ``(T, 3)`` root translation, as passed in.
+    adjusted_transl: torch.Tensor
+
+
+def process_smpl_joints(
+    body_pose: torch.Tensor, global_orient: torch.Tensor, transl: torch.Tensor
+) -> SmplJoints:
     """Process SMPL parameters to compute local joints.
 
     Args:
@@ -558,16 +600,21 @@ class YawAccumulator:
         return self.heading
 
 
-def compute_from_body_poses(parent_indices: list, device, body_poses_np: np.ndarray):
+def compute_from_body_poses(
+    parent_indices: list[int], device: torch.device, body_poses_np: np.ndarray
+) -> SmplJoints:
     """
     Compute local joints and body orientation from provided body_poses_np.
+
+    Orientations arrive already on the Pico convention: a non-Pico skeleton is
+    corrected upstream by isaacteleop, in the reader.
     """
     positions = body_poses_np[:, :3]
     global_quats = body_poses_np[:, [6, 3, 4, 5]]
 
     # Convert to local rotations
-    global_rots = sRot.from_quat(global_quats, scalar_first=True)
-    global_rots = global_rots * sRot.from_euler("y", 180, degrees=True)
+    raw_global_rots = sRot.from_quat(global_quats, scalar_first=True)
+    global_rots = raw_global_rots * sRot.from_euler("y", 180, degrees=True)
 
     local_rots = []
     for i in range(24):
@@ -576,6 +623,10 @@ def compute_from_body_poses(parent_indices: list, device, body_poses_np: np.ndar
         else:
             local_rot = global_rots[parent_indices[i]].inv() * global_rots[i]
             local_rots.append(local_rot)
+
+    # Rebase onto the Pico convention. Applied here, after the local rotations
+    # exist and before they become the SMPL pose, because that is the space the
+    # offsets were measured in.
 
     pose_aa = np.array([rot.as_rotvec() for rot in local_rots])
 
@@ -809,7 +860,7 @@ class PicoReader:
         self._last_t = None
         self._fps_ema = 0.0
         self._last_stamp_ns = None
-        self._latest = None
+        self._latest: input_readers.BodySample | None = None
         self._lock = threading.Lock()
 
     def start(self):
@@ -819,7 +870,7 @@ class PicoReader:
         self._stop.set()
         self._thread.join(timeout=1.0)
 
-    def get_latest(self):
+    def get_latest(self) -> input_readers.BodySample | None:
         with self._lock:
             return self._latest
 
@@ -857,13 +908,14 @@ class PicoReader:
             try:
                 body_poses = xrt.get_body_joints_pose()
 
-                sample = {
+                sample: input_readers.BodySample = {
                     "body_poses_np": np.array(body_poses),
                     "timestamp_realtime": t_realtime,
                     "timestamp_monotonic": t_monotonic,
                     "timestamp_ns": stamp_ns,
                     "dt": device_dt,
                     "fps": self._fps_ema,
+                    "epoch": 0,
                 }
                 with self._lock:
                     self._latest = sample
@@ -1240,7 +1292,7 @@ class PoseStreamer:
 
     def __init__(
         self,
-        socket,
+        socket: "zmq.Socket",
         reader: "PicoReader | input_readers.IsaacTeleopReader",
         three_point: ThreePointPose,
         num_frames_to_send: int,
@@ -1249,6 +1301,11 @@ class PoseStreamer:
         record_dir: str,
         record_format: str,
         log_prefix: str = "PoseLoop",
+        # Manager mode always passes this through from --skeleton-source. This
+        # default governs the non-manager path, which _pose_stream_common leaves
+        # unset: "pico" keeps that path uncorrected, matching the flag's
+        # documented "Manager mode only" scope.
+        skeleton_source: str = "pico",
     ):
         self.socket = socket
         self.reader = reader
@@ -1270,6 +1327,17 @@ class PoseStreamer:
         self.record_idx = 0
 
         self.left_hand_ik_solver, self.right_hand_ik_solver = init_hand_ik_solvers()
+        # Detection lives in the reader (the OpenXR Extension Method, resolved
+        # live every frame -- see IsaacTeleopReader._run()), which sees raw frames
+        # in every stream mode. The manager only follows its decision, so the
+        # wrist bias tracks the headset. Kept reactive (checked every run_once(),
+        # not just once) because the resolved source can change mid-session: an
+        # operator in auto mode may switch XR displays without restarting.
+        self.skeleton_source_mode = skeleton_source
+        self._last_resolved_skeleton_source = None
+        # The skeleton correction itself lives upstream, in the reader. Only the
+        # wrist bias stays here: it is expressed in G1 wrist joint commands, not
+        # in skeleton space, so it is robot-specific rather than headset-specific.
         self.parent_indices = [
             -1,
             0,
@@ -1311,6 +1379,7 @@ class PoseStreamer:
         self.prev_smpl_joints_np = None
         self.prev_body_quat_np = None
         self.next_target_ns = None
+        self.prev_epoch = None
         self.frame_start = time.time()
 
         # Data collection button state tracking (edge-triggered)
@@ -1327,7 +1396,8 @@ class PoseStreamer:
         Calibration is triggered separately by the operator (A+B+X+Y → calibrate_now)."""
         self.yaw_accumulator.reset()
 
-    def on_mode_exit(self):
+    def _reset_pose_history(self):
+        """Forget every frame already received, so the next one starts a fresh window."""
         self.frame_buffer.clear()
         self.prev_stamp_ns = None
         self.prev_smpl_pose_np = None
@@ -1335,18 +1405,46 @@ class PoseStreamer:
         self.prev_body_quat_np = None
         self.next_target_ns = None
         self.buffer_cleared = True
+
+    def on_mode_exit(self):
+        self._reset_pose_history()
         self.step = 0
 
     def run_once(self):
         """Execute one iteration of the pose streaming loop."""
         sample = self.reader.get_latest()
 
+        # Readers only withdraw a sample they already published when they
+        # refuse the stream (IsaacTeleopReader's degenerate-skeleton guards).
+        # The poses buffered before the refusal must not be resent, nor
+        # interpolated into the first frames after it. The reader may refuse
+        # and recover between two polls, so the empty cache is not always seen
+        # here; the epoch it stamps on every sample is.
+        #
+        # A withdrawal takes effect when this loop next observes it, here at
+        # the top of run_once(). A call that already fetched the old sample
+        # finishes with it and may send one more command: the buffered pose
+        # window, now ending in a pose computed from that sample. Nothing
+        # synchronises publication with the reader's refusal.
+        epoch = None if sample is None else sample["epoch"]
+        if epoch != self.prev_epoch and self.prev_stamp_ns is not None:
+            print("[PoseStreamer] Reader withdrew its sample; resetting pose history")
+            self._reset_pose_history()
+        self.prev_epoch = epoch
         if sample is None:
             time.sleep(0.005)
             return
 
+        if self.skeleton_source_mode == "auto":
+            resolved = getattr(self.reader, "resolved_skeleton_source", None)
+            if resolved is not None and resolved != self._last_resolved_skeleton_source:
+                print(f"[skeleton] auto mode: source is now {resolved!r} (OpenXR Extension Method)")
+                self._last_resolved_skeleton_source = resolved
+
         latest_data = compute_from_body_poses(
-            self.parent_indices, self.device, sample["body_poses_np"]
+            self.parent_indices,
+            self.device,
+            sample["body_poses_np"],
         )
         left_menu_button, left_trigger, right_trigger, left_grip, right_grip = get_controller_inputs(
             self.reader
@@ -1568,10 +1666,14 @@ class PoseStreamer:
 def _init_input_source(
     input_source: str,
     buffer_size: int,
+    skeleton_profile: str | None = None,
 ) -> "PicoReader | input_readers.IsaacTeleopReader":
     """Create, start, and wait for readiness of the requested teleop input source."""
     if input_source == "isaac-teleop":
-        reader = input_readers.IsaacTeleopReader(max_queue_size=buffer_size)
+        reader = input_readers.IsaacTeleopReader(
+            max_queue_size=buffer_size,
+            skeleton_profile=skeleton_profile,
+        )
         reader.start()
         print("Using Isaac Capture (in-process CloudXR / DeviceIO), waiting for data...")
         while reader.get_latest() is None:
@@ -1611,6 +1713,17 @@ def run_pico(
     input_source: str = "xrt",
 ):
     """Run body tracking with real-time visualization and ZMQ streaming."""
+    if input_source == "isaac-teleop":
+        # IsaacTeleopReader refuses degenerate body frames, and a refusal has to
+        # move the robot somewhere safe: the manager does that by switching the
+        # deploy side to the planner. This loop only streams poses, to a
+        # receiver that holds the last one when they stop, so it has no way to
+        # act on a refusal. Refuse the configuration instead.
+        raise SystemExit(
+            "--input-source isaac-teleop needs --manager (and the deploy side on "
+            "--input-type zmq_manager): only the manager can take the robot out of "
+            "pose tracking when body tracking is refused."
+        )
     reader = _init_input_source(input_source, buffer_size)
     context = zmq.Context()
     socket = context.socket(zmq.PUB)
@@ -1739,6 +1852,7 @@ class PlannerStreamer:
         self.yaw_accumulator = YawAccumulator()
         self.last_send = time.time()
         self.last_xrt_timestamp = None
+        self.last_stream_mode = None
 
         # Hand IK solvers for trigger-controlled hand open/close in VR 3PT mode
         self.left_hand_ik_solver, self.right_hand_ik_solver = init_hand_ik_solvers()
@@ -1774,27 +1888,38 @@ class PlannerStreamer:
     def run_once(self, stream_mode: StreamMode):
         """Execute one iteration of the planner control loop."""
         try:
-            # Avoid sending old commands if XRT timestamp hasn't advanced, in case of headset disconnect
+            # Avoid sending old commands if XRT timestamp hasn't advanced, in case of headset disconnect.
+            # A change of stream mode is still sent, once: the deploy side only
+            # drops the previous mode's targets when a packet without them
+            # arrives. Leaving VR_3PT after a refusal is exactly when the
+            # timestamp stops advancing (the reader has withdrawn its sample),
+            # and without this packet the last VR target would stay active.
             xrt_timestamp = self.reader.get_timestamp_ns()
-            if xrt_timestamp == self.last_xrt_timestamp:
+            stale = xrt_timestamp == self.last_xrt_timestamp
+            if stale and stream_mode == self.last_stream_mode:
                 return
             self.last_xrt_timestamp = xrt_timestamp
+            self.last_stream_mode = stream_mode
 
-            # A+B => next mode; X+Y => previous mode (rising edges)
-            a_pressed, b_pressed, x_pressed, y_pressed = get_abxy_buttons(self.reader)
-            ab_now = bool(a_pressed) and bool(b_pressed)
-            xy_now = bool(x_pressed) and bool(y_pressed)
-            if ab_now and not self.prev_ab:
-                self.mode = LocomotionMode(min(LocomotionMode.INJURED_WALK, self.mode + 1))
-                print(f"[PlannerLoop] Mode -> {self.mode.value}: {self.mode.name}")
-            if xy_now and not self.prev_xy:
-                self.mode = LocomotionMode(max(LocomotionMode.IDLE, self.mode - 1))
-                print(f"[PlannerLoop] Mode -> {self.mode.value}: {self.mode.name}")
-            self.prev_ab = ab_now
-            self.prev_xy = xy_now
+            if stale:
+                # Nothing fresh to act on: stand still and keep facing.
+                lx = ly = rx = ry = 0.0
+            else:
+                # A+B => next mode; X+Y => previous mode (rising edges)
+                a_pressed, b_pressed, x_pressed, y_pressed = get_abxy_buttons(self.reader)
+                ab_now = bool(a_pressed) and bool(b_pressed)
+                xy_now = bool(x_pressed) and bool(y_pressed)
+                if ab_now and not self.prev_ab:
+                    self.mode = LocomotionMode(min(LocomotionMode.INJURED_WALK, self.mode + 1))
+                    print(f"[PlannerLoop] Mode -> {self.mode.value}: {self.mode.name}")
+                if xy_now and not self.prev_xy:
+                    self.mode = LocomotionMode(max(LocomotionMode.IDLE, self.mode - 1))
+                    print(f"[PlannerLoop] Mode -> {self.mode.value}: {self.mode.name}")
+                self.prev_ab = ab_now
+                self.prev_xy = xy_now
 
-            # Read axes/joysticks to control movement, facing, speed and mode
-            lx, ly, rx, ry = get_controller_axes(self.reader)
+                # Read axes/joysticks to control movement, facing, speed and mode
+                lx, ly, rx, ry = get_controller_axes(self.reader)
 
             # Facing from RIGHT stick: continuous yaw based on rx (right = turn right, left = turn left)
             facing = self.yaw_accumulator.update(rx, self.dt)
@@ -1840,7 +1965,7 @@ class PlannerStreamer:
             vr_3pt_position = None
             vr_3pt_orientation = None
             vr_3pt_compliance = None
-            if stream_mode == StreamMode.PLANNER_VR_3PT:
+            if stream_mode == StreamMode.PLANNER_VR_3PT and not stale:
                 sample = self.reader.get_latest()
                 if sample is not None:
                     print("[PlannerLoop] Sending VR 3-point pose as target")
@@ -1912,6 +2037,7 @@ def run_pico_manager(
     enable_waist_tracking: bool = False,
     enable_smpl_vis: bool = False,
     input_source: str = "xrt",
+    skeleton_source: str = "auto",
 ):
     """
     Manager: creates shared PUB socket and runs pose/planner streamers based on current mode.
@@ -1919,7 +2045,11 @@ def run_pico_manager(
       A+X: Toggle between planner and pose mode
       A+B+X+Y: Toggle policy start/stop
     """
-    reader = _init_input_source(input_source, buffer_size)
+    reader = _init_input_source(
+        input_source,
+        buffer_size,
+        skeleton_profile=skeleton_source if skeleton_source in ("quest", "auto") else None,
+    )
 
     context = zmq.Context()
     socket = context.socket(zmq.PUB)
@@ -1953,6 +2083,7 @@ def run_pico_manager(
         record_dir=record_dir,
         record_format=record_format,
         log_prefix="PoseLoop",
+        skeleton_source=skeleton_source,
     )
     planner_streamer = PlannerStreamer(
         socket=socket,
@@ -1983,6 +2114,8 @@ def run_pico_manager(
     # Track which mode VR_3PT was entered from, so left_axis_click returns to it.
     # Will be either PLANNER or PLANNER_FROZEN_UPPER_BODY.
     vr3pt_parent_mode = StreamMode.PLANNER
+    # Only IsaacTeleopReader has guards that refuse frames; other readers never do.
+    last_refusal_count = getattr(reader, "refusal_count", 0)
     prev_toggle_dc = False
     prev_toggle_da = False
     try:
@@ -2066,6 +2199,20 @@ def run_pico_manager(
                     new_mode = StreamMode.POSE
                 elif by_pressed and not prev_by_pressed:
                     new_mode = StreamMode.POSE
+
+            # The reader refused body data since the last tick: stop driving the
+            # robot from it. Re-checked every tick, so pressing a button back
+            # into a pose-driven mode while refusals continue does not stick.
+            refusal_count = getattr(reader, "refusal_count", 0)
+            if refusal_count != last_refusal_count:
+                last_refusal_count = refusal_count
+                safe_mode = _mode_after_refusal(current_mode, new_mode, vr3pt_parent_mode)
+                if safe_mode != new_mode:
+                    print(
+                        f"[Manager] Body tracking refused; leaving {new_mode.name} "
+                        f"for {safe_mode.name}"
+                    )
+                    new_mode = safe_mode
 
             # Handle mode transitions before running loop
             if new_mode != current_mode:
@@ -2251,6 +2398,21 @@ if __name__ == "__main__":
             "'isaac-teleop' for in-process IsaacCapture / CloudXR DeviceIO"
         ),
     )
+    parser.add_argument(
+        "--skeleton-source",
+        type=str,
+        default="auto",
+        choices=["auto", "pico", "quest"],
+        help=(
+            "Headset providing body tracking. 'auto' (default) identifies it from "
+            "which full-body vendor extension delivered the frame, which the runtime "
+            "states outright, so there is no detection delay; it then applies the "
+            "matching correction. 'pico' uses the native "
+            "ByteDance skeleton with no correction. 'quest' applies the isaacteleop "
+            "per-joint orientation correction in the reader. Pass an explicit value "
+            "to pin the behaviour. Manager mode only."
+        ),
+    )
     args = parser.parse_args()
 
     # Standalone VR3Pt test modes (exit after finishing)
@@ -2292,6 +2454,7 @@ if __name__ == "__main__":
             enable_waist_tracking=args.waist_tracking,
             enable_smpl_vis=args.vis_smpl,
             input_source=args.input_source,
+            skeleton_source=args.skeleton_source,
         )
     else:
         # Run legacy single-thread pose streaming

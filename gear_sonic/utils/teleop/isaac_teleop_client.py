@@ -14,16 +14,141 @@ by ``install_scripts/install_pico.sh``).
 
 from __future__ import annotations
 
+import os
 import time
 from contextlib import ExitStack
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 import numpy as np
 
 import isaacteleop.deviceio as deviceio
 import isaacteleop.oxr as oxr
 from isaacteleop.cloudxr import CloudXRLauncher
+
+if TYPE_CHECKING:  # annotations only -- never imported at runtime
+    # The ``*TrackedT`` wrappers are matched structurally by _Tracked below
+    # rather than by name, since 1.7+ no longer has them.
+    #
+    # The payloads are described structurally too, by the members
+    # this module and its consumers rely on, not imported from the SDK. Their
+    # canonical home moved (isaacteleop.schema up to 1.5, isaaccapture.schema
+    # since 1.6, with ``isaacteleop`` left as a runtime-only alias a type
+    # checker cannot follow), and no import a checker can resolve statically
+    # serves both lines: whichever branch it cannot resolve joins the type as
+    # Unknown, and wrong payloads pass. These protocols name no SDK module, so
+    # they hold on every SDK; the real 1.5 and 1.7 classes both satisfy them.
+    # The nested members are typed the same way, down to the scalars, so a
+    # read such as ``inputs.trigger_value`` is checked as a float. Each
+    # payload carries a member the others lack, so one passed for another is
+    # rejected.
+    from typing import Protocol, TypeVar
+
+    class Point(Protocol):
+        @property
+        def x(self) -> float: ...
+        @property
+        def y(self) -> float: ...
+        @property
+        def z(self) -> float: ...
+
+    class Quaternion(Protocol):
+        @property
+        def x(self) -> float: ...
+        @property
+        def y(self) -> float: ...
+        @property
+        def z(self) -> float: ...
+        @property
+        def w(self) -> float: ...
+
+    class Pose(Protocol):
+        @property
+        def position(self) -> Point: ...
+        @property
+        def orientation(self) -> Quaternion: ...
+
+    class ValidPose(Protocol):
+        """``ControllerPose`` and ``BodyJointPose``: a pose and whether it holds."""
+
+        @property
+        def is_valid(self) -> bool: ...
+        @property
+        def pose(self) -> Pose: ...
+
+    class HandJointPose(ValidPose, Protocol):
+        @property
+        def radius(self) -> float: ...
+
+    class ControllerInputState(Protocol):
+        @property
+        def menu_click(self) -> bool: ...
+        @property
+        def primary_click(self) -> bool: ...
+        @property
+        def secondary_click(self) -> bool: ...
+        @property
+        def squeeze_value(self) -> float: ...
+        @property
+        def thumbstick_click(self) -> bool: ...
+        @property
+        def thumbstick_x(self) -> float: ...
+        @property
+        def thumbstick_y(self) -> float: ...
+        @property
+        def trigger_value(self) -> float: ...
+
+    class ControllerSnapshot(Protocol):
+        @property
+        def aim_pose(self) -> ValidPose: ...
+        @property
+        def grip_pose(self) -> ValidPose: ...
+        @property
+        def inputs(self) -> ControllerInputState: ...
+
+    class HeadPose(Protocol):
+        @property
+        def is_tracked(self) -> bool: ...
+        @property
+        def is_valid(self) -> bool: ...
+        @property
+        def pose(self) -> Pose: ...
+
+    class BodyJoints(Protocol):
+        def joints(self, index: int) -> ValidPose: ...
+
+    class HandJoints(Protocol):
+        def poses(self, index: int) -> HandJointPose: ...
+
+    class HandPose(Protocol):
+        @property
+        def joints(self) -> HandJoints: ...
+
+    class FullBodyPose(Protocol):
+        @property
+        def all_joint_poses_tracked(self) -> bool: ...
+        @property
+        def joints(self) -> BodyJoints: ...
+
+    #: The payload a tracker accessor is carrying, as a type variable, so
+    #: _tracker_payload() hands each caller back the one type it asked for.
+    #: Spelling the four payloads as a flat union instead would type every
+    #: result as "any of the four", which no field of TrackerSnapshot accepts.
+    _PayloadT = TypeVar("_PayloadT")
+    _PayloadT_co = TypeVar("_PayloadT_co", covariant=True)
+
+    class _Tracked(Protocol[_PayloadT_co]):
+        """The ``*TrackedT`` wrapper shape of 1.4.x.
+
+        ``ControllerSnapshotTrackedT``, ``FullBodyPoseTrackedT`` and the rest
+        share no base class, so what identifies a wrapper is structural: it
+        carries the payload on ``.data``. Matching on that structure types all
+        four without naming them.
+        """
+
+        @property
+        def data(self) -> "_PayloadT_co | None": ...
 
 
 def _default_pose_vec() -> np.ndarray:
@@ -65,6 +190,127 @@ def _controller_inputs(snapshot: Any) -> Any | None:
     return snapshot.inputs
 
 
+#: Oldest isaacteleop with the vendor-parameterised tracker API (IsaacTeleop#781).
+#: Only for the error message when an older one is somehow installed.
+_MIN_ISAACTELEOP = "1.4"
+#: What install_pico.sh installs, so the remedy names the same version.
+_INSTALLED_ISAACTELEOP = "1.5"
+
+_WEBXR_BODY_VENDOR = "body.quest-cloudxr"
+_BD_BODY_VENDOR = "body.pico-xr"
+
+
+def _webxr_body_vendor_available() -> bool:
+    """Whether this isaacteleop registers the WebXR/Quest full-body vendor.
+
+    The WebXR full-body tracker arrived in IsaacTeleop #921. IsaacTeleop ships on
+    a versioned cadence, so a deployment can easily be running a release that
+    predates it, and asking for an unregistered vendor is not a soft failure:
+    ``get_required_extensions`` raises ``ValueError`` before any session exists,
+    which used to be swallowed by the broad ``except Exception`` in connect().
+    The visible symptom was a single "failed to start sessions" line followed by
+    waiting forever for body data -- indistinguishable from a network or headset
+    problem. Probing instead lets BD/Pico body tracking (and the degeneracy
+    guards built on it) work on any isaacteleop, with WebXR simply dormant.
+
+    isaacteleop exposes no way to enumerate vendors, so this asks the factory to
+    resolve the vendor for a throwaway tracker. ``get_required_extensions`` only
+    inspects the tracker/vendor pairing -- it creates no session and has no side
+    effects. Only the factory's "unknown vendor id" ValueError is treated as
+    absence; anything else is a real fault and propagates.
+    """
+    try:
+        probe = deviceio.FullBodyTracker()
+        config = deviceio.VendorConfig(
+            [(probe, deviceio.TrackerVendor(_WEBXR_BODY_VENDOR))]
+        )
+    except AttributeError as exc:
+        # An isaacteleop older than 1.4 has no vendor-parameterised API at all:
+        # FullBodyTracker, TrackerVendor and VendorConfig arrived together in
+        # IsaacTeleop#781. Left alone this surfaces as a bare AttributeError
+        # inside connect()'s broad except, which prints one "failed to start
+        # sessions" line and then waits forever -- indistinguishable from a
+        # network or headset fault. Name the cause and the remedy instead.
+        raise RuntimeError(
+            f"this isaacteleop is too old for body tracking: it provides no "
+            f"{exc.name!r}. The vendor-parameterised tracker API arrived in "
+            f"isaacteleop {_MIN_ISAACTELEOP} (IsaacTeleop#781); 1.3.x has only the "
+            f"deprecated FullBodyTrackerPico.\n"
+            f"  install_scripts/install_pico.sh installs a supported version:\n"
+            f"    uv pip install 'isaacteleop[cloudxr]~={_INSTALLED_ISAACTELEOP}.0' "
+            f"--prerelease=allow --extra-index-url https://pypi.nvidia.com"
+        ) from exc
+
+    try:
+        deviceio.DeviceIOSession.get_required_extensions([probe], config)
+    except ValueError as exc:
+        if "unknown vendor id" in str(exc):
+            return False
+        raise
+    return True
+
+
+_MISSING = object()
+
+
+def _tracker_payload(
+    result: "_Tracked[_PayloadT] | _PayloadT | None",
+) -> "_PayloadT | None":
+    """Return a tracker accessor's payload, or None when the device produced none.
+
+    isaacteleop changed this API's shape between releases, and both shapes are in
+    the field:
+
+    - 1.4.x returns a ``*TrackedT`` wrapper (``ControllerSnapshotTrackedT``,
+      ``FullBodyPoseTrackedT``, ...) whose ``.data`` holds the payload. The
+      wrapper itself is never None -- the stubs type it non-Optional -- and
+      ``.data`` is None when the device reported nothing.
+    - Later versions return the payload directly, or None.
+
+    Normalizing here keeps every consumer working on both, and matters most for
+    the body-source check below, which reads None as "this vendor produced
+    nothing". Against a 1.4 wrapper that check never sees None, so it would call
+    every frame "quest" -- on a Pico that then either demands the #921 correction
+    or has the geometry guard refuse every frame.
+
+    Payload types do not expose ``data``, so presence of the attribute is a safe
+    discriminator between the two shapes.
+    """
+    if result is None:
+        return None
+    payload = getattr(result, "data", _MISSING)
+    if payload is _MISSING:
+        return cast("_PayloadT", result)  # already a payload (1.7+)
+    return cast("Optional[_PayloadT]", payload)
+
+
+@dataclass(frozen=True)
+class TrackerSnapshot:
+    """One poll of the DeviceIO trackers.
+
+    A structure rather than a dict so the field names are declared in one place
+    and a typo is an AttributeError here instead of a silent ``None`` at the far
+    end of the reader.
+
+    Every field is the raw isaacteleop payload for that tracker, or ``None``
+    when it produced no data this frame. isaacteleop deliberately spells absence
+    as ``None`` rather than an empty handle, so an inactive device cannot answer
+    field reads with defaults indistinguishable from real zeroes; the consumers
+    all treat ``None`` as "not present".
+    """
+
+    left_controller: "ControllerSnapshot | None" = None
+    right_controller: "ControllerSnapshot | None" = None
+    head: "HeadPose | None" = None
+    left_hand: "HandPose | None" = None
+    right_hand: "HandPose | None" = None
+    full_body: "FullBodyPose | None" = None
+    #: Which vendor extension delivered :attr:`full_body` -- ``"pico"``,
+    #: ``"quest"``, or ``None`` when no body data arrived. This is the OpenXR
+    #: Extension Method result: a fact the runtime states, not an inference.
+    full_body_source: Optional[str] = None
+
+
 class IsaacTeleopClient:
     """Single-process CloudXR + DeviceIO + OpenXR session.
 
@@ -101,7 +347,8 @@ class IsaacTeleopClient:
         self._head_tracker: Any = None
         self._hand_tracker: Any = None
         self._controller_tracker: Any = None
-        self._body_tracker: Any = None
+        self._body_tracker_bd: Any = None
+        self._body_tracker_meta: Any = None
         self._cloudxr_launcher: CloudXRLauncher | None = None
 
     def _clear_trackers_and_session_ref(self) -> None:
@@ -116,7 +363,8 @@ class IsaacTeleopClient:
         self._head_tracker = None
         self._hand_tracker = None
         self._controller_tracker = None
-        self._body_tracker = None
+        self._body_tracker_bd = None
+        self._body_tracker_meta = None
 
     def start_streaming(self) -> None:
         """Launch CloudXR + open OpenXR session + start DeviceIO trackers."""
@@ -126,6 +374,20 @@ class IsaacTeleopClient:
             # WebRTC media over the USB cable via `adb reverse`, so the headset
             # reaches the host on loopback without needing shared Wi-Fi. Needs
             # `coturn` and `adb` on PATH.
+            # Opt in to CloudXR's WebXR full-body skeleton before the runtime is
+            # launched. The check lives in the CloudXR server, i.e. the runtime
+            # process, and that process inherits its environment when it is
+            # started -- which CloudXRLauncher does below. Setting it after this
+            # point (for instance next to the OpenXR session) is too late: the
+            # runtime is already up with the variable absent, and it silently
+            # ignores a client offering the full-body skeleton.
+            #
+            # isaacteleop sets the same default on the runtime's environment from
+            # 1.5 on. setdefault means the two agree, this still works against an
+            # externally started runtime, and an operator who exports the variable
+            # -- including to "0" -- still wins.
+            os.environ.setdefault("NV_CXR_ENABLE_NON_CONFORMANT_WEBXR_BODY_TRACKING", "1")
+
             self._cloudxr_launcher = CloudXRLauncher(
                 install_dir=self._cloudxr_install_dir,
                 env_config=self._cloudxr_env_config,
@@ -133,25 +395,74 @@ class IsaacTeleopClient:
                 run_embedded=True,
                 setup_oob=self._use_adb,
                 usb_local=self._use_adb,
+                host_client=True,
             )
+            try:
+                import socket as _socket
+                import subprocess as _sp
+                from isaacteleop.cloudxr.oob_teleop_env import wss_proxy_port
+                _port = wss_proxy_port()
+                _all_ips = _sp.check_output(["hostname", "-I"], text=True).split()
+                _ips = [ip for ip in _all_ips if not ip.startswith("127.")]
+                print("[IsaacTeleopClient] Web client now served locally.")
+                print("[IsaacTeleopClient] Navigate your Quest browser to ONE of these URLs:")
+                for _ip in _ips:
+                    print(f"[IsaacTeleopClient]   https://{_ip}:{_port}/client/")
+                print("[IsaacTeleopClient] (use whichever IP is on the same subnet as your Quest)")
+            except Exception:
+                print("[IsaacTeleopClient] Web client served at https://<server-ip>:48322/client/")
 
             self._head_tracker = deviceio.HeadTracker()
             self._hand_tracker = deviceio.HandTracker()
             self._controller_tracker = deviceio.ControllerTracker()
-            self._body_tracker = deviceio.FullBodyTracker()
+            # Both full-body vendors are requested up front when isaacteleop has
+            # them: which headset connects (Pico vs Quest) is not known until the
+            # browser session negotiates, so both trackers are created and polled
+            # every frame. The server keeps BD
+            # and Meta full-body data mutually exclusive (only the vendor a client is
+            # actually sending reports active), so exactly one of these is ever active
+            # at a time; _get_tracker_data() below prefers Meta when both are present.
+            # The Meta tracker impl reduces its native 84-joint skeleton down to the
+            # same 24-joint BD-shaped FullBodyPose as the Pico tracker (the joint
+            # selection CloudXR.js used to do in the browser), so both come back in
+            # an identical layout and no downstream code needs to know which fired.
+            self._body_tracker_bd = deviceio.FullBodyTracker()
+            vendor_pairs = [(self._body_tracker_bd, deviceio.TrackerVendor(_BD_BODY_VENDOR))]
             trackers = [
                 self._head_tracker,
                 self._hand_tracker,
                 self._controller_tracker,
-                self._body_tracker,
+                self._body_tracker_bd,
             ]
-            required_extensions = deviceio.DeviceIOSession.get_required_extensions(trackers)
+            # Only request the WebXR vendor from an isaacteleop that has it;
+            # see _webxr_body_vendor_available(). Without it the Quest path is
+            # dormant and BD/Pico is untouched, rather than the whole session
+            # failing to start.
+            if _webxr_body_vendor_available():
+                self._body_tracker_meta = deviceio.FullBodyTracker()
+                vendor_pairs.append(
+                    (self._body_tracker_meta, deviceio.TrackerVendor(_WEBXR_BODY_VENDOR))
+                )
+                trackers.append(self._body_tracker_meta)
+            else:
+                self._body_tracker_meta = None
+                print(
+                    f"[IsaacTeleopClient] this isaacteleop does not provide the "
+                    f"{_WEBXR_BODY_VENDOR!r} full-body vendor, so Quest/WebXR body "
+                    f"tracking is unavailable; Pico/BD body tracking is unaffected. "
+                    f"Upgrade isaacteleop to enable it."
+                )
+            vendor_config = deviceio.VendorConfig(vendor_pairs)
+            required_extensions = deviceio.DeviceIOSession.get_required_extensions(
+                trackers, vendor_config
+            )
+
             oxr_session = stack.enter_context(
                 oxr.OpenXRSession(self._app_name, required_extensions)
             )
             handles = oxr_session.get_handles()
             self._deviceio_session = stack.enter_context(
-                deviceio.DeviceIOSession.run(trackers, handles)
+                deviceio.DeviceIOSession.run(trackers, handles, vendor_config=vendor_config)
             )
             self._exit_stack = stack
             print("Isaac Capture session initialized.")
@@ -170,13 +481,13 @@ class IsaacTeleopClient:
             self._clear_trackers_and_session_ref()
             print(f"IsaacTeleopClient: failed to start sessions ({e}).")
 
-    def _get_tracker_data(self) -> dict[str, Any] | None:
+    def _get_tracker_data(self) -> "TrackerSnapshot | None":
         """Poll current tracking data and return it as a dictionary.
 
         Returns:
             Dict with keys ``left_controller``, ``right_controller``, ``head``,
             ``left_hand``, ``right_hand``, ``full_body``. Each value is the
-            corresponding tracker's snapshot, or None if inactive.
+            corresponding tracker's payload, or None if inactive.
         """
         if self._deviceio_session is None:
             return None
@@ -188,14 +499,47 @@ class IsaacTeleopClient:
             return None
 
         session = self._deviceio_session
-        return {
-            "left_controller": self._controller_tracker.get_left_controller(session),
-            "right_controller": self._controller_tracker.get_right_controller(session),
-            "head": self._head_tracker.get_head(session),
-            "left_hand": self._hand_tracker.get_left_hand(session),
-            "right_hand": self._hand_tracker.get_right_hand(session),
-            "full_body": self._body_tracker.get_body_pose(session),
-        }
+        # This is the "OpenXR Extension Method" of headset identification: which
+        # full-body vendor extension actually delivered active data this frame is
+        # a fact stated by the runtime, not an inference. Meta reports active only
+        # when the connected client is actually sending the Meta full-body
+        # skeleton (server-side vendor arbitration keeps BD and Meta mutually
+        # exclusive), so exactly one of these is ever active; prefer it, and fall
+        # back to BD for a Pico client. Re-derived every frame (not cached) so a
+        # headset swap mid-session is picked up on the next poll.
+        # Each accessor returns the payload itself, or None when that tracker has
+        # produced no data -- isaacteleop deliberately spells absence as None
+        # rather than an empty handle, so that an inactive device cannot answer
+        # field reads with defaults indistinguishable from real zeroes. Every
+        # consumer below already treats None as "not present".
+        # _body_tracker_meta is None when this isaacteleop has no WebXR vendor,
+        # in which case every frame resolves to BD/Pico.
+        # Normalize before anything reads these: on 1.4.x every accessor hands
+        # back a non-None wrapper, so "is not None" only means "no data" once
+        # _tracker_payload has unwrapped it.
+        full_body = (
+            _tracker_payload(self._body_tracker_meta.get_body_pose(session))
+            if self._body_tracker_meta is not None
+            else None
+        )
+        if full_body is not None:
+            full_body_source = "quest"
+        else:
+            full_body = _tracker_payload(self._body_tracker_bd.get_body_pose(session))
+            full_body_source = "pico" if full_body is not None else None
+        return TrackerSnapshot(
+            left_controller=_tracker_payload(
+                self._controller_tracker.get_left_controller(session)
+            ),
+            right_controller=_tracker_payload(
+                self._controller_tracker.get_right_controller(session)
+            ),
+            head=_tracker_payload(self._head_tracker.get_head(session)),
+            left_hand=_tracker_payload(self._hand_tracker.get_left_hand(session)),
+            right_hand=_tracker_payload(self._hand_tracker.get_right_hand(session)),
+            full_body=full_body,
+            full_body_source=full_body_source,
+        )
 
     def get_pose_by_name(self, name: str) -> np.ndarray:
         """Return ``[x, y, z, qx, qy, qz, qw]`` for ``name`` ∈ {left_controller, right_controller, headset}."""
@@ -204,20 +548,21 @@ class IsaacTeleopClient:
             return _default_pose_vec()
 
         if name == "left_controller":
-            return _controller_pose_vec(raw.get("left_controller"))
+            return _controller_pose_vec(raw.left_controller)
         if name == "right_controller":
-            return _controller_pose_vec(raw.get("right_controller"))
+            return _controller_pose_vec(raw.right_controller)
         if name == "headset":
-            return _pose_vec_from_head_data(raw.get("head"))
+            return _pose_vec_from_head_data(raw.head)
         raise ValueError(
             f"Invalid name: {name}. Valid names: 'left_controller', 'right_controller', 'headset'."
         )
 
-    def _snapshot_side(self, raw: dict[str, Any] | None, side: str) -> Any:
+    def _snapshot_side(
+        self, raw: "TrackerSnapshot | None", side: str
+    ) -> "ControllerSnapshot | None":
         if raw is None:
             return None
-        key = "left_controller" if side == "left" else "right_controller"
-        return raw.get(key)
+        return raw.left_controller if side == "left" else raw.right_controller
 
     def get_key_value_by_name(self, name: str) -> float:
         """Return trigger/grip value for ``name`` ∈ {left,right}_{trigger,grip}."""
@@ -286,7 +631,7 @@ class IsaacTeleopClient:
             return [0.0, 0.0]
         return [float(inp.thumbstick_x), float(inp.thumbstick_y)]
 
-    def get_full_body_data(self) -> Any | None:
+    def get_full_body_data(self) -> "FullBodyPose | None":
         """Return the raw DeviceIO ``FullBodyTracker`` data payload (or None).
 
         Body-joint extraction (24×7 pose array) lives in
@@ -295,7 +640,7 @@ class IsaacTeleopClient:
         raw = self._get_tracker_data()
         if raw is None:
             return None
-        return raw.get("full_body")
+        return raw.full_body
 
     def get_timestamp_ns(self) -> int:
         """Return the host monotonic timestamp in nanoseconds."""
