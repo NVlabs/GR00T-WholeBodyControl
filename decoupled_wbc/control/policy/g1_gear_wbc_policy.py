@@ -170,7 +170,7 @@ class G1GearWbcPolicy(Policy):
         self.use_teleop_policy_cmd = use_teleop_policy_cmd
         # Safety: When teleop is disabled, reset navigation to stop
         if not use_teleop_policy_cmd:
-            self.nav_cmd = self.config["cmd_init"].copy()  # Reset to safe default
+            self.cmd = self.config["cmd_init"].copy()  # Reset to safe default
 
     def set_goal(self, goal: Dict[str, Any]):
         """Set the goal for the policy.
