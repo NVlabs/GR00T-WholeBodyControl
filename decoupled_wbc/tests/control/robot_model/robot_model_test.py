@@ -909,3 +909,39 @@ def test_robot_model_gravity_compensation_arms_specific(g1_robot_model):
                     )
         else:
             pytest.skip("No arm joint groups available for testing")
+
+
+def test_gravity_compensation_base_orientation(g1_robot_model):
+    """A tilted root must give the same torques as RNEA with gravity rotated into the root frame."""
+    robot_model = g1_robot_model
+    if robot_model.is_floating_base_model:
+        pytest.skip("base_orientation is for fixed-base models")
+    q = robot_model.q_zero.copy()
+    upright = robot_model.compute_gravity_compensation_torques(q, "arms")
+    np.testing.assert_allclose(
+        robot_model.compute_gravity_compensation_torques(q, "arms", base_orientation=np.eye(3)),
+        upright,
+    )
+
+    pitch = 0.2
+    c, s = np.cos(pitch), np.sin(pitch)
+    R_world_root = np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]])
+    tilted = robot_model.compute_gravity_compensation_torques(
+        q, "arms", base_orientation=R_world_root
+    )
+
+    model = robot_model.pinocchio_wrapper.model
+    g_world = model.gravity.linear.copy()
+    model.gravity.linear = R_world_root.T @ g_world
+    try:
+        expected = pin.rnea(
+            model, robot_model.pinocchio_wrapper.data, robot_model.clip_configuration(q),
+            np.zeros(robot_model.num_dofs), np.zeros(robot_model.num_dofs),
+        )
+    finally:
+        model.gravity.linear = g_world
+    arms = robot_model.get_joint_group_indices("arms")
+    np.testing.assert_allclose(tilted[arms], expected[arms], atol=1e-9)
+    assert np.max(np.abs(tilted[arms] - upright[arms])) > 1e-3
+    # The model's gravity must be restored after the call.
+    np.testing.assert_allclose(model.gravity.linear, g_world)

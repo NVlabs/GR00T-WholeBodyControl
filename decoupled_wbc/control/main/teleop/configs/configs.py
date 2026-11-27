@@ -47,6 +47,7 @@ def override_wbc_config(
         "keyboard_dispatcher_type": config.keyboard_dispatcher_type,
         "enable_gravity_compensation": config.enable_gravity_compensation,
         "gravity_compensation_joints": config.gravity_compensation_joints,
+        "gravity_compensation_use_base_orientation": config.gravity_compensation_use_base_orientation,
         "high_elbow_pose": config.high_elbow_pose,
     }
 
@@ -142,6 +143,10 @@ class BaseConfig(ArgsConfigTemplate):
 
     gravity_compensation_joints: Optional[list[str]] = None
     """Joint groups to apply gravity compensation to (e.g., ['arms', 'left_arm', 'right_arm'])."""
+
+    gravity_compensation_use_base_orientation: bool = True
+    """Simulation: compute gravity compensation with the measured pelvis orientation. False keeps
+    the previous upright-pelvis assumption (reproduces results before 2026-11-18)."""
     # Teleop/Device Configuration
     body_control_device: str = "dummy"
     """Device to use for body control. Options: dummy, vive, iphone, leapmotion, joycon."""

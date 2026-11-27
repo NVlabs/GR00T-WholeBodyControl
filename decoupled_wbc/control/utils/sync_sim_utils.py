@@ -503,6 +503,9 @@ def get_env(config: SyncSimDataCollectionConfig, **kwargs) -> SyncEnv:
             "enable_waist": config.enable_waist,
             "enable_gravity_compensation": config.enable_gravity_compensation,
             "gravity_compensation_joints": config.gravity_compensation_joints,
+            "gravity_compensation_use_base_orientation": (
+                config.gravity_compensation_use_base_orientation
+            ),
         }
     )
     if robot_type == "g1":
