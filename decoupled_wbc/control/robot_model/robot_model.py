@@ -218,7 +218,11 @@ class RobotModel:
         pin.framesForwardKinematics(self.pinocchio_wrapper.model, self.pinocchio_wrapper.data, q)
 
     def compute_gravity_compensation_torques(
-        self, q: np.ndarray, joint_groups: Union[str, List[str], Set[str]] = None, auto_clip=True
+        self,
+        q: np.ndarray,
+        joint_groups: Union[str, List[str], Set[str]] = None,
+        auto_clip=True,
+        base_orientation: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """
         Compute gravity compensation torques for specified joint groups using pinocchio.
@@ -227,6 +231,9 @@ class RobotModel:
         :param joint_groups: Joint groups to compensate (e.g., "arms", ["left_arm", "waist"],
              {"left_arm", "waist"}). If None, compensates all joints
         :param auto_clip: Whether to automatically clip joint values to limits
+        :param base_orientation: Optional 3x3 rotation of the root link (pelvis) in the world frame.
+            Fixed-base models otherwise assume an upright root; when given, gravity is expressed in
+            the root frame for this call. Floating-base models carry the base pose in q instead.
         :return: Array of gravity compensation torques for all DOFs (zero for non-compensated joints)
         """
         if q.shape[0] != self.num_dofs:
@@ -244,9 +251,21 @@ class RobotModel:
             v = np.zeros(self.num_dofs)
             a = np.zeros(self.num_dofs)
 
-            gravity_torques_full = pin.rnea(
-                self.pinocchio_wrapper.model, self.pinocchio_wrapper.data, q, v, a
-            )
+            model = self.pinocchio_wrapper.model
+            gravity_world = None
+            if base_orientation is not None:
+                if self.is_floating_base_model:
+                    raise ValueError(
+                        "base_orientation applies to fixed-base models; put the base pose in q"
+                    )
+                R_world_root = np.asarray(base_orientation, dtype=float).reshape(3, 3)
+                gravity_world = model.gravity.linear.copy()
+                model.gravity.linear = R_world_root.T @ gravity_world
+            try:
+                gravity_torques_full = pin.rnea(model, self.pinocchio_wrapper.data, q, v, a)
+            finally:
+                if gravity_world is not None:
+                    model.gravity.linear = gravity_world
 
             # If no joint groups specified, return full gravity torques
             if joint_groups is None:

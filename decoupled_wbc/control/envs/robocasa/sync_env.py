@@ -34,6 +34,10 @@ class SyncEnv(gym.Env):
         self.onscreen = kwargs.get("onscreen", True)
         self.enable_gravity_compensation = kwargs.pop("enable_gravity_compensation", False)
         self.gravity_compensation_joints = kwargs.pop("gravity_compensation_joints", ["arms"])
+        # Express gravity in the measured pelvis frame; False keeps the old upright-pelvis model.
+        self.gravity_compensation_use_base_orientation = kwargs.pop(
+            "gravity_compensation_use_base_orientation", True
+        )
         _, self.robot_model = get_robot_type_and_model(
             robot_name, enable_waist_ik=kwargs.pop("enable_waist", False)
         )
@@ -260,8 +264,19 @@ class SyncEnv(gym.Env):
                 )
 
                 # Compute gravity compensation in joint order using current robot configuration
+                base_orientation = None
+                if (
+                    self.gravity_compensation_use_base_orientation
+                    and not self.robot_model.is_floating_base_model
+                ):
+                    # floating_base_pose is [x, y, z, qw, qx, qy, qz] of the pelvis in the world.
+                    base_orientation = R.from_quat(
+                        raw_obs["floating_base_pose"][3:7], scalar_first=True
+                    ).as_matrix()
                 gravity_torques_joint_order = self.robot_model.compute_gravity_compensation_torques(
-                    current_q_joint_order, joint_groups=self.gravity_compensation_joints
+                    current_q_joint_order,
+                    joint_groups=self.gravity_compensation_joints,
+                    base_orientation=base_orientation,
                 )
 
                 # Convert gravity torques to actuated joint order
