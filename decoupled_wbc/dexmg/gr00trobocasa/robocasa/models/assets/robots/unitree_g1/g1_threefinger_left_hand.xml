@@ -20,6 +20,9 @@
 
   <worldbody>
     <body name="left_hand_palm_link" pos="0 0 0.04" quat="0.5 0.5 0.5 -0.5">
+      <!-- Palm mass is already included in the arm model's wrist_yaw_link inertial;
+           an explicit negligible inertial stops MuJoCo from inferring a second copy from the mesh. -->
+      <inertial pos="0.0415 0 0" mass="0.0001" diaginertia="1e-8 1e-8 1e-8" />
       <site name="ft_frame" pos="0 0 0" size="0.01 0.01 0.01" rgba="1 1 0 1" type="sphere" group="1" />
       <geom pos="0.0415 0.003 0" quat="1 0 0 0" type="mesh" contype="0"
         conaffinity="0" group="1" density="0" rgba="0.1 0.1 0.1 1"
